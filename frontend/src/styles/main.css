@@ -314,6 +314,10 @@ body {
   color: #f5f8ff;
 }
 
+.register-card .form-text {
+  color: #dbe5ff !important;
+}
+
 .register-card-sm {
   max-width: 700px;
 }
@@ -339,6 +343,16 @@ body {
 .skills-grid .form-check {
   margin-bottom: 0;
   font-size: 0.95rem;
+}
+
+.worker-dashboard .skills-grid {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(173, 197, 255, 0.82);
+  color: #10224d;
+}
+
+.worker-dashboard .skills-grid .form-check-label {
+  color: #10224d;
 }
 
 @media (max-width: 767px) {

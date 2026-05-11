@@ -1,15 +1,18 @@
 import React, { useEffect, useState } from "react";
-import seedData from "./data/appData.json";
 const SKILLS = ["House Cleaning", "Cooking", "Laundry", "Childcare", "Elder Care", "Gardening", "Electrical Work", "Plumbing", "Carpentry", "Painting", "Aircon Repair/Cleaning", "Welding", "Driving", "Other"];
 const BARANGAYS = ["Alitao", "Anos", "Ayaas", "Baguio", "Bakal", "Bucal", "Bulkan", "Calumpang", "Camaysa", "Dapdap", "Del Rosario", "Gibanga", "Ilasan", "Isabang", "Lalo", "Lita", "Mateuna", "Mayowe", "Opias", "Palale", "Piis", "Rizaliana", "San Diego", "San Isidro", "San Roque", "Talolong", "Tongko", "Wakas", "Poblacion"];
 const STORAGE_KEYS = { workers: "gawago-registered-workers", households: "gawago-registered-households", jobs: "gawago-posted-jobs", verificationRequests: "gawago-verification-requests", notificationReads: "gawago-notification-reads" };
 const ADMIN_ACCOUNT = { username: "admin", password: "admin123", displayName: "System Admin" };
-const DEMO_DATA_VERSION = "v10";
+const DEMO_DATA_VERSION = "v12";
 const DEMO_VERSION_KEY = "gawago-demo-data-version";
 const EMPTY_WORKER_FORM = { firstName: "", lastName: "", username: "", email: "", phone: "", barangay: "", streetAddress: "", bio: "", hourlyRate: "0.00", dailyRate: "0.00", yearsExperience: "0", password: "", confirmPassword: "", skills: [], customSkill: "" };
 const EMPTY_HOUSEHOLD_FORM = { firstName: "", lastName: "", username: "", email: "", phone: "", barangay: "", streetAddress: "", password: "", confirmPassword: "" };
 const EMPTY_HOUSEHOLD_REVIEW_FORM = { rating: "5", feedback: "", jobId: "" };
 const EMPTY_WORKER_FEEDBACK_FORM = { feedback: "", jobId: "" };
+const GMAIL_ADDRESS_PATTERN = /^[A-Z0-9._%+-]+@gmail\.com$/i;
+function isValidGmailAddress(email) {
+  return GMAIL_ADDRESS_PATTERN.test(String(email || "").trim());
+}
 function clearDemoStorage() {
   if (typeof window === "undefined") {
     return;
@@ -236,7 +239,7 @@ function App() {
   const verificationNotifications = getVerificationNotifications(verificationRequests, registeredWorkers);
   const workerNotifications = [...currentWorker?.verificationNotifications || [], ...currentWorker?.applicationNotifications || []];
   const householdNotificationsWithReadState = householdNotifications.map((item) => ({ ...item, unread: !notificationReads[item.id] }));
-  const workerNotificationsWithReadState = (workerNotifications.length > 0 ? workerNotifications : verificationNotifications).map((item) => ({ ...item, unread: !notificationReads[item.id] }));
+  const workerNotificationsWithReadState = workerNotifications.map((item) => ({ ...item, unread: !notificationReads[item.id] }));
   const workerApplications = currentWorker ? postedJobs.flatMap((job) => (job.applications || []).filter((application) => application.workerId === currentWorker.id).map((application) => ({ ...job, appliedAt: application.appliedAt, applicationStatus: application.status, applicationId: application.id }))) : [];
   const currentWorkerJobDetail = workerVisibleJobs.find((item) => item.id === selectedJobId) || workerVisibleJobs[0] || null;
   const currentWorkerJobHousehold = currentWorkerJobDetail ? registeredHouseholds.find((item) => item.username === currentWorkerJobDetail.householdUsername) : null;
@@ -485,6 +488,77 @@ function App() {
       }
     });
   }, [view, currentWorker?.verification]);
+  useEffect(() => {
+    if (view !== "household-worker-profile" || !selectedWorker) {
+      return;
+    }
+    const targetColumn = document.querySelector(".worker-content .row .col-lg-8");
+    if (!targetColumn || targetColumn.querySelector("[data-household-verification-panel]")) {
+      return;
+    }
+    const request = verificationRequests.find((item) => item.id === selectedWorker.verificationRequestId) || verificationRequests.find((item) => item.workerId === selectedWorker.id) || selectedWorker.verificationSubmission;
+    if (!request) {
+      return;
+    }
+    const panel = document.createElement("div");
+    panel.dataset.householdVerificationPanel = "true";
+    panel.className = "profile-card mb-3";
+    const head = document.createElement("div");
+    head.className = "profile-card-head";
+    head.textContent = "Verification Details";
+    const body = document.createElement("div");
+    body.className = "p-3";
+    const list = document.createElement("div");
+    list.className = "d-grid gap-2";
+    const addDetail = (label, value) => {
+      const row = document.createElement("p");
+      row.className = "mb-0 small d-flex justify-content-between gap-3";
+      const labelNode = document.createElement("span");
+      labelNode.className = "text-muted";
+      labelNode.textContent = label;
+      const valueNode = document.createElement("strong");
+      valueNode.className = "text-end";
+      valueNode.textContent = value || "Not provided";
+      row.append(labelNode, valueNode);
+      list.appendChild(row);
+    };
+    addDetail("Status", request.status || selectedWorker.verification || "Pending");
+    addDetail("Primary ID", request.primaryIdName);
+    addDetail("Secondary Document", request.secondaryDocName);
+    addDetail("Submitted", request.submittedAt);
+    if (request.reviewedAt) {
+      addDetail("Reviewed", request.reviewedAt);
+    }
+    if (request.notes) {
+      addDetail("Worker Notes", request.notes);
+    }
+    if (request.reviewNote) {
+      addDetail("Admin Note", request.reviewNote);
+    }
+    body.appendChild(list);
+    const previewRow = document.createElement("div");
+    previewRow.className = "d-flex flex-wrap gap-2 mt-3";
+    [
+      { label: "View Primary ID", url: request.primaryIdPreview },
+      { label: "View Secondary Document", url: request.secondaryDocPreview },
+    ].forEach((item) => {
+      if (!item.url) return;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn btn-outline-secondary btn-sm";
+      button.textContent = item.label;
+      button.addEventListener("click", () => openFilePreview(item.url));
+      previewRow.appendChild(button);
+    });
+    if (previewRow.children.length) {
+      body.appendChild(previewRow);
+    }
+    panel.append(head, body);
+    const cards = targetColumn.querySelectorAll(".profile-card");
+    const reviewsCard = Array.from(cards).find((card) => card.textContent.includes("Reviews & Ratings"));
+    targetColumn.insertBefore(panel, reviewsCard || null);
+    return () => panel.remove();
+  }, [view, selectedWorker, verificationRequests]);
   useEffect(() => {
     if (!["worker-profile", "household-profile", "household-worker-profile"].includes(view)) {
       return;
@@ -1008,6 +1082,10 @@ function App() {
       window.alert("Please complete all required fields.");
       return;
     }
+    if (!isValidGmailAddress(workerForm.email)) {
+      window.alert("Please enter a complete Gmail address, for example example@gmail.com.");
+      return;
+    }
     if (workerForm.password !== workerForm.confirmPassword) {
       window.alert("Worker passwords do not match.");
       return;
@@ -1017,7 +1095,7 @@ function App() {
       window.alert("Username already exists for a worker account.");
       return;
     }
-    const workerAccount = { ...workerForm, skills: Array.from(/* @__PURE__ */ new Set([...workerForm.skills || [], ...workerForm.customSkill.trim() ? [workerForm.customSkill.trim()] : []])), id: Date.now(), username: workerForm.username.trim(), verification: "Not Yet Verified", rating: "No ratings yet", reviewsDone: 0, status: "Available", distanceKm: "0.00", avatar: (workerForm.firstName || workerForm.username || "W").slice(0, 1).toUpperCase(), receivedReviews: [], givenFeedback: [] };
+    const workerAccount = { ...workerForm, skills: Array.from(/* @__PURE__ */ new Set([...workerForm.skills || [], ...workerForm.customSkill.trim() ? [workerForm.customSkill.trim()] : []])), id: Date.now(), username: workerForm.username.trim(), verification: "Not Yet Verified", rating: "No ratings yet", reviewsDone: 0, status: "Available", distanceKm: "0.00", avatar: (workerForm.firstName || workerForm.username || "W").slice(0, 1).toUpperCase(), receivedReviews: [], givenFeedback: [], verificationNotifications: [], applicationNotifications: [] };
     setRegisteredWorkers((prev) => [...prev, workerAccount]);
     setWorkerForm(EMPTY_WORKER_FORM);
     setLoginForm({ username: "", password: "", role: "worker" });
@@ -1029,6 +1107,10 @@ function App() {
     const requiredFields = [householdForm.firstName, householdForm.lastName, householdForm.username, householdForm.email, householdForm.phone, householdForm.barangay, householdForm.streetAddress, householdForm.password, householdForm.confirmPassword];
     if (requiredFields.some((field) => !String(field || "").trim())) {
       window.alert("Please complete all required fields.");
+      return;
+    }
+    if (!isValidGmailAddress(householdForm.email)) {
+      window.alert("Please enter a complete Gmail address, for example example@gmail.com.");
       return;
     }
     if (householdForm.password !== householdForm.confirmPassword) {

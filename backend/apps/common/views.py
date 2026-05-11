@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.models import UserProfile
 from apps.common.models import VerificationRequest
 from apps.common.serializers import VerificationRequestCreateSerializer, VerificationRequestSerializer
 from django.contrib.auth.models import User
@@ -39,9 +40,12 @@ class VerificationRequestReviewView(APIView):
         if action == "approve":
             request_record.status = VerificationRequest.STATUS_APPROVED
             request_record.review_note = "Approved by admin review."
+            profile_status = "verified"
         else:
             request_record.status = VerificationRequest.STATUS_REJECTED
             request_record.review_note = request.data.get("review_note", "Rejected by admin.")
+            profile_status = "rejected"
         request_record.reviewed_at = timezone.now()
         request_record.save(update_fields=["status", "review_note", "reviewed_at"])
+        UserProfile.objects.filter(user=request_record.worker).update(verification_status=profile_status)
         return Response(VerificationRequestSerializer(request_record).data)

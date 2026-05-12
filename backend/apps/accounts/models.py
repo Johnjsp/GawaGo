@@ -73,3 +73,30 @@ class PasswordResetRequest(models.Model):
         if self.is_expired or self.is_used:
             return False
         return check_password(token, self.token_hash)
+
+
+class SignupVerificationRequest(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="verification_request")
+    email = models.EmailField()
+    token_hash = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() >= self.expires_at
+
+    @classmethod
+    def create_request(cls, user: User, token: str, ttl_minutes: int = 10) -> "SignupVerificationRequest":
+        return cls.objects.create(
+            user=user,
+            email=user.email,
+            token_hash=make_password(token),
+            expires_at=timezone.now() + timedelta(minutes=ttl_minutes),
+        )
+
+    def verify_token(self, token: str) -> bool:
+        if self.is_expired or self.verified_at is not None:
+            return False
+        return check_password(token, self.token_hash)

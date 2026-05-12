@@ -6,9 +6,9 @@ from django.urls import include, path
 def home(request):
     return JsonResponse(
         {
-            "app": "GawaGo API",
+            "app": "GawaGo Backend",
             "status": "ok",
-            "message": "Backend is running. Use /api/... endpoints or run frontend on port 5173.",
+            "message": "Backend is running. Open /admin/ for Django admin or use /api/... for API requests.",
         }
     )
 

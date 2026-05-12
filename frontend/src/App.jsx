@@ -1,16 +1,36 @@
 import React, { useEffect, useState } from "react";
+import { apiRequest, clearAuthToken, getApiBaseUrl, getAuthToken, setAuthToken, setUnauthorizedHandler } from "./api/apiClient";
 const SKILLS = ["House Cleaning", "Cooking", "Laundry", "Childcare", "Elder Care", "Gardening", "Electrical Work", "Plumbing", "Carpentry", "Painting", "Aircon Repair/Cleaning", "Welding", "Driving", "Other"];
 const BARANGAYS = ["Alitao", "Anos", "Ayaas", "Baguio", "Bakal", "Bucal", "Bulkan", "Calumpang", "Camaysa", "Dapdap", "Del Rosario", "Gibanga", "Ilasan", "Isabang", "Lalo", "Lita", "Mateuna", "Mayowe", "Opias", "Palale", "Piis", "Rizaliana", "San Diego", "San Isidro", "San Roque", "Talolong", "Tongko", "Wakas", "Poblacion"];
 const STORAGE_KEYS = { workers: "gawago-registered-workers", households: "gawago-registered-households", jobs: "gawago-posted-jobs", verificationRequests: "gawago-verification-requests", notificationReads: "gawago-notification-reads" };
 const ADMIN_ACCOUNT = { username: "admin", password: "admin123", displayName: "System Admin" };
-const DEMO_DATA_VERSION = "v12";
+const DEMO_DATA_VERSION = "v14";
 const DEMO_VERSION_KEY = "gawago-demo-data-version";
-const API_BASE_URL = "http://127.0.0.1:8000/api/accounts";
+const API_BASE_URL = getApiBaseUrl();
+const ACCOUNTS_API_BASE_URL = `${API_BASE_URL}/accounts`;
 const EMPTY_WORKER_FORM = { firstName: "", lastName: "", username: "", email: "", phone: "", barangay: "", streetAddress: "", bio: "", hourlyRate: "0.00", dailyRate: "0.00", yearsExperience: "0", password: "", confirmPassword: "", skills: [], customSkill: "" };
 const EMPTY_HOUSEHOLD_FORM = { firstName: "", lastName: "", username: "", email: "", phone: "", barangay: "", streetAddress: "", password: "", confirmPassword: "" };
 const EMPTY_HOUSEHOLD_REVIEW_FORM = { rating: "5", feedback: "", jobId: "" };
 const EMPTY_WORKER_FEEDBACK_FORM = { feedback: "", jobId: "" };
 const GMAIL_ADDRESS_PATTERN = /^[A-Z0-9._%+-]+@gmail\.com$/i;
+async function readResponseData(response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (response.status === 204) {
+    return null;
+  }
+  const rawBody = await response.text();
+  if (!rawBody) {
+    return null;
+  }
+  if (contentType.includes("application/json")) {
+    try {
+      return JSON.parse(rawBody);
+    } catch (error) {
+      return { detail: rawBody };
+    }
+  }
+  return { detail: rawBody };
+}
 function isValidGmailAddress(email) {
   return GMAIL_ADDRESS_PATTERN.test(String(email || "").trim());
 }
@@ -96,6 +116,53 @@ function formatDateTime(dateValue, timeValue) {
 function formatLocation(barangay, streetAddress) {
   return [barangay, streetAddress].filter(Boolean).join(", ") || "Location not set";
 }
+function splitFullName(fullName, fallbackUsername = "") {
+  const normalized = String(fullName || "").trim();
+  if (!normalized) {
+    return { firstName: "", lastName: "", displayName: fallbackUsername || "User" };
+  }
+  const parts = normalized.split(/\s+/);
+  return {
+    firstName: parts[0] || "",
+    lastName: parts.slice(1).join(" "),
+    displayName: normalized,
+  };
+}
+function parseLocationLabel(locationLabel) {
+  const parts = String(locationLabel || "").split(",").map((part) => part.trim()).filter(Boolean);
+  return {
+    barangay: parts[0] || "",
+    streetAddress: parts.slice(1).join(", "),
+  };
+}
+function formatDistance(distanceKm, fallbackLabel = "") {
+  if (distanceKm === null || distanceKm === undefined || distanceKm === "") {
+    return fallbackLabel || "Distance not available";
+  }
+  const numericDistance = Number(distanceKm);
+  if (Number.isFinite(numericDistance) && numericDistance >= 0) {
+    if (numericDistance < 1) {
+      return `${Math.max(1, Math.round(numericDistance * 1000))} meters away`;
+    }
+    return `${numericDistance.toFixed(1)} km away`;
+  }
+  return fallbackLabel || "Distance not available";
+}
+function getCurrentCoordinates() {
+  if (typeof window === "undefined" || !window.navigator?.geolocation) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    window.navigator.geolocation.getCurrentPosition(
+      (position) => resolve({
+        latitude: Number(position.coords.latitude.toFixed(7)),
+        longitude: Number(position.coords.longitude.toFixed(7)),
+      }),
+      () => resolve(null),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+    );
+  });
+}
 function getWorkerPhoto(worker) {
   return worker?.profilePhotoPreview || worker?.verificationSubmission?.primaryIdPreview || "";
 }
@@ -120,6 +187,151 @@ function normalizeReview(review) {
     createdAt: review.createdAt || new Date().toLocaleString("en-PH"),
   };
 }
+function capitalizeVerificationStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "approved" || normalized === "verified") {
+    return "Approved";
+  }
+  if (normalized === "rejected") {
+    return "Rejected";
+  }
+  if (normalized === "pending") {
+    return "Pending";
+  }
+  return "Under Review";
+}
+function getWorkerVerificationLabel(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "approved" || normalized === "verified") {
+    return "Verified";
+  }
+  if (normalized === "rejected") {
+    return "Rejected";
+  }
+  if (normalized === "pending" || normalized === "under review") {
+    return "Under Review";
+  }
+  return "Not Yet Verified";
+}
+function normalizeVerificationRequest(request) {
+  if (!request) {
+    return null;
+  }
+  const source = request.verification_request || request;
+  const workerId = source.worker ?? source.workerId ?? source.worker_id ?? null;
+  const workerUsername = source.worker_username || source.workerUsername || "";
+  return {
+    id: source.id,
+    workerId,
+    workerUsername,
+    workerName: source.worker_name || source.workerName || workerUsername || "Worker",
+    primaryIdName: source.primary_id_name || source.primaryIdName || "",
+    secondaryDocName: source.secondary_doc_name || source.secondaryDocName || "",
+    primaryIdPreview: source.primary_id_preview || source.primaryIdPreview || "",
+    secondaryDocPreview: source.secondary_doc_preview || source.secondaryDocPreview || "",
+    notes: source.notes || "",
+    status: capitalizeVerificationStatus(source.status),
+    submittedAt: source.submitted_at || source.submittedAt || "",
+    reviewedAt: source.reviewed_at || source.reviewedAt || "",
+    reviewedBy: source.reviewed_by || source.reviewedBy || "",
+    reviewNote: source.review_note || source.reviewNote || "",
+  };
+}
+function normalizeBackendWorker(currentUser) {
+  if (!currentUser || currentUser.role !== "worker" || !currentUser.profile) {
+    return null;
+  }
+  const profile = currentUser.profile;
+  return {
+    id: currentUser.id || currentUser.username,
+    username: currentUser.username,
+    firstName: currentUser.first_name || currentUser.firstName || "",
+    lastName: currentUser.last_name || currentUser.lastName || "",
+    email: currentUser.email || "",
+    phone: currentUser.phone || "",
+    barangay: currentUser.barangay || profile.location_label || "",
+    streetAddress: currentUser.streetAddress || "",
+    bio: currentUser.bio || "",
+    hourlyRate: profile.hourly_rate || currentUser.hourlyRate || "0.00",
+    dailyRate: profile.daily_rate || currentUser.dailyRate || "0.00",
+    yearsExperience: currentUser.yearsExperience || "0",
+    skills: profile.skills || currentUser.skills || [],
+    verification: profile.verification_status === "verified" ? "Verified" : profile.verification_status === "pending" ? "Under Review" : profile.verification_status === "rejected" ? "Rejected" : "Not Yet Verified",
+    rating: profile.display_rating || "No ratings yet",
+    reviewsDone: profile.rating_count || 0,
+    status: "Available",
+    distanceKm: "0.00",
+    avatar: (currentUser.displayName || currentUser.username || "W").slice(0, 1).toUpperCase(),
+    receivedReviews: [],
+    givenFeedback: [],
+    verificationNotifications: [],
+    applicationNotifications: [],
+    verificationRequestId: profile.verification_request?.id || null,
+    verificationSubmission: normalizeVerificationRequest(profile.verification_request),
+  };
+}
+function normalizeBackendWorkerPayload(payload) {
+  if (!payload) {
+    return null;
+  }
+  const userPart = payload.user || payload;
+  const profilePart = payload.profile || payload.worker_profile || null;
+  return normalizeBackendWorker({
+    id: userPart.id || userPart.user_id || userPart.username,
+    role: profilePart?.role || userPart.role || "worker",
+    username: userPart.username || "",
+    email: userPart.email || "",
+    first_name: userPart.first_name || "",
+    last_name: userPart.last_name || "",
+    displayName: userPart.display_name || userPart.full_name || userPart.username || "",
+    profile: profilePart,
+    is_staff: Boolean(userPart.is_staff),
+  });
+}
+function normalizeProfileRecord(profile) {
+  if (!profile) {
+    return null;
+  }
+  const { firstName, lastName, displayName } = splitFullName(profile.full_name, profile.username);
+  const locationParts = parseLocationLabel(profile.location_label);
+  return {
+    id: profile.id || profile.username,
+    username: profile.username || "",
+    firstName,
+    lastName,
+    displayName,
+    email: profile.email || "",
+    barangay: locationParts.barangay,
+    streetAddress: locationParts.streetAddress,
+    skills: profile.skills || [],
+    hourlyRate: profile.hourly_rate || "0.00",
+    dailyRate: profile.daily_rate || "0.00",
+    verification: getWorkerVerificationLabel(profile.verification_status),
+    rating: profile.display_rating || "No ratings yet",
+    reviewsDone: profile.rating_count || 0,
+    latitude: profile.latitude,
+    longitude: profile.longitude,
+    role: profile.role || profile.user_type || "worker",
+  };
+}
+function getApiErrorMessage(data, fallback) {
+  if (!data) {
+    return fallback;
+  }
+  if (typeof data === "string") {
+    return data || fallback;
+  }
+  if (data.detail) {
+    return data.detail;
+  }
+  const fieldError = Object.values(data)
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .find(Boolean);
+  if (fieldError) {
+    return String(fieldError);
+  }
+  return fallback;
+}
 function isJobOpenForApplications(job) {
   return job?.status === "Open" && getHiredWorkerCount(job) < getWorkersNeeded(job);
 }
@@ -128,6 +340,133 @@ function normalizeJobRecord(job) {
     return { ...job, status: "Already found a worker", cancellationReason: "" };
   }
   return job;
+}
+function normalizeJobStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "assigned" || normalized === "found a worker" || normalized === "already found a worker") {
+    return "Already found a worker";
+  }
+  if (normalized === "completed") {
+    return "Completed";
+  }
+  if (normalized === "cancelled" || normalized === "canceled") {
+    return "Cancelled";
+  }
+  return "Open";
+}
+function normalizeJobApplicationStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "hired") {
+    return "Hired";
+  }
+  if (normalized === "rejected") {
+    return "Rejected";
+  }
+  if (normalized === "closed") {
+    return "Closed";
+  }
+  return "Pending";
+}
+function normalizeBackendApplication(application) {
+  if (!application) {
+    return null;
+  }
+  return {
+    id: application.id,
+    workerId: application.worker ?? application.worker_id ?? null,
+    workerUsername: application.worker_username || application.workerUsername || "",
+    workerName: application.worker_name || application.workerName || application.worker_username || "Worker",
+    status: normalizeJobApplicationStatus(application.status),
+    appliedAt: application.applied_at || application.appliedAt || "",
+    updatedAt: application.updated_at || application.updatedAt || "",
+    note: application.note || "",
+  };
+}
+function normalizeBackendJob(job) {
+  if (!job) {
+    return null;
+  }
+  const applications = (job.applications || []).map(normalizeBackendApplication).filter(Boolean);
+  const hiredApplications = applications.filter((application) => application.status === "Hired");
+  return normalizeJobRecord({
+    id: job.id,
+    householdUsername: job.household_username || job.householdUsername || "",
+    householdName: job.household_name || job.householdName || job.household_username || "Household",
+    jobTitle: job.title || job.job_title || job.required_skill || job.jobType || "",
+    serviceType: job.required_skill || job.job_type || job.jobType || job.title || "",
+    scheduleType: job.schedule || "One - Time",
+    preferredDate: job.preferred_date || "",
+    preferredTime: job.preferred_time || "",
+    description: job.description || "",
+    barangay: job.location_label || job.barangay || "",
+    streetAddress: job.street_address || "",
+    offeredRate: String(job.service_rate ?? "0.00"),
+    rateType: "Per Day",
+    workersNeeded: Number(job.worker_slots || 1),
+    status: normalizeJobStatus(job.status),
+    matchedWorkerIds: hiredApplications.map((application) => application.workerId).filter(Boolean),
+    selectedWorkerId: hiredApplications[0]?.workerId || null,
+    selectedWorkerName: hiredApplications[0]?.workerName || "",
+    hiredAt: hiredApplications[0]?.appliedAt || "",
+    applications,
+    createdAt: job.created_at || job.createdAt || new Date().toISOString(),
+  });
+}
+function normalizeBackendNotification(notification) {
+  if (!notification) {
+    return null;
+  }
+  return {
+    id: `backend-notification-${notification.id}`,
+    backendId: notification.id,
+    notificationType: notification.notification_type || notification.notificationType || "analytics",
+    title: notification.title || "Notification",
+    message: notification.message || "",
+    date: notification.created_at || notification.createdAt || "Recently",
+    unread: !notification.is_read,
+  };
+}
+function normalizeBackendReview(review) {
+  if (!review) {
+    return null;
+  }
+  return normalizeReview({
+    id: review.id,
+    authorRole: review.author_role || review.authorRole || "",
+    authorName: review.author_name || review.authorName || review.author_username || "User",
+    targetName: review.target_name || review.targetName || review.target_username || "User",
+    rating: review.rating ?? null,
+    feedback: review.feedback || "",
+    jobTitle: review.job_title || review.jobTitle || "",
+    createdAt: review.created_at || review.createdAt || new Date().toLocaleString("en-PH"),
+  });
+}
+function dedupeNotifications(notifications) {
+  const seenKeys = new Set();
+  return notifications.filter((notification) => {
+    const key = notification.backendId || `${notification.notificationType || "generic"}-${notification.title}-${notification.message}`;
+    if (seenKeys.has(key)) {
+      return false;
+    }
+    seenKeys.add(key);
+    return true;
+  });
+}
+function isNumericIdentifier(value) {
+  if (value == null || value === "") {
+    return false;
+  }
+  return /^\d+$/.test(String(value));
+}
+function findJobApplicationForWorker(job, worker) {
+  if (!job || !worker) {
+    return null;
+  }
+  return (job.applications || []).find((application) => {
+    const matchesWorkerId = application.workerId != null && String(application.workerId) === String(worker.id);
+    const matchesWorkerUsername = application.workerUsername && worker.username && application.workerUsername === worker.username;
+    return matchesWorkerId || matchesWorkerUsername;
+  }) || null;
 }
 function getJobStatusBadgeClass(status) {
   if (status === "Cancelled") {
@@ -160,7 +499,41 @@ function renderBarangayOptions() {
 function buildMatchedWorkersForJob(job, workers) {
   const applicantIds = (job.applications || []).filter((application) => application.status !== "Rejected").map((application) => application.workerId);
   const matchedWorkerIds = [...new Set([...(job.matchedWorkerIds || []), ...applicantIds])];
-  return matchedWorkerIds.map((workerId) => workers.find((worker) => worker.id === workerId)).filter(Boolean);
+  return matchedWorkerIds.map((workerId) => workers.find((worker) => String(worker.id) === String(workerId))).filter(Boolean);
+}
+function buildWorkerFallbackFromJob(job, selectedWorkerId) {
+  if (!job || selectedWorkerId == null) {
+    return null;
+  }
+  const application = (job.applications || []).find((item) => String(item.workerId) === String(selectedWorkerId));
+  if (!application) {
+    return null;
+  }
+  return {
+    id: application.workerId ?? selectedWorkerId,
+    username: application.workerUsername || `worker-${selectedWorkerId}`,
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    barangay: "",
+    streetAddress: "",
+    bio: "",
+    hourlyRate: "0.00",
+    dailyRate: "0.00",
+    yearsExperience: "0",
+    skills: [],
+    verification: "Not Yet Verified",
+    rating: "No ratings yet",
+    reviewsDone: 0,
+    status: application.status === "Hired" ? "Hired" : "Available",
+    distanceKm: "0.00",
+    avatar: (application.workerName || application.workerUsername || "W").slice(0, 1).toUpperCase(),
+    receivedReviews: [],
+    givenFeedback: [],
+    verificationNotifications: [],
+    applicationNotifications: [],
+  };
 }
 function getWorkerJobMatches(worker, jobs) {
   if (!worker) {
@@ -214,9 +587,10 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [registeredWorkers, setRegisteredWorkers] = useState(() => getStoredCollection(STORAGE_KEYS.workers, []));
   const [registeredHouseholds, setRegisteredHouseholds] = useState(() => getStoredCollection(STORAGE_KEYS.households, []));
-  const [verificationRequests, setVerificationRequests] = useState(() => getStoredCollection(STORAGE_KEYS.verificationRequests, []));
+  const [verificationRequests, setVerificationRequests] = useState([]);
   const [postedJobs, setPostedJobs] = useState(() => getStoredCollection(STORAGE_KEYS.jobs, []).map(normalizeJobRecord));
-  const [selectedVerificationRequestId, setSelectedVerificationRequestId] = useState(() => getStoredCollection(STORAGE_KEYS.verificationRequests, [])[0]?.id || null);
+  const [backendNotifications, setBackendNotifications] = useState([]);
+  const [selectedVerificationRequestId, setSelectedVerificationRequestId] = useState(null);
   const [adminSection, setAdminSection] = useState("verification");
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [selectedWorkerId, setSelectedWorkerId] = useState(null);
@@ -230,23 +604,62 @@ function App() {
   const [householdReviewForm, setHouseholdReviewForm] = useState(EMPTY_HOUSEHOLD_REVIEW_FORM);
   const [workerFeedbackForm, setWorkerFeedbackForm] = useState(EMPTY_WORKER_FEEDBACK_FORM);
   const [adminLoginForm, setAdminLoginForm] = useState({ username: "", password: "" });
-  const currentWorker = registeredWorkers.find((item) => item.username === currentUser?.username);
+  const [matchedWorkersByJob, setMatchedWorkersByJob] = useState({});
+  const backendCurrentWorker = normalizeBackendWorker(currentUser);
+  const localCurrentWorker = registeredWorkers.find((item) => item.username === currentUser?.username) || null;
+  const currentWorkerRequestFromProfile = normalizeVerificationRequest(currentUser?.profile?.verification_request);
+  const currentWorkerVerificationRequest = verificationRequests.find((item) => item.workerUsername === currentUser?.username) || currentWorkerRequestFromProfile || localCurrentWorker?.verificationSubmission || backendCurrentWorker?.verificationSubmission || null;
+  const currentWorkerVerificationLabel = currentWorkerVerificationRequest?.status ? getWorkerVerificationLabel(currentWorkerVerificationRequest.status) : getWorkerVerificationLabel(currentUser?.profile?.verification_status || backendCurrentWorker?.verification || localCurrentWorker?.verification);
+  const currentWorkerBase = backendCurrentWorker ? {
+    ...localCurrentWorker,
+    ...backendCurrentWorker,
+    verificationNotifications: [
+      ...(localCurrentWorker?.verificationNotifications || []),
+      ...(backendCurrentWorker?.verificationNotifications || []),
+    ],
+    applicationNotifications: [
+      ...(localCurrentWorker?.applicationNotifications || []),
+      ...(backendCurrentWorker?.applicationNotifications || []),
+    ],
+    receivedReviews: backendCurrentWorker.receivedReviews || localCurrentWorker?.receivedReviews || [],
+    givenFeedback: backendCurrentWorker.givenFeedback || localCurrentWorker?.givenFeedback || [],
+  } : localCurrentWorker || null;
+  const currentWorker = currentWorkerBase ? {
+    ...currentWorkerBase,
+    verification: currentWorkerVerificationLabel,
+    verificationSubmission: currentWorkerVerificationRequest,
+  } : null;
   const currentHousehold = registeredHouseholds.find((item) => item.username === currentUser?.username);
   const householdJobs = postedJobs.filter((item) => item.householdUsername === currentUser?.username);
   const selectedJob = householdJobs.find((item) => item.id === selectedJobId) || householdJobs[0] || postedJobs[0] || null;
-  const selectedMatchedWorkers = selectedJob ? buildMatchedWorkersForJob(selectedJob, registeredWorkers) : [];
-  const selectedWorker = registeredWorkers.find((worker) => worker.id === selectedWorkerId) || null;
+  const selectedMatchedWorkers = selectedJob ? matchedWorkersByJob[selectedJob.id] || buildMatchedWorkersForJob(selectedJob, registeredWorkers) : [];
+  const matchedSelectedWorker = selectedMatchedWorkers.find((worker) => String(worker.id) === String(selectedWorkerId)) || selectedMatchedWorkers.find((worker) => {
+    const matchingApplication = (selectedJob?.applications || []).find((application) => String(application.workerId) === String(selectedWorkerId));
+    return matchingApplication && worker.username === matchingApplication.workerUsername;
+  }) || null;
+  const registeredSelectedWorker = registeredWorkers.find((worker) => String(worker.id) === String(selectedWorkerId)) || registeredWorkers.find((worker) => {
+    const matchingApplication = (selectedJob?.applications || []).find((application) => String(application.workerId) === String(selectedWorkerId));
+    return matchingApplication && worker.username === matchingApplication.workerUsername;
+  }) || null;
+  const selectedWorker = matchedSelectedWorker ? { ...registeredSelectedWorker, ...matchedSelectedWorker } : registeredSelectedWorker || buildWorkerFallbackFromJob(selectedJob, selectedWorkerId);
   const selectedWorkerPhoto = getWorkerPhoto(selectedWorker);
   const selectedVerificationRequest = verificationRequests.find((item) => item.id === selectedVerificationRequestId) || verificationRequests[0] || null;
   const workerVisibleJobs = getWorkerJobMatches(currentWorker, postedJobs);
   const workerMatchedJobs = workerVisibleJobs.filter((job) => job.matchesSkill);
   const workerMiniPhoto = getWorkerPhoto(currentWorker);
-  const householdNotifications = getHouseholdNotifications(householdJobs, registeredWorkers);
+  const householdNotifications = dedupeNotifications([
+    ...getHouseholdNotifications(householdJobs, registeredWorkers),
+    ...backendNotifications.filter((item) => item.notificationType === "application"),
+  ]);
   const verificationNotifications = getVerificationNotifications(verificationRequests, registeredWorkers);
-  const workerNotifications = [...currentWorker?.verificationNotifications || [], ...currentWorker?.applicationNotifications || []];
-  const householdNotificationsWithReadState = householdNotifications.map((item) => ({ ...item, unread: !notificationReads[item.id] }));
-  const workerNotificationsWithReadState = workerNotifications.map((item) => ({ ...item, unread: !notificationReads[item.id] }));
-  const workerApplications = currentWorker ? postedJobs.flatMap((job) => (job.applications || []).filter((application) => application.workerId === currentWorker.id).map((application) => ({ ...job, appliedAt: application.appliedAt, applicationStatus: application.status, applicationId: application.id }))) : [];
+  const workerNotifications = dedupeNotifications([
+    ...backendNotifications.filter((item) => item.notificationType !== "application"),
+    ...(currentWorker?.verificationNotifications || []),
+    ...(currentWorker?.applicationNotifications || []),
+  ]);
+  const householdNotificationsWithReadState = householdNotifications.map((item) => ({ ...item, unread: item.unread !== false && !notificationReads[item.id] }));
+  const workerNotificationsWithReadState = workerNotifications.map((item) => ({ ...item, unread: item.unread !== false && !notificationReads[item.id] }));
+  const workerApplications = currentWorker ? postedJobs.flatMap((job) => (job.applications || []).filter((application) => String(application.workerId) === String(currentWorker.id) || application.workerUsername === currentWorker.username).map((application) => ({ ...job, appliedAt: application.appliedAt, applicationStatus: application.status, applicationId: application.id }))) : [];
   const currentWorkerJobDetail = workerVisibleJobs.find((item) => item.id === selectedJobId) || workerVisibleJobs[0] || null;
   const currentWorkerJobHousehold = currentWorkerJobDetail ? registeredHouseholds.find((item) => item.username === currentWorkerJobDetail.householdUsername) : null;
   const adminVisibleWorkers = registeredWorkers.filter((worker) => Boolean(worker.verificationSubmission));
@@ -260,14 +673,135 @@ function App() {
     return ["Hired", "Rejected"].includes(job.applicationStatus) && !notificationReads[notificationId];
   }).length;
   useEffect(() => {
+    if (!currentUser?.username) {
+      return;
+    }
+    refreshProfilesFromBackend();
+  }, [currentUser?.username]);
+  useEffect(() => {
+    if (currentUser?.role !== "household" || !selectedJob?.id) {
+      return;
+    }
+    refreshRecommendedWorkers(selectedJob.id);
+  }, [currentUser?.role, selectedJob?.id, registeredWorkers.length]);
+  useEffect(() => {
+    if (currentUser?.role !== "worker" || !currentWorkerVerificationLabel) {
+      return;
+    }
+    const normalizedProfileStatus = currentWorkerVerificationLabel === "Verified" ? "verified" : currentWorkerVerificationLabel === "Rejected" ? "rejected" : currentWorkerVerificationLabel === "Under Review" ? "pending" : "unverified";
+    if (currentUser?.profile?.verification_status === normalizedProfileStatus) {
+      return;
+    }
+    setCurrentUser((prev) => {
+      if (!prev || prev.role !== "worker") {
+        return prev;
+      }
+      return {
+        ...prev,
+        profile: {
+          ...(prev.profile || {}),
+          verification_status: normalizedProfileStatus,
+          verification_request: currentWorkerVerificationRequest || prev.profile?.verification_request || null,
+        },
+      };
+    });
+  }, [currentUser?.role, currentUser?.profile?.verification_status, currentWorkerVerificationLabel, currentWorkerVerificationRequest]);
+  useEffect(() => {
+    let cancelled = false;
+    let intervalId = null;
+    async function syncVerificationState() {
+      if (!currentUser?.username) {
+        return;
+      }
+      if (!cancelled) {
+        await refreshVerificationStateFromBackend();
+      }
+    }
+    syncVerificationState();
+    if (currentUser?.username) {
+      intervalId = window.setInterval(syncVerificationState, currentUser.role === "worker" ? 3000 : 5000);
+    }
+    return () => {
+      cancelled = true;
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [
+    currentUser?.username,
+    currentUser?.role,
+    currentUser?.profile?.verification_status,
+    currentUser?.profile?.verification_request?.id,
+    currentUser?.profile?.verification_request?.reviewed_at,
+    currentUser?.profile?.verification_request?.status,
+  ]);
+  useEffect(() => {
+    let cancelled = false;
+    let intervalId = null;
+    async function syncJobs() {
+      if (cancelled) {
+        return;
+      }
+      await refreshJobsFromBackend();
+    }
+    syncJobs();
+    intervalId = window.setInterval(syncJobs, currentUser?.username ? 5000 : 10000);
+    return () => {
+      cancelled = true;
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [currentUser?.username, currentUser?.role]);
+  useEffect(() => {
+    let cancelled = false;
+    let intervalId = null;
+    async function syncBackendActivity() {
+      if (cancelled) {
+        return;
+      }
+      if (!currentUser?.username) {
+        setBackendNotifications([]);
+        return;
+      }
+      await refreshNotificationsFromBackend();
+      await refreshReviewsFromBackend();
+    }
+    syncBackendActivity();
+    if (currentUser?.username) {
+      intervalId = window.setInterval(syncBackendActivity, 5000);
+    }
+    return () => {
+      cancelled = true;
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [currentUser?.username, currentUser?.role, selectedWorker?.username]);
+  useEffect(() => {
     let cancelled = false;
     async function loadDashboardMetrics() {
+      if (currentUser?.role !== "admin" && !getAuthToken()) {
+        if (!cancelled) {
+          setDashboardMetrics({
+            openJobs: postedJobs.filter((job) => job.status === "Open").length,
+            verifiedWorkers: registeredWorkers.filter((worker) => worker.verification === "Verified").length,
+            completedJobs: postedJobs.filter((job) => job.status === "Completed").length,
+            totalAccounts: registeredWorkers.length + registeredHouseholds.length,
+            avgRating: null,
+          });
+        }
+        return;
+      }
       try {
-        const response = await fetch("http://127.0.0.1:8000/api/analytics/dashboard-metrics/");
+        const response = await apiRequest("analytics/dashboard-metrics/", {
+          auth: true,
+          suppressUnauthorized: true,
+        });
         if (!response.ok) {
           throw new Error("Failed to load dashboard metrics");
         }
-        const data = await response.json();
+        const data = await readResponseData(response);
         if (!cancelled) {
           setDashboardMetrics({ openJobs: data.open_jobs ?? 0, verifiedWorkers: data.verified_workers ?? 0, completedJobs: data.completed_jobs ?? 0, totalAccounts: data.total_accounts ?? 0, avgRating: data.avg_rating });
         }
@@ -281,7 +815,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [postedJobs, registeredHouseholds.length, registeredWorkers.length]);
+  }, [currentUser?.role, postedJobs, registeredHouseholds.length, registeredWorkers.length]);
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEYS.workers, JSON.stringify(registeredWorkers));
   }, [registeredWorkers]);
@@ -291,9 +825,6 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEYS.jobs, JSON.stringify(postedJobs));
   }, [postedJobs]);
-  useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEYS.verificationRequests, JSON.stringify(verificationRequests));
-  }, [verificationRequests]);
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEYS.notificationReads, JSON.stringify(notificationReads));
   }, [notificationReads]);
@@ -679,7 +1210,11 @@ function App() {
     if (view !== "worker-notifications" || !currentWorker) {
       return;
     }
+    const existingAlert = document.querySelector("[data-verification-alert]");
     if (currentWorker.verification === "Verified") {
+      if (existingAlert) {
+        existingAlert.remove();
+      }
       return;
     }
     const badgeRow = document.querySelector(".worker-topbar");
@@ -737,6 +1272,7 @@ function App() {
     setView("home");
   }
   function handleLogout() {
+    clearAuthToken();
     setCurrentUser(null);
     setSelectedWorkerId(null);
     setSelectedJobId(null);
@@ -756,6 +1292,18 @@ function App() {
     setForgotPasswordForm({ email: "", token: "", newPassword: "", confirmPassword: "" });
     setView("forgot-password");
   }
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      clearAuthToken();
+      setCurrentUser(null);
+      setSelectedWorkerId(null);
+      setSelectedJobId(null);
+      setLoginForm({ username: "", password: "", role: "worker" });
+      setView("login");
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
   function openWorkerRegister() {
     setWorkerForm(EMPTY_WORKER_FORM);
     setView("register-worker");
@@ -796,6 +1344,256 @@ function App() {
     setAdminSection("history");
     setView("admin-dashboard");
   }
+  function mergeBackendWorkerIntoState(backendWorker) {
+    if (!backendWorker) {
+      return;
+    }
+    setRegisteredWorkers((prev) => {
+      const existingIndex = prev.findIndex((item) => item.id === backendWorker.id || item.username?.toLowerCase() === backendWorker.username?.toLowerCase());
+      if (existingIndex < 0) {
+        return [backendWorker, ...prev];
+      }
+      return prev.map((item, index) => (index === existingIndex ? { ...item, ...backendWorker, password: item.password || backendWorker.password || "" } : item));
+    });
+  }
+  async function refreshVerificationStateFromBackend() {
+    if (!currentUser?.username) {
+      return;
+    }
+    try {
+      const requestsResponse = await apiRequest("common/verification-requests/", {
+        auth: false,
+        suppressUnauthorized: true,
+      });
+      if (requestsResponse.ok) {
+        const requestsData = await readResponseData(requestsResponse);
+        const records = Array.isArray(requestsData) ? requestsData : requestsData?.results || [];
+        const normalizedRequests = records.map(normalizeVerificationRequest).filter(Boolean);
+        setVerificationRequests(normalizedRequests);
+        setSelectedVerificationRequestId((prevSelectedId) => {
+          if (normalizedRequests.some((item) => item.id === prevSelectedId)) {
+            return prevSelectedId;
+          }
+          if (currentUser.role === "worker") {
+            return normalizedRequests.find((item) => item.workerUsername === currentUser.username)?.id || normalizedRequests[0]?.id || null;
+          }
+          return normalizedRequests[0]?.id || null;
+        });
+        if (currentUser.role === "worker") {
+          const matchingRequest = normalizedRequests.find((item) => item.workerUsername === currentUser.username);
+          if (!getAuthToken() && matchingRequest) {
+            const nextVerificationStatus = matchingRequest.status === "Approved" ? "approved" : matchingRequest.status === "Rejected" ? "rejected" : "pending";
+            setCurrentUser((prev) => (prev ? { ...prev, profile: { ...(prev.profile || {}), verification_status: nextVerificationStatus, verification_request: matchingRequest } } : prev));
+          }
+          if (matchingRequest) {
+            const nextVerificationLabel = matchingRequest.status === "Approved" ? "Verified" : matchingRequest.status === "Rejected" ? "Rejected" : "Under Review";
+            setRegisteredWorkers((prev) => prev.map((worker) => worker.username === currentUser.username ? {
+              ...worker,
+              verification: nextVerificationLabel,
+              verificationRequestId: matchingRequest.id,
+              verificationSubmission: matchingRequest,
+              verificationReviewedAt: matchingRequest.reviewedAt || worker.verificationReviewedAt || "",
+              verificationReviewedBy: matchingRequest.reviewedBy || worker.verificationReviewedBy || "",
+              verificationRejectionNote: matchingRequest.reviewNote || worker.verificationRejectionNote || "",
+            } : worker));
+          }
+        }
+      }
+      if (currentUser.role === "worker" && getAuthToken()) {
+        const profileResponse = await apiRequest("accounts/me/", {
+          auth: true,
+          suppressUnauthorized: true,
+        });
+        if (profileResponse.ok) {
+          const profileData = await readResponseData(profileResponse);
+          const refreshedUser = {
+            id: profileData?.user?.id || currentUser.id || currentUser.username,
+            role: currentUser.role,
+            username: profileData?.user?.username || currentUser.username,
+            email: profileData?.user?.email || currentUser.email || "",
+            first_name: profileData?.user?.first_name || currentUser.first_name || "",
+            last_name: profileData?.user?.last_name || currentUser.last_name || "",
+            displayName: profileData?.user?.first_name || profileData?.user?.last_name ? getDisplayName(profileData?.user?.first_name || "", profileData?.user?.last_name || "", profileData?.user?.username || currentUser.username) : (currentUser.displayName || currentUser.username),
+            profile: profileData?.profile || currentUser.profile || null,
+            is_staff: Boolean(currentUser.is_staff),
+          };
+          setCurrentUser((prev) => (prev ? { ...prev, ...refreshedUser } : prev));
+          mergeBackendWorkerIntoState(normalizeBackendWorker(refreshedUser));
+        }
+      }
+    } catch (error) {
+      return;
+    }
+  }
+  async function refreshJobsFromBackend() {
+    try {
+      const response = await apiRequest("jobs/", {
+        auth: false,
+        suppressUnauthorized: true,
+      });
+      if (!response.ok) {
+        return;
+      }
+      const data = await readResponseData(response);
+      const records = Array.isArray(data) ? data : data?.results || [];
+      const normalizedJobs = records.map(normalizeBackendJob).filter(Boolean);
+      setPostedJobs(normalizedJobs);
+    } catch (error) {
+      return;
+    }
+  }
+  async function refreshProfilesFromBackend() {
+    try {
+      const response = await apiRequest("accounts/profiles/", {
+        auth: false,
+        suppressUnauthorized: true,
+      });
+      if (!response.ok) {
+        return;
+      }
+      const data = await readResponseData(response);
+      const records = Array.isArray(data) ? data : data?.results || [];
+      const normalizedProfiles = records.map(normalizeProfileRecord).filter(Boolean);
+      const workerProfiles = normalizedProfiles.filter((profile) => profile.role === "worker");
+      const householdProfiles = normalizedProfiles.filter((profile) => profile.role === "household");
+      if (workerProfiles.length > 0) {
+        setRegisteredWorkers((prev) => workerProfiles.map((workerProfile) => {
+          const existing = prev.find((item) => item.username?.toLowerCase() === workerProfile.username?.toLowerCase() || String(item.id) === String(workerProfile.id));
+          return {
+            ...existing,
+            ...workerProfile,
+            verificationSubmission: existing?.verificationSubmission || null,
+            verificationNotifications: existing?.verificationNotifications || [],
+            applicationNotifications: existing?.applicationNotifications || [],
+            receivedReviews: existing?.receivedReviews || [],
+            givenFeedback: existing?.givenFeedback || [],
+            avatar: existing?.avatar || (workerProfile.firstName || workerProfile.username || "W").slice(0, 1).toUpperCase(),
+            bio: existing?.bio || "",
+            phone: existing?.phone || "",
+            yearsExperience: existing?.yearsExperience || "0",
+            status: existing?.status || "Available",
+            distanceKm: existing?.distanceKm || "0.00",
+            distanceLabel: existing?.distanceLabel || "",
+          };
+        }));
+      }
+      if (householdProfiles.length > 0) {
+        setRegisteredHouseholds((prev) => householdProfiles.map((householdProfile) => {
+          const existing = prev.find((item) => item.username?.toLowerCase() === householdProfile.username?.toLowerCase() || String(item.id) === String(householdProfile.id));
+          return {
+            ...existing,
+            ...householdProfile,
+            avatar: existing?.avatar || (householdProfile.firstName || householdProfile.username || "H").slice(0, 1).toUpperCase(),
+            phone: existing?.phone || "",
+            receivedFeedback: existing?.receivedFeedback || [],
+            givenFeedback: existing?.givenFeedback || [],
+          };
+        }));
+      }
+    } catch (error) {
+      return;
+    }
+  }
+  async function refreshRecommendedWorkers(jobId) {
+    if (!jobId) {
+      return;
+    }
+    try {
+      const response = await apiRequest(`matching/recommended-workers/?job_id=${encodeURIComponent(jobId)}`, {
+        auth: false,
+        suppressUnauthorized: true,
+      });
+      if (!response.ok) {
+        return;
+      }
+      const data = await readResponseData(response);
+      const results = Array.isArray(data?.results) ? data.results : [];
+      setMatchedWorkersByJob((prev) => ({
+        ...prev,
+        [jobId]: results.map((result) => {
+          const existingWorker = registeredWorkers.find((worker) => String(worker.id) === String(result.worker_id) || worker.username === result.worker_username);
+          const distanceLabel = formatDistance(result.distance_km, result.distance_label);
+          return {
+            ...existingWorker,
+            id: existingWorker?.id || result.worker_id,
+            username: existingWorker?.username || result.worker_username,
+            firstName: existingWorker?.firstName || "",
+            lastName: existingWorker?.lastName || "",
+            skills: result.skills || existingWorker?.skills || [],
+            verification: getWorkerVerificationLabel(result.verification_status),
+            rating: result.rating_label || existingWorker?.rating || "No ratings yet",
+            reviewsDone: existingWorker?.reviewsDone || 0,
+            hourlyRate: existingWorker?.hourlyRate || "0.00",
+            dailyRate: existingWorker?.dailyRate || "0.00",
+            status: existingWorker?.status || "Available",
+            avatar: existingWorker?.avatar || (result.worker_username || "W").slice(0, 1).toUpperCase(),
+            distanceKm: result.distance_km !== null && result.distance_km !== undefined && result.distance_km !== "" && Number.isFinite(Number(result.distance_km)) ? Number(result.distance_km).toFixed(1) : "",
+            distanceLabel,
+            matchScore: result.match_score,
+          };
+        }),
+      }));
+    } catch (error) {
+      return;
+    }
+  }
+  async function refreshNotificationsFromBackend() {
+    if (!currentUser?.username) {
+      setBackendNotifications([]);
+      return;
+    }
+    try {
+      const response = await apiRequest(`notifications/?username=${encodeURIComponent(currentUser.username)}`, {
+        auth: false,
+        suppressUnauthorized: true,
+      });
+      if (!response.ok) {
+        return;
+      }
+      const data = await readResponseData(response);
+      const records = Array.isArray(data) ? data : data?.results || [];
+      setBackendNotifications(records.map(normalizeBackendNotification).filter(Boolean));
+    } catch (error) {
+      return;
+    }
+  }
+  async function refreshReviewsFromBackend() {
+    if (!currentUser?.username) {
+      return;
+    }
+    try {
+      const requests = [
+        apiRequest(`reviews/?username=${encodeURIComponent(currentUser.username)}`, { auth: false, suppressUnauthorized: true }),
+        apiRequest(`reviews/?author_username=${encodeURIComponent(currentUser.username)}`, { auth: false, suppressUnauthorized: true }),
+      ];
+      if (currentUser.role === "household" && selectedWorker?.username) {
+        requests.push(apiRequest(`reviews/?username=${encodeURIComponent(selectedWorker.username)}`, { auth: false, suppressUnauthorized: true }));
+      }
+      const responses = await Promise.all(requests);
+      const payloads = await Promise.all(responses.map(async (response) => {
+        if (!response.ok) {
+          return [];
+        }
+        const data = await readResponseData(response);
+        const records = Array.isArray(data) ? data : data?.results || [];
+        return records.map(normalizeBackendReview).filter(Boolean);
+      }));
+      const receivedReviews = payloads[0] || [];
+      const authoredReviews = payloads[1] || [];
+      if (currentUser.role === "worker") {
+        setRegisteredWorkers((prev) => prev.map((worker) => worker.username === currentUser.username ? { ...worker, receivedReviews, givenFeedback: authoredReviews } : worker));
+      }
+      if (currentUser.role === "household") {
+        setRegisteredHouseholds((prev) => prev.map((household) => household.username === currentUser.username ? { ...household, receivedFeedback: receivedReviews, givenFeedback: authoredReviews } : household));
+        if (selectedWorker?.username) {
+          const selectedWorkerReviews = payloads[2] || [];
+          setRegisteredWorkers((prev) => prev.map((worker) => worker.username === selectedWorker.username ? { ...worker, receivedReviews: selectedWorkerReviews } : worker));
+        }
+      }
+    } catch (error) {
+      return;
+    }
+  }
   function openHouseholdDashboard() {
     setView("household-dashboard");
   }
@@ -834,6 +1632,21 @@ function App() {
   function markNotificationRead(notificationId) {
     if (!notificationId) return;
     setNotificationReads((prev) => prev[notificationId] ? prev : { ...prev, [notificationId]: true });
+    const backendNotification = backendNotifications.find((item) => item.id === notificationId);
+    if (backendNotification?.backendId && currentUser?.username) {
+      apiRequest(`notifications/${backendNotification.backendId}/read/`, {
+        method: "PATCH",
+        auth: false,
+        suppressUnauthorized: true,
+        body: { username: currentUser.username },
+      }).then(async (response) => {
+        if (response.ok) {
+          await refreshNotificationsFromBackend();
+        }
+      }).catch(() => {
+        return;
+      });
+    }
   }
   function markAllNotificationsRead(notifications) {
     setNotificationReads((prev) => {
@@ -846,6 +1659,18 @@ function App() {
         }
       });
       return changed ? nextState : prev;
+    });
+    notifications.forEach((notification) => {
+      if (notification.backendId && currentUser?.username) {
+        apiRequest(`notifications/${notification.backendId}/read/`, {
+          method: "PATCH",
+          auth: false,
+          suppressUnauthorized: true,
+          body: { username: currentUser.username },
+        }).catch(() => {
+          return;
+        });
+      }
     });
   }
   function markAllWorkerNotificationsRead() {
@@ -898,11 +1723,39 @@ function App() {
       window.alert("You already applied for this job.");
       return;
     }
-    const appliedAt = (/* @__PURE__ */ new Date()).toLocaleString("en-PH");
-    const application = { id: `application-${job.id}-${currentWorker.id}-${Date.now()}`, workerId: currentWorker.id, workerName: getDisplayName(currentWorker.firstName, currentWorker.lastName, currentWorker.username), workerUsername: currentWorker.username, appliedAt, status: "Pending" };
-    setPostedJobs((prev) => prev.map((item) => item.id === jobId ? { ...item, applications: [...item.applications || [], application] } : item));
-    window.alert("Application sent to the household.");
-    setView("worker-applications");
+    (async () => {
+      try {
+        const response = await apiRequest(`jobs/${jobId}/apply/`, {
+          method: "POST",
+          auth: false,
+          body: { worker_username: currentWorker.username, worker_role: "worker", note: "" },
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to apply for this job."));
+        }
+        const appliedAt = data?.applied_at || (/* @__PURE__ */ new Date()).toLocaleString("en-PH");
+        const application = {
+          id: data?.id || `application-${job.id}-${currentWorker.id}-${Date.now()}`,
+          workerId: data?.worker || currentWorker.id,
+          workerName: data?.worker_name || getDisplayName(currentWorker.firstName, currentWorker.lastName, currentWorker.username),
+          workerUsername: data?.worker_username || currentWorker.username,
+          appliedAt,
+          status: "Pending",
+        };
+        setPostedJobs((prev) => prev.map((item) => item.id === jobId ? { ...item, applications: [...item.applications || [], application] } : item));
+        await refreshJobsFromBackend();
+        await refreshNotificationsFromBackend();
+        window.alert("Application sent to the household.");
+        setView("worker-applications");
+      } catch (error) {
+        const appliedAt = (/* @__PURE__ */ new Date()).toLocaleString("en-PH");
+        const application = { id: `application-${job.id}-${currentWorker.id}-${Date.now()}`, workerId: currentWorker.id, workerName: getDisplayName(currentWorker.firstName, currentWorker.lastName, currentWorker.username), workerUsername: currentWorker.username, appliedAt, status: "Pending" };
+        setPostedJobs((prev) => prev.map((item) => item.id === jobId ? { ...item, applications: [...item.applications || [], application] } : item));
+        window.alert(error.message || "Application sent locally.");
+        setView("worker-applications");
+      }
+    })();
   }
   function openHouseholdNotificationWorker(notification) {
     if (!notification?.workerId) return;
@@ -937,34 +1790,60 @@ function App() {
       window.alert("This job already has enough hired workers.");
       return;
     }
-    const existingApplication = (selectedJob.applications || []).find((application) => application.workerId === selectedWorker.id);
+    const existingApplication = findJobApplicationForWorker(selectedJob, selectedWorker);
     if (existingApplication?.status === "Hired") {
       window.alert("This worker is already hired for this job.");
       return;
     }
-    const hiredAt = (/* @__PURE__ */ new Date()).toLocaleString("en-PH");
-    const applicationRecord = existingApplication ? { ...existingApplication, status: "Hired", hiredAt } : { id: `application-${selectedJob.id}-${selectedWorker.id}-${Date.now()}`, workerId: selectedWorker.id, workerName: getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username), workerUsername: selectedWorker.username, appliedAt: hiredAt, hiredAt, status: "Hired" };
-    setPostedJobs((prev) => prev.map((job) => {
-      if (job.id !== selectedJob.id) {
-        return job;
+    (async () => {
+      const hiredAt = (/* @__PURE__ */ new Date()).toLocaleString("en-PH");
+      const applicationRecord = existingApplication ? { ...existingApplication, status: "Hired", hiredAt } : { id: `application-${selectedJob.id}-${selectedWorker.id}-${Date.now()}`, workerId: selectedWorker.id, workerName: getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username), workerUsername: selectedWorker.username, appliedAt: hiredAt, hiredAt, status: "Hired" };
+      const applicationStatusTargetId = isNumericIdentifier(existingApplication?.id) ? existingApplication.id : selectedJob.id;
+      try {
+        const response = await apiRequest(`jobs/applications/${applicationStatusTargetId}/status/`, {
+          method: "PATCH",
+          auth: false,
+          body: { household_username: currentHousehold.username, status: "hired", job_id: selectedJob.id, worker_username: selectedWorker.username, worker_role: "worker" },
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to hire worker."));
+        }
+        const normalizedApplication = normalizeBackendApplication(data);
+        setPostedJobs((prev) => prev.map((job) => {
+          if (job.id !== selectedJob.id) {
+            return job;
+          }
+          const nextApplication = normalizedApplication || applicationRecord;
+          const applications = existingApplication ? (job.applications || []).map((application) => {
+            const matchesWorkerId = application.workerId != null && String(application.workerId) === String(selectedWorker.id);
+            const matchesWorkerUsername = application.workerUsername && selectedWorker.username && application.workerUsername === selectedWorker.username;
+            return matchesWorkerId || matchesWorkerUsername ? nextApplication : application;
+          }) : [...job.applications || [], nextApplication];
+          const nextJob = { ...job, cancellationReason: "", selectedWorkerId: selectedWorker.id, selectedWorkerName: getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username), hiredAt, applications };
+          const isFilled = getHiredWorkerCount(nextJob) >= getWorkersNeeded(nextJob);
+          return { ...nextJob, status: isFilled ? "Already found a worker" : "Open", applications: isFilled ? applications.map((application) => application.status === "Pending" ? { ...application, status: "Closed" } : application) : applications };
+        }));
+        setRegisteredWorkers((prev) => prev.map((worker) => worker.id === selectedWorker.id ? { ...worker, status: "Hired", hiredBy: currentHousehold.username, hiredJobId: selectedJob.id, applicationNotifications: [...worker.applicationNotifications || [], { id: `hired-${selectedJob.id}-${selectedWorker.id}-${Date.now()}`, title: "You were hired", message: `${getDisplayName(currentHousehold.firstName, currentHousehold.lastName, currentHousehold.username)} hired you for ${selectedJob.jobTitle || selectedJob.serviceType}.`, date: hiredAt, unread: true }] } : worker));
+        await refreshJobsFromBackend();
+        await refreshNotificationsFromBackend();
+        window.alert(`${getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username)} has been hired for ${selectedJob.jobTitle || selectedJob.serviceType}.`);
+        setView("household-my-jobs");
+      } catch (error) {
+        await refreshJobsFromBackend();
+        await refreshNotificationsFromBackend();
+        window.alert(error.message || "Unable to hire worker.");
       }
-      const applications = existingApplication ? (job.applications || []).map((application) => application.workerId === selectedWorker.id ? applicationRecord : application) : [...job.applications || [], applicationRecord];
-      const nextJob = { ...job, cancellationReason: "", selectedWorkerId: selectedWorker.id, selectedWorkerName: getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username), hiredAt, applications };
-      const isFilled = getHiredWorkerCount(nextJob) >= getWorkersNeeded(nextJob);
-      return { ...nextJob, status: isFilled ? "Already found a worker" : "Open", applications: isFilled ? applications.map((application) => application.status === "Pending" ? { ...application, status: "Closed" } : application) : applications };
-    }));
-    setRegisteredWorkers((prev) => prev.map((worker) => worker.id === selectedWorker.id ? { ...worker, status: "Hired", hiredBy: currentHousehold.username, hiredJobId: selectedJob.id, applicationNotifications: [...worker.applicationNotifications || [], { id: `hired-${selectedJob.id}-${selectedWorker.id}-${Date.now()}`, title: "You were hired", message: `${getDisplayName(currentHousehold.firstName, currentHousehold.lastName, currentHousehold.username)} hired you for ${selectedJob.jobTitle || selectedJob.serviceType}.`, date: hiredAt, unread: true }] } : worker));
-    window.alert(`${getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username)} has been hired for ${selectedJob.jobTitle || selectedJob.serviceType}.`);
-    setView("household-my-jobs");
+    })();
   }
   function handleRejectApplication(workerId = selectedWorker?.id, jobId = selectedJob?.id) {
     const job = postedJobs.find((item) => item.id === jobId);
-    const worker = registeredWorkers.find((item) => item.id === workerId);
+    const worker = registeredWorkers.find((item) => String(item.id) === String(workerId)) || selectedWorker || null;
     if (!job || !worker) {
       window.alert("Application not found.");
       return;
     }
-    const existingApplication = (job.applications || []).find((application) => application.workerId === workerId);
+    const existingApplication = findJobApplicationForWorker(job, worker);
     if (!existingApplication) {
       window.alert("Only workers who applied to this job can be rejected.");
       return;
@@ -973,12 +1852,40 @@ function App() {
       window.alert("This worker is already hired and cannot be rejected from this application.");
       return;
     }
-    const rejectedAt = (/* @__PURE__ */ new Date()).toLocaleString("en-PH");
-    const message = `Thank you for applying to ${job.jobTitle || job.serviceType}. The household chose another applicant for now, but you can still apply to other open jobs.`;
-    setPostedJobs((prev) => prev.map((item) => item.id === jobId ? { ...item, applications: (item.applications || []).map((application) => application.workerId === workerId ? { ...application, status: "Rejected", rejectedAt, rejectionMessage: message } : application) } : item));
-    setRegisteredWorkers((prev) => prev.map((item) => item.id === workerId ? { ...item, applicationNotifications: [...item.applicationNotifications || [], { id: `rejected-${jobId}-${workerId}-${Date.now()}`, title: "Application update", message, date: rejectedAt, unread: true }] } : item));
-    window.alert(message);
-    setView("household-my-jobs");
+    (async () => {
+      const rejectedAt = (/* @__PURE__ */ new Date()).toLocaleString("en-PH");
+      const message = `Thank you for applying to ${job.jobTitle || job.serviceType}. The household chose another applicant for now, but you can still apply to other open jobs.`;
+      const applicationStatusTargetId = isNumericIdentifier(existingApplication?.id) ? existingApplication.id : job.id;
+      try {
+        const response = await apiRequest(`jobs/applications/${applicationStatusTargetId}/status/`, {
+          method: "PATCH",
+          auth: false,
+          body: { household_username: currentHousehold?.username || currentUser?.username || "", status: "rejected", job_id: job.id, worker_username: worker.username, worker_role: "worker" },
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to reject application."));
+        }
+        const normalizedApplication = normalizeBackendApplication(data);
+        setPostedJobs((prev) => prev.map((item) => item.id === jobId ? {
+          ...item,
+          applications: (item.applications || []).map((application) => {
+            const matchesWorkerId = application.workerId != null && String(application.workerId) === String(worker.id);
+            const matchesWorkerUsername = application.workerUsername && worker.username && application.workerUsername === worker.username;
+            return matchesWorkerId || matchesWorkerUsername ? { ...(normalizedApplication || application), status: "Rejected", rejectedAt, rejectionMessage: message } : application;
+          }),
+        } : item));
+        setRegisteredWorkers((prev) => prev.map((item) => item.id === workerId ? { ...item, applicationNotifications: [...item.applicationNotifications || [], { id: `rejected-${jobId}-${workerId}-${Date.now()}`, title: "Application update", message, date: rejectedAt, unread: true }] } : item));
+        await refreshJobsFromBackend();
+        await refreshNotificationsFromBackend();
+        window.alert(message);
+        setView("household-my-jobs");
+      } catch (error) {
+        await refreshJobsFromBackend();
+        await refreshNotificationsFromBackend();
+        window.alert(error.message || "Unable to reject application.");
+      }
+    })();
   }
   function handleLoginChange(event) {
     const { name, value } = event.target;
@@ -999,17 +1906,17 @@ function App() {
     setForgotPasswordError("");
     setForgotPasswordNotice("");
     try {
-      const response = await fetch(`${API_BASE_URL}/forgot-password/`, {
+      const response = await apiRequest("accounts/forgot-password/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        auth: false,
+        body: { email },
       });
-      const data = await response.json();
+      const data = await readResponseData(response);
       if (!response.ok) {
-        throw new Error(data.detail || "Unable to send reset code.");
+        throw new Error(data?.detail || "Unable to send reset code.");
       }
       setForgotPasswordStep("verify");
-      setForgotPasswordNotice(data.detail || "Reset code sent to your email.");
+      setForgotPasswordNotice(data?.detail || "Reset code sent to your email.");
     } catch (error) {
       setForgotPasswordError(error.message || "Unable to send reset code.");
     } finally {
@@ -1028,17 +1935,17 @@ function App() {
     setForgotPasswordError("");
     setForgotPasswordNotice("");
     try {
-      const response = await fetch(`${API_BASE_URL}/verify-reset-token/`, {
+      const response = await apiRequest("accounts/verify-reset-token/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, token }),
+        auth: false,
+        body: { email, token },
       });
-      const data = await response.json();
+      const data = await readResponseData(response);
       if (!response.ok) {
-        throw new Error(data.detail || "Invalid reset code.");
+        throw new Error(data?.detail || "Invalid reset code.");
       }
       setForgotPasswordStep("reset");
-      setForgotPasswordNotice(data.detail || "Code verified.");
+      setForgotPasswordNotice(data?.detail || "Code verified.");
     } catch (error) {
       setForgotPasswordError(error.message || "Invalid reset code.");
     } finally {
@@ -1060,16 +1967,16 @@ function App() {
     setForgotPasswordError("");
     setForgotPasswordNotice("");
     try {
-      const response = await fetch(`${API_BASE_URL}/reset-password/`, {
+      const response = await apiRequest("accounts/reset-password/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), token: token.trim(), new_password: newPassword }),
+        auth: false,
+        body: { email: email.trim(), token: token.trim(), new_password: newPassword },
       });
-      const data = await response.json();
+      const data = await readResponseData(response);
       if (!response.ok) {
-        throw new Error(data.detail || "Unable to reset password.");
+        throw new Error(data?.detail || "Unable to reset password.");
       }
-      setForgotPasswordNotice(data.detail || "Password reset successful.");
+      setForgotPasswordNotice(data?.detail || "Password reset successful.");
       setForgotPasswordStep("done");
     } catch (error) {
       setForgotPasswordError(error.message || "Unable to reset password.");
@@ -1148,41 +2055,79 @@ function App() {
   function handleLoginSubmit(event) {
     event.preventDefault();
     const username = loginForm.username.trim();
-    const isAdminLogin = username.toLowerCase() === ADMIN_ACCOUNT.username && loginForm.password === ADMIN_ACCOUNT.password;
+    const isFallbackAdminLogin = username.toLowerCase() === ADMIN_ACCOUNT.username && loginForm.password === ADMIN_ACCOUNT.password;
     if (!username || !loginForm.password) {
       window.alert("Please enter your username and password.");
       return;
     }
-    if (isAdminLogin) {
-      setCurrentUser({ role: "admin", username: ADMIN_ACCOUNT.username, displayName: ADMIN_ACCOUNT.displayName });
-      setView("admin-dashboard");
-      return;
-    }
-    if (loginForm.role === "worker") {
-      const worker = registeredWorkers.find((item) => item.username.toLowerCase() === username.toLowerCase());
-      if (!worker) {
-        window.alert("Worker account not found. Please register first.");
-        return;
+    (async () => {
+      try {
+        const response = await apiRequest("accounts/login/", {
+          method: "POST",
+          auth: false,
+          body: { username, password: loginForm.password },
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(data?.detail || "Login failed.");
+        }
+        setAuthToken(data?.access || "");
+        const resolvedRole = data?.role || loginForm.role || "worker";
+        setCurrentUser({
+          id: data?.id || data?.user_id || username,
+          role: resolvedRole,
+          username: data?.username || username,
+          email: data?.email || "",
+          first_name: data?.profile?.username ? "" : "",
+          last_name: "",
+          displayName: data?.display_name || data?.username || username,
+          profile: data?.profile || null,
+          is_staff: Boolean(data?.is_staff),
+        });
+        const backendWorker = normalizeBackendWorkerPayload({
+          user: {
+            id: data?.id || data?.user_id || username,
+            username: data?.username || username,
+            email: data?.email || "",
+            first_name: data?.profile?.full_name ? "" : "",
+            last_name: "",
+            display_name: data?.display_name || data?.username || username,
+            is_staff: Boolean(data?.is_staff),
+          },
+          profile: data?.profile || null,
+        });
+        if (backendWorker) {
+          mergeBackendWorkerIntoState(backendWorker);
+        }
+        setView(resolvedRole === "admin" ? "admin-dashboard" : resolvedRole === "household" ? "household-dashboard" : "worker-dashboard");
+      } catch (error) {
+        if (isFallbackAdminLogin) {
+          clearAuthToken();
+          setCurrentUser({ role: "admin", username: ADMIN_ACCOUNT.username, displayName: ADMIN_ACCOUNT.displayName });
+          setView("admin-dashboard");
+          return;
+        }
+        if (loginForm.role === "worker") {
+          const worker = registeredWorkers.find((item) => item.username.toLowerCase() === username.toLowerCase());
+          if (!worker || worker.password !== loginForm.password) {
+            window.alert(error.message || "Worker account not found. Please register first.");
+            return;
+          }
+          clearAuthToken();
+          setCurrentUser({ role: "worker", username: worker.username, displayName: getDisplayName(worker.firstName, worker.lastName, worker.username) });
+          setView("worker-dashboard");
+          return;
+        }
+        const household = registeredHouseholds.find((item) => item.username.toLowerCase() === username.toLowerCase());
+        if (!household || household.password !== loginForm.password) {
+          window.alert(error.message || "Household account not found. Please register first.");
+          return;
+        }
+        clearAuthToken();
+        setCurrentUser({ role: "household", username: household.username, displayName: getDisplayName(household.firstName, household.lastName, household.username) });
+        setView("household-dashboard");
       }
-      if (worker.password !== loginForm.password) {
-        window.alert("Incorrect password.");
-        return;
-      }
-      setCurrentUser({ role: "worker", username: worker.username, displayName: getDisplayName(worker.firstName, worker.lastName, worker.username) });
-      setView("worker-dashboard");
-      return;
-    }
-    const household = registeredHouseholds.find((item) => item.username.toLowerCase() === username.toLowerCase());
-    if (!household) {
-      window.alert("Household account not found. Please register first.");
-      return;
-    }
-    if (household.password !== loginForm.password) {
-      window.alert("Incorrect password.");
-      return;
-    }
-    setCurrentUser({ role: "household", username: household.username, displayName: getDisplayName(household.firstName, household.lastName, household.username) });
-    setView("household-dashboard");
+    })();
   }
   function handleWorkerRegisterSubmit(event) {
     event.preventDefault();
@@ -1195,6 +2140,10 @@ function App() {
       window.alert("Please enter a complete Gmail address, for example example@gmail.com.");
       return;
     }
+    if (workerForm.password.length < 8) {
+      window.alert("Password must be at least 8 characters long.");
+      return;
+    }
     if (workerForm.password !== workerForm.confirmPassword) {
       window.alert("Worker passwords do not match.");
       return;
@@ -1204,12 +2153,58 @@ function App() {
       window.alert("Username already exists for a worker account.");
       return;
     }
-    const workerAccount = { ...workerForm, skills: Array.from(/* @__PURE__ */ new Set([...workerForm.skills || [], ...workerForm.customSkill.trim() ? [workerForm.customSkill.trim()] : []])), id: Date.now(), username: workerForm.username.trim(), verification: "Not Yet Verified", rating: "No ratings yet", reviewsDone: 0, status: "Available", distanceKm: "0.00", avatar: (workerForm.firstName || workerForm.username || "W").slice(0, 1).toUpperCase(), receivedReviews: [], givenFeedback: [], verificationNotifications: [], applicationNotifications: [] };
-    setRegisteredWorkers((prev) => [...prev, workerAccount]);
-    setWorkerForm(EMPTY_WORKER_FORM);
-    setLoginForm({ username: "", password: "", role: "worker" });
-    setView("login");
-    window.alert("Worker account created. You can now login.");
+    (async () => {
+      try {
+        const coordinates = await getCurrentCoordinates();
+        const response = await apiRequest("accounts/register/", {
+          method: "POST",
+          auth: false,
+          body: {
+            username: workerForm.username.trim(),
+            email: workerForm.email.trim(),
+            password: workerForm.password,
+            first_name: workerForm.firstName.trim(),
+            last_name: workerForm.lastName.trim(),
+            role: "worker",
+            skills: Array.from(new Set([...workerForm.skills || [], ...(workerForm.customSkill.trim() ? [workerForm.customSkill.trim()] : [])])),
+            hourly_rate: workerForm.hourlyRate,
+            daily_rate: workerForm.dailyRate,
+            location_label: formatLocation(workerForm.barangay, workerForm.streetAddress),
+            latitude: coordinates?.latitude ?? null,
+            longitude: coordinates?.longitude ?? null,
+          },
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to create worker account."));
+        }
+        const workerAccount = {
+          ...workerForm,
+          skills: Array.from(new Set([...workerForm.skills || [], ...(workerForm.customSkill.trim() ? [workerForm.customSkill.trim()] : [])])),
+          id: Date.now(),
+          username: workerForm.username.trim(),
+          verification: "Not Yet Verified",
+          rating: "No ratings yet",
+          reviewsDone: 0,
+          status: "Available",
+          distanceKm: "0.00",
+          latitude: coordinates?.latitude ?? null,
+          longitude: coordinates?.longitude ?? null,
+          avatar: (workerForm.firstName || workerForm.username || "W").slice(0, 1).toUpperCase(),
+          receivedReviews: [],
+          givenFeedback: [],
+          verificationNotifications: [],
+          applicationNotifications: [],
+        };
+        setRegisteredWorkers((prev) => [...prev, workerAccount]);
+        setWorkerForm(EMPTY_WORKER_FORM);
+        setLoginForm({ username: "", password: "", role: "worker" });
+        setView("login");
+        window.alert(data?.detail || "Worker account created. You can now login.");
+      } catch (error) {
+        window.alert(error.message || "Unable to create worker account.");
+      }
+    })();
   }
   function handleHouseholdRegisterSubmit(event) {
     event.preventDefault();
@@ -1222,6 +2217,10 @@ function App() {
       window.alert("Please enter a complete Gmail address, for example example@gmail.com.");
       return;
     }
+    if (householdForm.password.length < 8) {
+      window.alert("Password must be at least 8 characters long.");
+      return;
+    }
     if (householdForm.password !== householdForm.confirmPassword) {
       window.alert("Household passwords do not match.");
       return;
@@ -1231,12 +2230,44 @@ function App() {
       window.alert("Username already exists for a household account.");
       return;
     }
-    const householdAccount = { ...householdForm, id: Date.now(), username: householdForm.username.trim() };
-    setRegisteredHouseholds((prev) => [...prev, householdAccount]);
-    setHouseholdForm(EMPTY_HOUSEHOLD_FORM);
-    setLoginForm({ username: "", password: "", role: "household" });
-    setView("login");
-    window.alert("Household account created. You can now login.");
+    (async () => {
+      try {
+        const coordinates = await getCurrentCoordinates();
+        const response = await apiRequest("accounts/register/", {
+          method: "POST",
+          auth: false,
+          body: {
+            username: householdForm.username.trim(),
+            email: householdForm.email.trim(),
+            password: householdForm.password,
+            first_name: householdForm.firstName.trim(),
+            last_name: householdForm.lastName.trim(),
+            role: "household",
+            location_label: formatLocation(householdForm.barangay, householdForm.streetAddress),
+            latitude: coordinates?.latitude ?? null,
+            longitude: coordinates?.longitude ?? null,
+          },
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to create household account."));
+        }
+        const householdAccount = {
+          ...householdForm,
+          id: Date.now(),
+          username: householdForm.username.trim(),
+          latitude: coordinates?.latitude ?? null,
+          longitude: coordinates?.longitude ?? null,
+        };
+        setRegisteredHouseholds((prev) => [...prev, householdAccount]);
+        setHouseholdForm(EMPTY_HOUSEHOLD_FORM);
+        setLoginForm({ username: "", password: "", role: "household" });
+        setView("login");
+        window.alert(data?.detail || "Household account created. You can now login.");
+      } catch (error) {
+        window.alert(error.message || "Unable to create household account.");
+      }
+    })();
   }
   function handleWorkerProfileSave(event) {
     event.preventDefault();
@@ -1262,21 +2293,57 @@ function App() {
       window.alert("Please upload both required verification documents.");
       return;
     }
-    if (!currentWorker) {
+    const worker = currentWorker;
+    if (!worker) {
       window.alert("Please login as a worker first.");
       return;
     }
-    const requestId = Date.now();
-    const existingRequestIndex = verificationRequests.findIndex((item) => item.workerId === currentWorker.id && item.status !== "Rejected");
-    const requestRecord = { id: existingRequestIndex >= 0 ? verificationRequests[existingRequestIndex].id : requestId, workerId: currentWorker.id, workerUsername: currentWorker.username, workerName: getDisplayName(currentWorker.firstName, currentWorker.lastName, currentWorker.username), primaryIdName: verificationForm.primaryIdName, secondaryDocName: verificationForm.secondaryDocName, primaryIdPreview: verificationForm.primaryIdPreview, secondaryDocPreview: verificationForm.secondaryDocPreview, notes: verificationForm.notes, status: "Pending", submittedAt: (/* @__PURE__ */ new Date()).toLocaleString("en-PH"), reviewedAt: "", reviewedBy: "", reviewNote: "" };
-    setVerificationRequests((prev) => {
-      if (existingRequestIndex >= 0) {
-        return prev.map((item, index) => index === existingRequestIndex ? requestRecord : item);
+    (async () => {
+      const requestRecord = {
+        worker_username: worker.username,
+        primary_id_name: verificationForm.primaryIdName,
+        secondary_doc_name: verificationForm.secondaryDocName,
+        primary_id_preview: verificationForm.primaryIdPreview,
+        secondary_doc_preview: verificationForm.secondaryDocPreview,
+        notes: verificationForm.notes,
+      };
+      try {
+        const response = await apiRequest("common/verification-requests/", {
+          method: "POST",
+          auth: false,
+          body: requestRecord,
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to submit verification request."));
+        }
+        const normalizedRequest = normalizeVerificationRequest(data.verification_request || data);
+        const backendWorker = normalizeBackendWorkerPayload(data.worker);
+        setVerificationRequests((prev) => {
+          const existingIndex = prev.findIndex((item) => item.workerUsername === worker.username && item.status !== "Rejected");
+          if (existingIndex >= 0) {
+            return prev.map((item, index) => (index === existingIndex ? normalizedRequest : item));
+          }
+          return [normalizedRequest, ...prev];
+        });
+        if (backendWorker) {
+          mergeBackendWorkerIntoState({
+            ...backendWorker,
+            verification: "Under Review",
+            verificationRequestId: normalizedRequest.id,
+            verificationSubmission: normalizedRequest,
+            verificationNotifications: [{ id: `submission-${normalizedRequest.id}`, title: "Verification Submitted", message: "Your documents were sent to the admin for review.", date: normalizedRequest.submittedAt || (new Date()).toLocaleString("en-PH"), unread: true }],
+          });
+        } else {
+          setRegisteredWorkers((prev) => prev.map((item) => item.username === worker.username ? { ...item, verification: "Under Review", verificationRequestId: normalizedRequest.id, verificationSubmission: normalizedRequest, verificationNotifications: [{ id: `submission-${normalizedRequest.id}`, title: "Verification Submitted", message: "Your documents were sent to the admin for review.", date: normalizedRequest.submittedAt || (new Date()).toLocaleString("en-PH"), unread: true }] } : item));
+        }
+        setCurrentUser((prev) => prev ? { ...prev, profile: data?.worker?.profile || (prev.profile ? { ...prev.profile, verification_status: "pending", verification_request: normalizedRequest } : prev.profile) } : prev);
+        await refreshVerificationStateFromBackend();
+        window.alert("Verification request submitted. Status is now Under Review.");
+      } catch (error) {
+        window.alert(error.message || "Verification documents submitted. Please wait for admin review.");
       }
-      return [requestRecord, ...prev];
-    });
-    setRegisteredWorkers((prev) => prev.map((worker) => worker.id === currentWorker.id ? { ...worker, verification: "Under Review", verificationRequestId: requestRecord.id, verificationSubmission: requestRecord, verificationNotifications: [{ id: `submission-${requestRecord.id}`, title: "Verification Submitted", message: "Your documents were sent to the admin for review.", date: requestRecord.submittedAt, unread: true }] } : worker));
-    window.alert("Verification documents submitted. Please wait for admin review.");
+    })();
   }
   function handleHouseholdProfileSave(event) {
     event.preventDefault();
@@ -1303,10 +2370,34 @@ function App() {
     window.alert("Household profile updated.");
   }
   function handleCancelJob(jobId) {
-    setPostedJobs((prev) => prev.filter((job) => job.id !== jobId));
-    if (selectedJobId === jobId) {
-      setSelectedJobId(null);
+    const job = postedJobs.find((item) => item.id === jobId);
+    if (!job) {
+      return;
     }
+    (async () => {
+      try {
+        const response = await apiRequest(`jobs/${jobId}/`, {
+          method: "PATCH",
+          auth: false,
+          body: { household_username: currentHousehold?.username || currentUser?.username || "", status: "cancelled" },
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to cancel job."));
+        }
+        const normalizedJob = normalizeBackendJob(data);
+        if (normalizedJob) {
+          setPostedJobs((prev) => prev.map((item) => item.id === normalizedJob.id ? normalizedJob : item));
+        }
+        await refreshJobsFromBackend();
+      } catch (error) {
+        setPostedJobs((prev) => prev.filter((jobRecord) => jobRecord.id !== jobId));
+      } finally {
+        if (selectedJobId === jobId) {
+          setSelectedJobId(null);
+        }
+      }
+    })();
   }
   function handleHouseholdReviewSubmit(event) {
     event.preventDefault();
@@ -1324,10 +2415,34 @@ function App() {
       jobTitle: selectedJob?.jobTitle || selectedJob?.serviceType || "",
       createdAt: new Date().toLocaleString("en-PH"),
     });
-    setRegisteredWorkers((prev) => prev.map((worker) => worker.id === selectedWorker.id ? { ...worker, receivedReviews: [...worker.receivedReviews || [], review], rating: review.rating || worker.rating, reviewsDone: (worker.reviewsDone || 0) + 1 } : worker));
-    setRegisteredHouseholds((prev) => prev.map((household) => household.username === currentUser.username ? { ...household, givenFeedback: [...household.givenFeedback || [], review] } : household));
-    setHouseholdReviewForm(EMPTY_HOUSEHOLD_REVIEW_FORM);
-    window.alert("Review submitted for the worker.");
+    (async () => {
+      try {
+        const response = await apiRequest("reviews/", {
+          method: "POST",
+          auth: false,
+          body: {
+            author_username: currentHousehold.username,
+            target_username: selectedWorker.username,
+            job_title: selectedJob?.jobTitle || selectedJob?.serviceType || "",
+            rating: Number(householdReviewForm.rating),
+            feedback: householdReviewForm.feedback.trim(),
+          },
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to submit review."));
+        }
+        setHouseholdReviewForm(EMPTY_HOUSEHOLD_REVIEW_FORM);
+        await refreshReviewsFromBackend();
+        await refreshNotificationsFromBackend();
+        window.alert("Review submitted for the worker.");
+      } catch (error) {
+        setRegisteredWorkers((prev) => prev.map((worker) => worker.id === selectedWorker.id ? { ...worker, receivedReviews: [...worker.receivedReviews || [], review], rating: review.rating || worker.rating, reviewsDone: (worker.reviewsDone || 0) + 1 } : worker));
+        setRegisteredHouseholds((prev) => prev.map((household) => household.username === currentUser.username ? { ...household, givenFeedback: [...household.givenFeedback || [], review] } : household));
+        setHouseholdReviewForm(EMPTY_HOUSEHOLD_REVIEW_FORM);
+        window.alert(error.message || "Review submitted locally.");
+      }
+    })();
   }
   function handleWorkerFeedbackSubmit(event) {
     event.preventDefault();
@@ -1350,10 +2465,33 @@ function App() {
       jobTitle: selectedJob?.jobTitle || selectedJob?.serviceType || "",
       createdAt: new Date().toLocaleString("en-PH"),
     });
-    setRegisteredHouseholds((prev) => prev.map((item) => item.username === household.username ? { ...item, receivedFeedback: [...item.receivedFeedback || [], review] } : item));
-    setRegisteredWorkers((prev) => prev.map((worker) => worker.id === currentWorker.id ? { ...worker, givenFeedback: [...worker.givenFeedback || [], review] } : worker));
-    setWorkerFeedbackForm(EMPTY_WORKER_FEEDBACK_FORM);
-    window.alert("Feedback submitted for the household.");
+    (async () => {
+      try {
+        const response = await apiRequest("reviews/", {
+          method: "POST",
+          auth: false,
+          body: {
+            author_username: currentWorker.username,
+            target_username: household.username,
+            job_title: selectedJob?.jobTitle || selectedJob?.serviceType || "",
+            feedback: workerFeedbackForm.feedback.trim(),
+          },
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to submit feedback."));
+        }
+        setWorkerFeedbackForm(EMPTY_WORKER_FEEDBACK_FORM);
+        await refreshReviewsFromBackend();
+        await refreshNotificationsFromBackend();
+        window.alert("Feedback submitted for the household.");
+      } catch (error) {
+        setRegisteredHouseholds((prev) => prev.map((item) => item.username === household.username ? { ...item, receivedFeedback: [...item.receivedFeedback || [], review] } : item));
+        setRegisteredWorkers((prev) => prev.map((worker) => worker.id === currentWorker.id ? { ...worker, givenFeedback: [...worker.givenFeedback || [], review] } : worker));
+        setWorkerFeedbackForm(EMPTY_WORKER_FEEDBACK_FORM);
+        window.alert(error.message || "Feedback submitted locally.");
+      }
+    })();
   }
   function handleHouseholdJobSubmit(event) {
     event.preventDefault();
@@ -1365,33 +2503,121 @@ function App() {
       window.alert("Please complete the service type, preferred date, preferred time, and number of workers needed.");
       return;
     }
-    const newJob = createJobRecord(householdJobForm, currentHousehold, Date.now());
-    setPostedJobs((prev) => [newJob, ...prev]);
-    setSelectedJobId(newJob.id);
-    window.alert("Job posted successfully.");
-    setHouseholdJobForm({ jobTitle: "", serviceType: "", scheduleType: "One - Time", preferredDate: "", preferredTime: "", description: "", barangay: currentHousehold?.barangay || "", streetAddress: currentHousehold?.streetAddress || "", offeredRate: "0.00", rateType: "Per Day", workersNeeded: "1" });
-    setView("household-my-jobs");
+    (async () => {
+      const browserCoordinates = await getCurrentCoordinates();
+      const scheduledLabel = `${formatScheduleLabel(householdJobForm.scheduleType)}${householdJobForm.preferredDate ? ` on ${householdJobForm.preferredDate}` : ""}${householdJobForm.preferredTime ? ` at ${householdJobForm.preferredTime}` : ""}`;
+      const payload = {
+        household_username: currentHousehold?.username || currentUser.username,
+        title: householdJobForm.jobTitle.trim() || householdJobForm.serviceType,
+        job_type: householdJobForm.serviceType,
+        required_skill: householdJobForm.serviceType,
+        schedule: scheduledLabel,
+        description: householdJobForm.description.trim(),
+        location_label: formatLocation(householdJobForm.barangay.trim(), householdJobForm.streetAddress.trim()),
+        latitude: browserCoordinates?.latitude ?? currentUser?.profile?.latitude ?? currentHousehold?.latitude ?? null,
+        longitude: browserCoordinates?.longitude ?? currentUser?.profile?.longitude ?? currentHousehold?.longitude ?? null,
+        service_rate: householdJobForm.offeredRate,
+        worker_slots: getWorkersNeeded(householdJobForm),
+      };
+      try {
+        const response = await apiRequest("jobs/", {
+          method: "POST",
+          auth: false,
+          body: payload,
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to post job."));
+        }
+        const normalizedJob = normalizeBackendJob(data);
+        if (normalizedJob) {
+          setPostedJobs((prev) => [normalizedJob, ...prev.filter((job) => job.id !== normalizedJob.id)]);
+          setSelectedJobId(normalizedJob.id);
+          await refreshRecommendedWorkers(normalizedJob.id);
+        }
+        await refreshJobsFromBackend();
+        window.alert("Job posted successfully.");
+      } catch (error) {
+        const newJob = createJobRecord(householdJobForm, currentHousehold, Date.now());
+        setPostedJobs((prev) => [newJob, ...prev]);
+        setSelectedJobId(newJob.id);
+        window.alert(error.message || "Job posted locally.");
+      } finally {
+        setHouseholdJobForm({ jobTitle: "", serviceType: "", scheduleType: "One - Time", preferredDate: "", preferredTime: "", description: "", barangay: currentHousehold?.barangay || "", streetAddress: currentHousehold?.streetAddress || "", offeredRate: "0.00", rateType: "Per Day", workersNeeded: "1" });
+        setView("household-my-jobs");
+      }
+    })();
   }
   function handleAdminApproveVerification(requestId) {
     const request = verificationRequests.find((item) => item.id === requestId);
     if (!request) return;
-    const reviewedAt = (/* @__PURE__ */ new Date()).toLocaleString("en-PH");
-    setVerificationRequests((prev) => prev.map((item) => item.id === requestId ? { ...item, status: "Approved", reviewedAt, reviewedBy: currentUser?.displayName || "Admin", reviewNote: "Approved by admin review." } : item));
-    setRegisteredWorkers((prev) => prev.map((worker) => worker.id === request.workerId ? { ...worker, verification: "Verified", verificationReviewedAt: reviewedAt, verificationReviewedBy: currentUser?.displayName || "Admin", profilePhotoPreview: request.primaryIdPreview || worker.profilePhotoPreview || "", verificationNotifications: [{ id: `approved-${request.id}`, title: "Verified", message: "Your worker account has been verified by the admin.", date: reviewedAt, unread: true }] } : worker));
-    window.alert(`Verified ${request.workerName}.`);
-    setSelectedVerificationRequestId(requestId);
-    setView("admin-dashboard");
+    (async () => {
+      try {
+        const response = await apiRequest(`common/verification-requests/${requestId}/review/`, {
+          method: "POST",
+          auth: false,
+          body: { action: "approve", reviewed_by: currentUser?.displayName || ADMIN_ACCOUNT.displayName },
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to approve verification request."));
+        }
+        const normalizedRequest = normalizeVerificationRequest(data.verification_request || data);
+        const reviewedAt = normalizedRequest.reviewedAt || (/* @__PURE__ */ new Date()).toLocaleString("en-PH");
+        const backendWorker = normalizeBackendWorkerPayload(data.worker);
+        setVerificationRequests((prev) => prev.map((item) => item.id === requestId ? normalizedRequest : item));
+        if (backendWorker) {
+          mergeBackendWorkerIntoState({ ...backendWorker, verification: "Verified", verificationReviewedAt: reviewedAt, verificationReviewedBy: currentUser?.displayName || "Admin", profilePhotoPreview: normalizedRequest.primaryIdPreview || backendWorker.profilePhotoPreview || "", verificationNotifications: [{ id: `approved-${normalizedRequest.id}`, title: "Verified", message: "Your worker account has been verified by the admin.", date: reviewedAt, unread: true }] });
+        } else {
+          setRegisteredWorkers((prev) => prev.map((worker) => worker.id === normalizedRequest.workerId ? { ...worker, verification: "Verified", verificationReviewedAt: reviewedAt, verificationReviewedBy: currentUser?.displayName || "Admin", profilePhotoPreview: normalizedRequest.primaryIdPreview || worker.profilePhotoPreview || "", verificationNotifications: [{ id: `approved-${normalizedRequest.id}`, title: "Verified", message: "Your worker account has been verified by the admin.", date: reviewedAt, unread: true }] } : worker));
+        }
+        await refreshVerificationStateFromBackend();
+        await refreshNotificationsFromBackend();
+        window.alert("Verification approved. Worker is now Verified.");
+        setSelectedVerificationRequestId(requestId);
+        setView("admin-dashboard");
+      } catch (error) {
+        window.alert(error.message || `Verified ${request.workerName}.`);
+        setSelectedVerificationRequestId(requestId);
+        setView("admin-dashboard");
+      }
+    })();
   }
   function handleAdminRejectVerification(requestId) {
     const request = verificationRequests.find((item) => item.id === requestId);
     if (!request) return;
     const reviewNote = window.prompt("Enter rejection note:", "Please resubmit clearer documents.") || "Rejected by admin.";
-    const reviewedAt = (/* @__PURE__ */ new Date()).toLocaleString("en-PH");
-    setVerificationRequests((prev) => prev.map((item) => item.id === requestId ? { ...item, status: "Rejected", reviewedAt, reviewedBy: currentUser?.displayName || "Admin", reviewNote } : item));
-    setRegisteredWorkers((prev) => prev.map((worker) => worker.id === request.workerId ? { ...worker, verification: "Not Yet Verified", verificationReviewedAt: reviewedAt, verificationReviewedBy: currentUser?.displayName || "Admin", verificationRejectionNote: reviewNote, profilePhotoPreview: worker.profilePhotoPreview || "", verificationNotifications: [{ id: `rejected-${request.id}`, title: "Verification Rejected", message: reviewNote, date: reviewedAt, unread: true }] } : worker));
-    window.alert(`Rejected ${request.workerName}.`);
-    setSelectedVerificationRequestId(requestId);
-    setView("admin-dashboard");
+    (async () => {
+      try {
+        const response = await apiRequest(`common/verification-requests/${requestId}/review/`, {
+          method: "POST",
+          auth: false,
+          body: { action: "reject", review_note: reviewNote, reviewed_by: currentUser?.displayName || ADMIN_ACCOUNT.displayName },
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to reject verification request."));
+        }
+        const normalizedRequest = normalizeVerificationRequest(data.verification_request || data);
+        const reviewedAt = normalizedRequest.reviewedAt || (/* @__PURE__ */ new Date()).toLocaleString("en-PH");
+        const backendWorker = normalizeBackendWorkerPayload(data.worker);
+        setVerificationRequests((prev) => prev.map((item) => item.id === requestId ? normalizedRequest : item));
+        if (backendWorker) {
+          mergeBackendWorkerIntoState({ ...backendWorker, verification: "Rejected", verificationReviewedAt: reviewedAt, verificationReviewedBy: currentUser?.displayName || "Admin", verificationRejectionNote: reviewNote, profilePhotoPreview: backendWorker.profilePhotoPreview || "", verificationNotifications: [{ id: `rejected-${normalizedRequest.id}`, title: "Verification Rejected", message: reviewNote, date: reviewedAt, unread: true }] });
+        } else {
+          setRegisteredWorkers((prev) => prev.map((worker) => worker.id === normalizedRequest.workerId ? { ...worker, verification: "Rejected", verificationReviewedAt: reviewedAt, verificationReviewedBy: currentUser?.displayName || "Admin", verificationRejectionNote: reviewNote, profilePhotoPreview: worker.profilePhotoPreview || "", verificationNotifications: [{ id: `rejected-${normalizedRequest.id}`, title: "Verification Rejected", message: reviewNote, date: reviewedAt, unread: true }] } : worker));
+        }
+        await refreshVerificationStateFromBackend();
+        await refreshNotificationsFromBackend();
+        window.alert("Verification rejected. Please check admin review notes.");
+        setSelectedVerificationRequestId(requestId);
+        setView("admin-dashboard");
+      } catch (error) {
+        window.alert(error.message || `Rejected ${request.workerName}.`);
+        setSelectedVerificationRequestId(requestId);
+        setView("admin-dashboard");
+      }
+    })();
   }
   if (view === "forgot-password") {
     return /* @__PURE__ */ React.createElement("div", { className: "app-shell" }, "       ", /* @__PURE__ */ React.createElement("section", { className: "login-section py-5" }, "         ", /* @__PURE__ */ React.createElement("div", { className: "container login-page-wrap" }, "           ", /* @__PURE__ */ React.createElement("div", { className: "login-shell shadow-sm" }, "             ", /* @__PURE__ */ React.createElement("div", { className: "login-topbar d-flex align-items-center px-3" }, "               ", /* @__PURE__ */ React.createElement("span", { className: "badge rounded-pill text-bg-light text-primary me-2" }, "GG"), "               ", /* @__PURE__ */ React.createElement("span", { className: "small fw-semibold" }, "Password Reset"), "             "), "             ", /* @__PURE__ */ React.createElement("div", { className: "login-card mx-auto" }, "               ", /* @__PURE__ */ React.createElement("div", { className: "login-card-head text-center" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "login-avatar" }, "GG"), "                 ", /* @__PURE__ */ React.createElement("h2", { className: "h6 fw-bold mb-1" }, "Reset your password"), "                 ", /* @__PURE__ */ React.createElement("p", { className: "small text-white-50 mb-0" }, "We will send a reset code to your Gmail address."), "               "), "               ", /* @__PURE__ */ React.createElement("div", { className: "p-3 p-md-4" }, "                 ", forgotPasswordNotice ? /* @__PURE__ */ React.createElement("div", { className: "alert alert-info py-2" }, forgotPasswordNotice) : null, "                 ", forgotPasswordError ? /* @__PURE__ */ React.createElement("div", { className: "alert alert-danger py-2" }, forgotPasswordError) : null, "                 ", forgotPasswordStep === "email" && /* @__PURE__ */ React.createElement("form", { onSubmit: handleForgotPasswordEmailSubmit }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "mb-3" }, "                     ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold", htmlFor: "reset-email" }, "Email address"), "                     ", /* @__PURE__ */ React.createElement("input", { id: "reset-email", name: "email", type: "email", className: "form-control", value: forgotPasswordForm.email, onChange: handleForgotPasswordChange, placeholder: "Enter your Gmail address" }), "                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary w-100", type: "submit", disabled: forgotPasswordLoading }, forgotPasswordLoading ? "Sending..." : "Send OTP"), "                 "), "                 ", forgotPasswordStep === "verify" && /* @__PURE__ */ React.createElement("form", { onSubmit: handleVerifyResetToken }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "mb-3" }, "                     ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold", htmlFor: "reset-token" }, "OTP / Reset Code"), "                     ", /* @__PURE__ */ React.createElement("input", { id: "reset-token", name: "token", type: "text", className: "form-control", value: forgotPasswordForm.token, onChange: handleForgotPasswordChange, placeholder: "Enter the 6-digit code" }), "                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary w-100", type: "submit", disabled: forgotPasswordLoading }, forgotPasswordLoading ? "Verifying..." : "Verify Code"), "                 "), "                 ", forgotPasswordStep === "reset" && /* @__PURE__ */ React.createElement("form", { onSubmit: handleResetPassword }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "mb-3" }, "                     ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold", htmlFor: "new-password" }, "New Password"), "                     ", /* @__PURE__ */ React.createElement("input", { id: "new-password", name: "newPassword", type: "password", className: "form-control", value: forgotPasswordForm.newPassword, onChange: handleForgotPasswordChange }), "                   "), "                   ", /* @__PURE__ */ React.createElement("div", { className: "mb-3" }, "                     ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold", htmlFor: "confirm-password" }, "Confirm Password"), "                     ", /* @__PURE__ */ React.createElement("input", { id: "confirm-password", name: "confirmPassword", type: "password", className: "form-control", value: forgotPasswordForm.confirmPassword, onChange: handleForgotPasswordChange }), "                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary w-100", type: "submit", disabled: forgotPasswordLoading }, forgotPasswordLoading ? "Resetting..." : "Reset Password"), "                 "), "                 ", forgotPasswordStep === "done" && /* @__PURE__ */ React.createElement("div", { className: "d-grid gap-2" }, "                   ", /* @__PURE__ */ React.createElement("button", { type: "button", className: "btn btn-success", onClick: openLogin }, "Back to Login"), "                   ", /* @__PURE__ */ React.createElement("button", { type: "button", className: "btn btn-outline-secondary", onClick: openForgotPassword }, "Send another code"), "                 "), "                 ", /* @__PURE__ */ React.createElement("div", { className: "mt-3 text-center" }, "                   ", /* @__PURE__ */ React.createElement("button", { type: "button", className: "btn btn-link btn-sm text-decoration-none p-0", onClick: openLogin }, "Return to login"), "                 "), "               "), "             "), "           "), "         "), "       "), "     ");
@@ -1405,7 +2631,7 @@ function App() {
     if (event.key === "Enter" || event.key === " ") {
       openVerificationRequest(request.id);
     }
-  } }, "                               ", /* @__PURE__ */ React.createElement("div", { className: "d-flex justify-content-between align-items-start gap-3 flex-wrap" }, "                                 ", /* @__PURE__ */ React.createElement("div", null, "                                   ", /* @__PURE__ */ React.createElement("h3", { className: "h6 mb-1" }, request.workerName), "                                   ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "@", request.workerUsername), "                                   ", /* @__PURE__ */ React.createElement("p", { className: "small mb-1" }, "                                     ", /* @__PURE__ */ React.createElement("strong", null, "Status:"), " ", request.status, "                                   "), "                                   ", /* @__PURE__ */ React.createElement("p", { className: "small mb-1" }, "                                     ", /* @__PURE__ */ React.createElement("strong", null, "Submitted:"), " ", request.submittedAt, "                                   "), "                                   ", request.reviewedAt && /* @__PURE__ */ React.createElement("p", { className: "small mb-1" }, "                                       ", /* @__PURE__ */ React.createElement("strong", null, "Reviewed:"), " ", request.reviewedAt, "                                     "), "                                   ", request.reviewNote && /* @__PURE__ */ React.createElement("p", { className: "small mb-0" }, "                                       ", /* @__PURE__ */ React.createElement("strong", null, "Admin Note:"), " ", request.reviewNote, "                                     "), "                                 "), "                                 ", /* @__PURE__ */ React.createElement("span", { className: `badge ${request.status === "Approved" ? "text-bg-success" : request.status === "Rejected" ? "text-bg-danger" : "text-bg-warning"}` }, "                                   ", request.status, "                                 "), "                               "), "                                ", /* @__PURE__ */ React.createElement("div", { className: "row g-2 mt-2" }, "                                 ", /* @__PURE__ */ React.createElement("div", { className: "col-md-4" }, "                                   ", /* @__PURE__ */ React.createElement("div", { className: "verification-note h-100" }, "                                     ", /* @__PURE__ */ React.createElement("p", { className: "small fw-semibold mb-1" }, "Primary ID"), "                                     ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 small" }, request.primaryIdName), "                                   "), "                                 "), "                                 ", /* @__PURE__ */ React.createElement("div", { className: "col-md-4" }, "                                   ", /* @__PURE__ */ React.createElement("div", { className: "verification-note h-100" }, "                                     ", /* @__PURE__ */ React.createElement("p", { className: "small fw-semibold mb-1" }, "Supporting Doc"), "                                     ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 small" }, request.secondaryDocName), "                                   "), "                                 "), "                                 ", /* @__PURE__ */ React.createElement("div", { className: "col-md-4" }, "                                   ", /* @__PURE__ */ React.createElement("div", { className: "verification-note h-100" }, "                                     ", /* @__PURE__ */ React.createElement("p", { className: "small fw-semibold mb-1" }, "Notes"), "                                     ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 small" }, request.notes || "No additional notes provided."), "                                   "), "                                 "), "                               "), "                                ", request.status === "Pending" || request.status === "Under Review" ? /* @__PURE__ */ React.createElement("div", { className: "d-flex gap-2 mt-3 flex-wrap" }, "                                   ", /* @__PURE__ */ React.createElement("button", { type: "button", className: "btn btn-success btn-sm", onClick: () => handleAdminApproveVerification(request.id) }, "                                     Approve                                   "), "                                   ", /* @__PURE__ */ React.createElement("button", { type: "button", className: "btn btn-outline-danger btn-sm", onClick: () => handleAdminRejectVerification(request.id) }, "                                     Reject                                   "), "                                 ") : null, "                             ")) : /* @__PURE__ */ React.createElement("div", { className: "text-center text-muted py-4" }, "No verification requests yet."), "                       "), "                     "), "                   ") : /* @__PURE__ */ React.createElement("div", { className: "card border-0 shadow-sm mt-4" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "card-header bg-white d-flex justify-content-between align-items-center" }, "                       ", /* @__PURE__ */ React.createElement("h2", { className: "h6 mb-0 fw-bold" }, "Workers History"), "                       ", /* @__PURE__ */ React.createElement("span", { className: "small text-muted" }, "Verified and submitted workers"), "                     "), "                     ", /* @__PURE__ */ React.createElement("div", { className: "table-responsive" }, "                       ", /* @__PURE__ */ React.createElement("table", { className: "table align-middle mb-0" }, "                         ", /* @__PURE__ */ React.createElement("thead", null, "                           ", /* @__PURE__ */ React.createElement("tr", null, "                             ", /* @__PURE__ */ React.createElement("th", null, "Worker"), "                             ", /* @__PURE__ */ React.createElement("th", null, "Verification"), "                             ", /* @__PURE__ */ React.createElement("th", null, "Submitted"), "                             ", /* @__PURE__ */ React.createElement("th", null, "Reviewed By"), "                           "), "                         "), "                         ", /* @__PURE__ */ React.createElement("tbody", null, "                           ", adminVisibleWorkers.length > 0 ? adminVisibleWorkers.map((worker) => /* @__PURE__ */ React.createElement("tr", { key: worker.id }, "                                 ", /* @__PURE__ */ React.createElement("td", null, getDisplayName(worker.firstName, worker.lastName, worker.username)), "                                 ", /* @__PURE__ */ React.createElement("td", null, "                                   ", /* @__PURE__ */ React.createElement("span", { className: `badge ${worker.verification === "Verified" ? "text-bg-success" : worker.verification === "Under Review" ? "text-bg-warning" : "text-bg-secondary"}` }, "                                     ", worker.verification || "Not Yet Verified", "                                   "), "                                 "), "                                 ", /* @__PURE__ */ React.createElement("td", null, worker.verificationSubmission?.submittedAt || "None"), "                                 ", /* @__PURE__ */ React.createElement("td", null, worker.verificationReviewedBy || "None"), "                               ")) : /* @__PURE__ */ React.createElement("tr", null, "                               ", /* @__PURE__ */ React.createElement("td", { colSpan: "4", className: "text-center text-muted py-4" }, "                                 No verified or registered workers to display.                               "), "                             "), "                         "), "                       "), "                     "), "                   "), "               "), "             "), "           "), "          ", view === "household-post-job" && /* @__PURE__ */ React.createElement("section", { className: "worker-dashboard" }, "             ", /* @__PURE__ */ React.createElement("div", { className: "worker-layout" }, "               ", /* @__PURE__ */ React.createElement("aside", { className: "worker-sidebar" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-sidebar-head" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-logo" }, "GG"), "                   ", /* @__PURE__ */ React.createElement("p", { className: "worker-brand mb-0" }, "GawaGo Community Platform"), "                 "), "                 ", /* @__PURE__ */ React.createElement("nav", { className: "worker-nav" }, "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdDashboard }, "                     Dashboard                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item active" }, "Post a Job"), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdMyJobs }, "                     My Jobs                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdProfile }, "                     My Profile                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdNotifications }, "                     Notifications                   "), "                 "), "               "), "                ", /* @__PURE__ */ React.createElement("div", { className: "worker-content" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-topbar" }, "                   ", /* @__PURE__ */ React.createElement("h1", { className: "h4 mb-0" }, "Post a New Job"), "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-user-meta d-flex align-items-center gap-2" }, "                     ", /* @__PURE__ */ React.createElement("span", { className: "small fw-semibold" }, currentUser?.displayName || "Household"), "                     ", /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-primary" }, "Household"), "                     ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary btn-sm", type: "button", onClick: goBack }, "                       Back                     "), "                     ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary btn-sm", type: "button", onClick: handleLogout }, "                       Log Out                     "), "                   "), "                 "), "                  ", /* @__PURE__ */ React.createElement("div", { className: "profile-card mt-3" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "profile-card-head" }, "Post a New Job"), "                   ", /* @__PURE__ */ React.createElement("form", { className: "p-3 p-md-4", onSubmit: handleHouseholdJobSubmit }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "row g-3" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-12" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Job Title"), "                         ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "jobTitle", className: "form-control", placeholder: "e.g. House Cleaning - 3 Bedroom", value: householdJobForm.jobTitle, onChange: handleHouseholdJobChange }), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Service Type"), "                         ", /* @__PURE__ */ React.createElement("select", { name: "serviceType", className: "form-select", value: householdJobForm.serviceType, onChange: handleHouseholdJobChange }, "                           ", /* @__PURE__ */ React.createElement("option", { value: "" }, "---Select Service---"), "                           ", SKILLS.map((skill) => /* @__PURE__ */ React.createElement("option", { key: skill, value: skill }, "                               ", skill, "                             ")), "                         "), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Schedule Type"), "                         ", /* @__PURE__ */ React.createElement("select", { name: "scheduleType", className: "form-select", value: householdJobForm.scheduleType, onChange: handleHouseholdJobChange }, "                           ", /* @__PURE__ */ React.createElement("option", null, "One - Time"), "                           ", /* @__PURE__ */ React.createElement("option", null, "Part-Time"), "                           ", /* @__PURE__ */ React.createElement("option", null, "Full-Time"), "                         "), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Preferred Date"), "                         ", /* @__PURE__ */ React.createElement("input", { type: "date", name: "preferredDate", className: "form-control", value: householdJobForm.preferredDate, onChange: handleHouseholdJobChange }), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Preferred Time"), "                         ", /* @__PURE__ */ React.createElement("input", { type: "time", name: "preferredTime", className: "form-control", value: householdJobForm.preferredTime, onChange: handleHouseholdJobChange }), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-12" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Job Description"), "                         ", /* @__PURE__ */ React.createElement("textarea", { name: "description", className: "form-control", rows: "3", placeholder: "Describe the job in detail...", value: householdJobForm.description, onChange: handleHouseholdJobChange }), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Barangay"), "                         ", /* @__PURE__ */ React.createElement("select", { name: "barangay", className: "form-select", value: householdJobForm.barangay, onChange: handleHouseholdJobChange }, "                           ", /* @__PURE__ */ React.createElement("option", { value: "" }, "---Select Barangay---"), "                           ", renderBarangayOptions(), "                         "), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Street / House No."), "                         ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "streetAddress", className: "form-control", value: householdJobForm.streetAddress, onChange: handleHouseholdJobChange }), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Offered Rate (PHP)"), "                         ", /* @__PURE__ */ React.createElement("input", { type: "number", min: "0", step: "0.01", name: "offeredRate", className: "form-control", value: householdJobForm.offeredRate, onChange: handleHouseholdJobChange }), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Rate Type"), "                         ", /* @__PURE__ */ React.createElement("select", { name: "rateType", className: "form-select", value: householdJobForm.rateType, onChange: handleHouseholdJobChange }, "                           ", /* @__PURE__ */ React.createElement("option", null, "Per Day"), "                           ", /* @__PURE__ */ React.createElement("option", null, "Per Hour"), "                           ", /* @__PURE__ */ React.createElement("option", null, "Fixed Rate"), "                         "), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-12 d-flex gap-2" }, "                         ", /* @__PURE__ */ React.createElement("button", { type: "submit", className: "btn btn-primary" }, "                           Post Job                         "), "                         ", /* @__PURE__ */ React.createElement("button", { type: "button", className: "btn btn-outline-secondary", onClick: openHouseholdDashboard }, "                           Cancel                         "), "                       "), "                     "), "                   "), "                 "), "               "), "             "), "           "), "          ", view === "household-profile" && /* @__PURE__ */ React.createElement("section", { className: "worker-dashboard" }, "             ", /* @__PURE__ */ React.createElement("div", { className: "worker-layout" }, "               ", /* @__PURE__ */ React.createElement("aside", { className: "worker-sidebar" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-sidebar-head" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-logo" }, "GG"), "                   ", /* @__PURE__ */ React.createElement("p", { className: "worker-brand mb-0" }, "GawaGo Community Platform"), "                 "), "                 ", /* @__PURE__ */ React.createElement("nav", { className: "worker-nav" }, "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdDashboard }, "                     Dashboard                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdPostJob }, "                     Post a Job                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdMyJobs }, "                     My Jobs                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item active" }, "My Profile"), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdNotifications }, "                     Notifications                   "), "                 "), "               "), "                ", /* @__PURE__ */ React.createElement("div", { className: "worker-content" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "row g-3" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "col-lg-4" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "profile-card" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "profile-card-head" }, "My Profile"), "                       ", /* @__PURE__ */ React.createElement("div", { className: "p-3 text-center" }, "                         ", householdProfileForm.profilePhotoPreview ? /* @__PURE__ */ React.createElement("img", { src: householdProfileForm.profilePhotoPreview, alt: "Household profile", className: "profile-photo-large mb-2" }) : /* @__PURE__ */ React.createElement("div", { className: "profile-avatar mb-2" }, "                             ", (householdProfileForm.firstName || "H").slice(0, 1).toUpperCase(), "                           "), "                         ", /* @__PURE__ */ React.createElement("h2", { className: "h5 mb-1" }, "                           ", getDisplayName(householdProfileForm.firstName, householdProfileForm.lastName, householdProfileForm.username), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "text-muted mb-2" }, "@", householdProfileForm.username || "household"), "                         ", /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-primary" }, "Household"), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "px-3 pb-3" }, "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small" }, "                           ", /* @__PURE__ */ React.createElement("strong", null, "Barangay:"), " ", householdProfileForm.barangay || "Not set", "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small" }, "                           ", /* @__PURE__ */ React.createElement("strong", null, "Phone:"), " ", householdProfileForm.phone || "Not set", "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-2 small" }, "                           ", /* @__PURE__ */ React.createElement("strong", null, "Email:"), " ", householdProfileForm.email || "Not set", "                         "), "                       "), "                     "), "                   "), "                    ", /* @__PURE__ */ React.createElement("div", { className: "col-lg-8" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "profile-card" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "profile-card-head" }, "Edit Profile Information"), "                       ", /* @__PURE__ */ React.createElement("form", { className: "p-3", onSubmit: handleHouseholdProfileSave }, "                         ", /* @__PURE__ */ React.createElement("h3", { className: "h6 fw-bold mb-2" }, "Profile Photo"), "                         ", /* @__PURE__ */ React.createElement("div", { className: "mb-3" }, "                           ", /* @__PURE__ */ React.createElement("input", { type: "file", className: "form-control", name: "profilePhoto", accept: "image/*", onChange: handleHouseholdProfileChange }), "                           ", /* @__PURE__ */ React.createElement("p", { className: "form-text mb-0" }, "Accepted: JPG, PNG. Use a clear profile photo."), "                           ", householdProfileForm.profilePhotoPreview && /* @__PURE__ */ React.createElement("img", { src: householdProfileForm.profilePhotoPreview, alt: "Household profile preview", className: "img-fluid rounded border mt-2" }), "                         "), "                          ", /* @__PURE__ */ React.createElement("div", { className: "row g-2 mb-3" }, "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "First Name"), "                             ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "firstName", className: "form-control", value: householdProfileForm.firstName, onChange: handleHouseholdProfileChange }), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "Last Name"), "                             ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "lastName", className: "form-control", value: householdProfileForm.lastName, onChange: handleHouseholdProfileChange }), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "Username"), "                             ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "username", className: "form-control", value: householdProfileForm.username, disabled: true }), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "Email"), "                             ", /* @__PURE__ */ React.createElement("input", { type: "email", name: "email", className: "form-control", value: householdProfileForm.email, onChange: handleHouseholdProfileChange }), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "Phone Number"), "                             ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "phone", className: "form-control", value: householdProfileForm.phone, onChange: handleHouseholdProfileChange }), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "Barangay"), "                             ", /* @__PURE__ */ React.createElement("select", { name: "barangay", className: "form-select", value: householdProfileForm.barangay, onChange: handleHouseholdProfileChange }, "                               ", /* @__PURE__ */ React.createElement("option", { value: "" }, "---Select Barangay---"), "                               ", renderBarangayOptions(), "                             "), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-12" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "Street / House No."), "                             ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "streetAddress", className: "form-control", value: householdProfileForm.streetAddress, onChange: handleHouseholdProfileChange }), "                           "), "                         "), "                          ", /* @__PURE__ */ React.createElement("div", { className: "d-flex gap-2" }, "                           ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", type: "submit" }, "                             Save Profile                           "), "                           ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary", type: "button", onClick: openHouseholdDashboard }, "                             Back to Dashboard                           "), "                         "), "                       "), "                     "), "                   "), "                 "), "               "), "             "), "           "), "          ", view === "household-my-jobs" && /* @__PURE__ */ React.createElement("section", { className: "worker-dashboard" }, "             ", /* @__PURE__ */ React.createElement("div", { className: "worker-layout" }, "               ", /* @__PURE__ */ React.createElement("aside", { className: "worker-sidebar" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-sidebar-head" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-logo" }, "GG"), "                   ", /* @__PURE__ */ React.createElement("p", { className: "worker-brand mb-0" }, "GawaGo Community Platform"), "                 "), "                 ", /* @__PURE__ */ React.createElement("nav", { className: "worker-nav" }, "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdDashboard }, "                     Dashboard                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdPostJob }, "                     Post a Job                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item active" }, "My Jobs"), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdProfile }, "                     My Profile                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdNotifications }, "                     Notifications                   "), "                 "), "               "), "                ", /* @__PURE__ */ React.createElement("div", { className: "worker-content" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-topbar" }, "                   ", /* @__PURE__ */ React.createElement("h1", { className: "h4 mb-0" }, "My Jobs"), "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-user-meta d-flex align-items-center gap-2" }, "                     ", /* @__PURE__ */ React.createElement("span", { className: "small fw-semibold" }, currentUser?.displayName || "Household"), "                     ", /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-primary" }, "Household"), "                     ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary btn-sm", type: "button", onClick: goBack }, "                       Back                     "), "                     ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary btn-sm", type: "button", onClick: handleLogout }, "                       Log Out                     "), "                   "), "                 "), "                  ", !householdJobs.length && /* @__PURE__ */ React.createElement("div", { className: "profile-card mt-3" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "p-4 text-center" }, "                       ", /* @__PURE__ */ React.createElement("h2", { className: "h5 mb-2" }, "No job posts yet"), "                       ", /* @__PURE__ */ React.createElement("p", { className: "text-muted mb-3" }, "                         Kapag nag-post ka ng job, lalabas dito ang details at matched workers.                       "), "                       ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: openHouseholdPostJob }, "                         Post a New Job                       "), "                     "), "                   "), "                  ", householdJobs.length > 0 && selectedJob && /* @__PURE__ */ React.createElement(React.Fragment, null, "                     ", /* @__PURE__ */ React.createElement("div", { className: "my-jobs-list mt-3" }, "                       ", householdJobs.map((job) => /* @__PURE__ */ React.createElement("button", { key: job.id, type: "button", className: `job-summary-card ${selectedJob.id === job.id ? "active" : ""}`, onClick: () => openHouseholdJobDetail(job.id) }, "                           ", /* @__PURE__ */ React.createElement("div", null, "                             ", /* @__PURE__ */ React.createElement("p", { className: "job-summary-title mb-1" }, job.jobTitle || job.serviceType), "                             ", /* @__PURE__ */ React.createElement("p", { className: "job-summary-meta mb-0" }, "                               ", job.serviceType, " ??? ", formatLocation(job.barangay, job.streetAddress), "                             "), "                           "), "                           ", /* @__PURE__ */ React.createElement("span", { className: `badge ${getJobStatusBadgeClass(job.status)}` }, "                             ", job.status, "                           "), "                         ")), "                     "), "                      ", /* @__PURE__ */ React.createElement("div", { className: "my-jobs-card mt-3" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "my-jobs-card-head d-flex justify-content-between align-items-center" }, "                         ", /* @__PURE__ */ React.createElement("h2", { className: "h6 fw-bold mb-0" }, selectedJob.jobTitle || selectedJob.serviceType), "                         ", /* @__PURE__ */ React.createElement("span", { className: `badge ${selectedJob.status === "Cancelled" ? "text-bg-danger" : "text-bg-primary"}` }, "                           ", selectedJob.status, "                         "), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "p-3" }, "                         ", /* @__PURE__ */ React.createElement("div", { className: "row g-3" }, "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-3" }, "                             ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "Service Type"), "                             ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 fw-semibold" }, selectedJob.serviceType), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-3" }, "                             ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "Schedule"), "                             ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 fw-semibold" }, formatScheduleLabel(selectedJob.scheduleType)), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-3" }, "                             ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "Date & Time"), "                             ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 fw-semibold" }, "                               ", formatDateTime(selectedJob.preferredDate, selectedJob.preferredTime), "                             "), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-3" }, "                             ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "Offered Rate"), "                             ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 fw-semibold text-primary" }, "                               ", formatRate(selectedJob.offeredRate, selectedJob.rateType), "                             "), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-3" }, "                             ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "Location"), "                             ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 fw-semibold" }, "                               ", formatLocation(selectedJob.barangay, selectedJob.streetAddress), "                             "), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-9" }, "                             ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "Description"), "                             ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 fw-semibold" }, "                               ", selectedJob.description || "No description provided.", "                             "), "                           "), "                         "), "                         ", selectedJob.status !== "Cancelled" && /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-danger btn-sm mt-3", type: "button", onClick: () => handleCancelJob(selectedJob.id) }, "                             Cancel Job                           "), "                       "), "                     "), "                      ", /* @__PURE__ */ React.createElement("div", { className: "my-jobs-card mt-3" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "my-jobs-card-head d-flex justify-content-between align-items-center" }, "                         ", /* @__PURE__ */ React.createElement("h2", { className: "h6 fw-bold mb-0" }, "Smart Matched Workers"), "                         ", /* @__PURE__ */ React.createElement("span", { className: "fw-semibold small" }, selectedMatchedWorkers.length, " worker(s) found"), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "small px-3 py-2 border-bottom bg-light" }, "                         Click a worker to view their full profile and description.                       "), "                        ", /* @__PURE__ */ React.createElement("div", { className: "p-2 p-md-3 d-grid gap-2" }, "                         ", selectedMatchedWorkers.map((worker, index) => /* @__PURE__ */ React.createElement("button", { type: "button", className: "matched-worker-item matched-worker-button", key: worker.id, onClick: () => openMatchedWorkerProfile(worker.id, selectedJob.id) }, "                             ", /* @__PURE__ */ React.createElement("div", { className: "d-flex align-items-center gap-3" }, "                               ", /* @__PURE__ */ React.createElement("span", { className: "match-rank" }, index + 1), "                               ", /* @__PURE__ */ React.createElement("div", { className: "profile-avatar match-avatar" }, "                                 ", (worker.avatar || worker.firstName || worker.username || "W").slice(0, 1).toUpperCase(), "                               "), "                               ", /* @__PURE__ */ React.createElement("div", { className: "flex-grow-1 text-start" }, "                                 ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 fw-semibold" }, "                                   ", getDisplayName(worker.firstName, worker.lastName, worker.username), "                                 "), "                                 ", /* @__PURE__ */ React.createElement("div", { className: "d-flex gap-2 flex-wrap" }, "                                   ", (worker.skills || []).slice(0, 2).map((skill) => /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-primary", key: `${worker.id}-${skill}` }, "                                       ", skill, "                                     ")), "                                   ", /* @__PURE__ */ React.createElement("span", { className: `badge ${worker.verification === "Verified" ? "text-bg-success" : "text-bg-warning"}` }, "                                     ", worker.verification || "Not Yet Verified", "                                   "), "                                   ", /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-light border text-dark" }, "                                     ", formatCurrency(worker.dailyRate), "/day                                   "), "                                   ", /* @__PURE__ */ React.createElement("span", { className: "small text-muted align-self-center" }, worker.rating), "                                 "), "                               "), "                               ", /* @__PURE__ */ React.createElement("div", { className: "distance-pill" }, "                                 ", /* @__PURE__ */ React.createElement("span", { className: "distance-value" }, worker.distanceKm || "0.00", " km"), "                                 ", /* @__PURE__ */ React.createElement("span", { className: "distance-label" }, "AWAY"), "                               "), "                             "), "                           ")), "                       "), "                     "), "                   "), "               "), "             "), "           "), "          ", view === "household-worker-profile" && selectedWorker && /* @__PURE__ */ React.createElement("section", { className: "worker-dashboard" }, "             ", /* @__PURE__ */ React.createElement("div", { className: "worker-layout" }, "               ", /* @__PURE__ */ React.createElement("aside", { className: "worker-sidebar" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-sidebar-head" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-logo" }, "GG"), "                   ", /* @__PURE__ */ React.createElement("p", { className: "worker-brand mb-0" }, "GawaGo Community Platform"), "                 "), "                 ", /* @__PURE__ */ React.createElement("nav", { className: "worker-nav" }, "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdDashboard }, "                     Dashboard                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdPostJob }, "                     Post a Job                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item active", onClick: openHouseholdMyJobs }, "                     My Jobs                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdProfile }, "                     My Profile                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item active", onClick: openHouseholdNotifications }, "                     Notifications                     ", householdUnreadCount > 0 && /* @__PURE__ */ React.createElement("span", { className: "nav-count-badge" }, householdUnreadCount), "                   "), "                 "), "               "), "                ", /* @__PURE__ */ React.createElement("div", { className: "worker-content" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "row g-3" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "col-lg-4" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "profile-card" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "p-3 text-center" }, "                         ", selectedWorkerPhoto ? /* @__PURE__ */ React.createElement("img", { className: "profile-photo-large mb-2", src: selectedWorkerPhoto, alt: `${getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username)} profile` }) : /* @__PURE__ */ React.createElement("div", { className: "profile-avatar mb-2" }, "                           ", (selectedWorker.avatar || selectedWorker.firstName || "W").slice(0, 1).toUpperCase(), "                         "), "                         ", /* @__PURE__ */ React.createElement("h2", { className: "h5 mb-1" }, "                           ", getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-2" }, "                           ", formatLocation(selectedWorker.barangay, selectedWorker.streetAddress), "                         "), "                         ", /* @__PURE__ */ React.createElement("span", { className: `badge ${selectedWorker.verification === "Verified" ? "text-bg-success" : "text-bg-warning"}` }, "                           ", selectedWorker.verification || "Not Yet Verified", "                         "), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "px-3 pb-3" }, "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Rating"), "                           ", /* @__PURE__ */ React.createElement("strong", null, selectedWorker.rating || "No ratings yet"), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Jobs Done"), "                           ", /* @__PURE__ */ React.createElement("strong", null, selectedWorker.reviewsDone || 0), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Experience"), "                           ", /* @__PURE__ */ React.createElement("strong", null, selectedWorker.yearsExperience || 0, " yr(s)"), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Status"), "                           ", /* @__PURE__ */ React.createElement("strong", null, selectedWorker.status || "Available"), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Distance"), "                           ", /* @__PURE__ */ React.createElement("strong", null, selectedWorker.distanceKm || "0.00", " km"), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Hourly Rate"), "                           ", /* @__PURE__ */ React.createElement("strong", null, formatCurrency(selectedWorker.hourlyRate)), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-3 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Daily Rate"), "                           ", /* @__PURE__ */ React.createElement("strong", null, formatCurrency(selectedWorker.dailyRate)), "                         "), "                         ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary w-100 mb-2", type: "button", onClick: handleHireWorker }, "                           Hire This Worker                         "), "                         ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary w-100", type: "button", onClick: openHouseholdMyJobs }, "                           Go Back                         "), "                       "), "                     "), "                   "), "                    ", /* @__PURE__ */ React.createElement("div", { className: "col-lg-8" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "profile-card mb-3" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "profile-card-head" }, "About"), "                       ", /* @__PURE__ */ React.createElement("div", { className: "p-3" }, "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-0" }, selectedWorker.bio || "No description provided yet."), "                       "), "                     "), "                      ", /* @__PURE__ */ React.createElement("div", { className: "profile-card mb-3" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "profile-card-head" }, "Skills & Expertise"), "                       ", /* @__PURE__ */ React.createElement("div", { className: "p-3 d-flex gap-2 flex-wrap" }, "                         ", (selectedWorker.skills || []).map((skill) => /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-primary", key: `${selectedWorker.id}-${skill}` }, "                             ", skill, "                           ")), "                       "), "                     "), "                      ", /* @__PURE__ */ React.createElement("div", { className: "profile-card" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "profile-card-head" }, "Reviews & Ratings"), "                       ", /* @__PURE__ */ React.createElement("div", { className: "p-3 d-grid gap-3" }, "                         ", (selectedWorker.receivedReviews || []).length > 0 ? selectedWorker.receivedReviews.map((review) => /* @__PURE__ */ React.createElement("article", { key: review.id, className: "review-item" }, "                               ", /* @__PURE__ */ React.createElement("div", { className: "d-flex justify-content-between gap-3" }, "                                 ", /* @__PURE__ */ React.createElement("div", null, "                                   ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 fw-semibold" }, review.authorName || review.author || "User"), "                                   ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small text-muted" }, review.feedback || review.comment || ""), "                                   ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 small text-muted" }, review.createdAt || review.date || "Recently"), "                                 "), "                                 ", /* @__PURE__ */ React.createElement("strong", null, review.rating != null ? `${review.rating}/5` : "Feedback"), "                               "), "                             ")) : /* @__PURE__ */ React.createElement("p", { className: "mb-0 text-muted" }, "No reviews yet."), "                       "), "                     "), "                   "), "                 "), "               "), "             "), "           "), "          ", view === "household-notifications" && /* @__PURE__ */ React.createElement("section", { className: "worker-dashboard" }, "             ", /* @__PURE__ */ React.createElement("div", { className: "worker-layout" }, "               ", /* @__PURE__ */ React.createElement("aside", { className: "worker-sidebar" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-sidebar-head" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-logo" }, "GG"), "                   ", /* @__PURE__ */ React.createElement("p", { className: "worker-brand mb-0" }, "GawaGo Community Platform"), "                 "), "                 ", /* @__PURE__ */ React.createElement("nav", { className: "worker-nav" }, "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdDashboard }, "                     Dashboard                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdPostJob }, "                     Post a Job                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdMyJobs }, "                     My Jobs                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdProfile }, "                     My Profile                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item active", onClick: openHouseholdNotifications }, "                     Notifications                     ", householdUnreadCount > 0 && /* @__PURE__ */ React.createElement("span", { className: "nav-count-badge" }, householdUnreadCount), "                   "), "                 "), "               "), "                ", /* @__PURE__ */ React.createElement("div", { className: "worker-content" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-topbar" }, "                   ", /* @__PURE__ */ React.createElement("h1", { className: "h4 mb-0 d-flex align-items-center gap-2" }, "                     Notifications                     ", householdUnreadCount > 0 && /* @__PURE__ */ React.createElement("span", { className: "nav-count-badge" }, householdUnreadCount), "                   "), "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-user-meta d-flex align-items-center gap-2" }, "                     ", /* @__PURE__ */ React.createElement("span", { className: "small fw-semibold" }, currentUser?.displayName || "Household"), "                     ", /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-primary" }, "Household"), "                     ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary btn-sm", type: "button", onClick: goBack }, "                       Back                     "), "                     ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary btn-sm", type: "button", onClick: handleLogout }, "                       Log Out                     "), "                   "), "                 "), "                  ", /* @__PURE__ */ React.createElement("div", { className: "applications-filter mt-3" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "row g-2" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "col-md-4" }, "                       ", /* @__PURE__ */ React.createElement("select", { className: "form-select" }, "                         ", /* @__PURE__ */ React.createElement("option", null, "All Notifications"), "                         ", /* @__PURE__ */ React.createElement("option", null, "Job Updates"), "                         ", /* @__PURE__ */ React.createElement("option", null, "Worker Matches"), "                         ", /* @__PURE__ */ React.createElement("option", null, "Job Status"), "                       "), "                     "), "                     ", /* @__PURE__ */ React.createElement("div", { className: "col-md-3 ms-md-auto" }, "                       ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary w-100", type: "button", onClick: () => markAllNotificationsRead(householdNotificationsWithReadState) }, "                         Mark All as Read                       "), "                     "), "                   "), "                 "), "                  ", /* @__PURE__ */ React.createElement("div", { className: "mt-3 d-grid gap-2" }, "                   ", householdNotificationsWithReadState.length > 0 ? householdNotificationsWithReadState.map((item) => /* @__PURE__ */ React.createElement("article", { className: `notification-card ${item.unread ? "unread" : ""}`, key: item.id, role: "button", tabIndex: 0, onClick: () => {
+  } }, "                               ", /* @__PURE__ */ React.createElement("div", { className: "d-flex justify-content-between align-items-start gap-3 flex-wrap" }, "                                 ", /* @__PURE__ */ React.createElement("div", null, "                                   ", /* @__PURE__ */ React.createElement("h3", { className: "h6 mb-1" }, request.workerName), "                                   ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "@", request.workerUsername), "                                   ", /* @__PURE__ */ React.createElement("p", { className: "small mb-1" }, "                                     ", /* @__PURE__ */ React.createElement("strong", null, "Status:"), " ", request.status, "                                   "), "                                   ", /* @__PURE__ */ React.createElement("p", { className: "small mb-1" }, "                                     ", /* @__PURE__ */ React.createElement("strong", null, "Submitted:"), " ", request.submittedAt, "                                   "), "                                   ", request.reviewedAt && /* @__PURE__ */ React.createElement("p", { className: "small mb-1" }, "                                       ", /* @__PURE__ */ React.createElement("strong", null, "Reviewed:"), " ", request.reviewedAt, "                                     "), "                                   ", request.reviewNote && /* @__PURE__ */ React.createElement("p", { className: "small mb-0" }, "                                       ", /* @__PURE__ */ React.createElement("strong", null, "Admin Note:"), " ", request.reviewNote, "                                     "), "                                 "), "                                 ", /* @__PURE__ */ React.createElement("span", { className: `badge ${request.status === "Approved" ? "text-bg-success" : request.status === "Rejected" ? "text-bg-danger" : "text-bg-warning"}` }, "                                   ", request.status, "                                 "), "                               "), "                                ", /* @__PURE__ */ React.createElement("div", { className: "row g-2 mt-2" }, "                                 ", /* @__PURE__ */ React.createElement("div", { className: "col-md-4" }, "                                   ", /* @__PURE__ */ React.createElement("div", { className: "verification-note h-100" }, "                                     ", /* @__PURE__ */ React.createElement("p", { className: "small fw-semibold mb-1" }, "Primary ID"), "                                     ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 small" }, request.primaryIdName), "                                   "), "                                 "), "                                 ", /* @__PURE__ */ React.createElement("div", { className: "col-md-4" }, "                                   ", /* @__PURE__ */ React.createElement("div", { className: "verification-note h-100" }, "                                     ", /* @__PURE__ */ React.createElement("p", { className: "small fw-semibold mb-1" }, "Supporting Doc"), "                                     ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 small" }, request.secondaryDocName), "                                   "), "                                 "), "                                 ", /* @__PURE__ */ React.createElement("div", { className: "col-md-4" }, "                                   ", /* @__PURE__ */ React.createElement("div", { className: "verification-note h-100" }, "                                     ", /* @__PURE__ */ React.createElement("p", { className: "small fw-semibold mb-1" }, "Notes"), "                                     ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 small" }, request.notes || "No additional notes provided."), "                                   "), "                                 "), "                               "), "                                ", request.status === "Pending" || request.status === "Under Review" ? /* @__PURE__ */ React.createElement("div", { className: "d-flex gap-2 mt-3 flex-wrap" }, "                                   ", /* @__PURE__ */ React.createElement("button", { type: "button", className: "btn btn-success btn-sm", onClick: () => handleAdminApproveVerification(request.id) }, "                                     Approve                                   "), "                                   ", /* @__PURE__ */ React.createElement("button", { type: "button", className: "btn btn-outline-danger btn-sm", onClick: () => handleAdminRejectVerification(request.id) }, "                                     Reject                                   "), "                                 ") : null, "                             ")) : /* @__PURE__ */ React.createElement("div", { className: "text-center text-muted py-4" }, "No verification requests yet."), "                       "), "                     "), "                   ") : /* @__PURE__ */ React.createElement("div", { className: "card border-0 shadow-sm mt-4" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "card-header bg-white d-flex justify-content-between align-items-center" }, "                       ", /* @__PURE__ */ React.createElement("h2", { className: "h6 mb-0 fw-bold" }, "Workers History"), "                       ", /* @__PURE__ */ React.createElement("span", { className: "small text-muted" }, "Verified and submitted workers"), "                     "), "                     ", /* @__PURE__ */ React.createElement("div", { className: "table-responsive" }, "                       ", /* @__PURE__ */ React.createElement("table", { className: "table align-middle mb-0" }, "                         ", /* @__PURE__ */ React.createElement("thead", null, "                           ", /* @__PURE__ */ React.createElement("tr", null, "                             ", /* @__PURE__ */ React.createElement("th", null, "Worker"), "                             ", /* @__PURE__ */ React.createElement("th", null, "Verification"), "                             ", /* @__PURE__ */ React.createElement("th", null, "Submitted"), "                             ", /* @__PURE__ */ React.createElement("th", null, "Reviewed By"), "                           "), "                         "), "                         ", /* @__PURE__ */ React.createElement("tbody", null, "                           ", adminVisibleWorkers.length > 0 ? adminVisibleWorkers.map((worker) => /* @__PURE__ */ React.createElement("tr", { key: worker.id }, "                                 ", /* @__PURE__ */ React.createElement("td", null, getDisplayName(worker.firstName, worker.lastName, worker.username)), "                                 ", /* @__PURE__ */ React.createElement("td", null, "                                   ", /* @__PURE__ */ React.createElement("span", { className: `badge ${worker.verification === "Verified" ? "text-bg-success" : worker.verification === "Under Review" ? "text-bg-warning" : "text-bg-secondary"}` }, "                                     ", worker.verification || "Not Yet Verified", "                                   "), "                                 "), "                                 ", /* @__PURE__ */ React.createElement("td", null, worker.verificationSubmission?.submittedAt || "None"), "                                 ", /* @__PURE__ */ React.createElement("td", null, worker.verificationReviewedBy || "None"), "                               ")) : /* @__PURE__ */ React.createElement("tr", null, "                               ", /* @__PURE__ */ React.createElement("td", { colSpan: "4", className: "text-center text-muted py-4" }, "                                 No verified or registered workers to display.                               "), "                             "), "                         "), "                       "), "                     "), "                   "), "               "), "             "), "           "), "          ", view === "household-post-job" && /* @__PURE__ */ React.createElement("section", { className: "worker-dashboard" }, "             ", /* @__PURE__ */ React.createElement("div", { className: "worker-layout" }, "               ", /* @__PURE__ */ React.createElement("aside", { className: "worker-sidebar" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-sidebar-head" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-logo" }, "GG"), "                   ", /* @__PURE__ */ React.createElement("p", { className: "worker-brand mb-0" }, "GawaGo Community Platform"), "                 "), "                 ", /* @__PURE__ */ React.createElement("nav", { className: "worker-nav" }, "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdDashboard }, "                     Dashboard                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item active" }, "Post a Job"), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdMyJobs }, "                     My Jobs                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdProfile }, "                     My Profile                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdNotifications }, "                     Notifications                   "), "                 "), "               "), "                ", /* @__PURE__ */ React.createElement("div", { className: "worker-content" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-topbar" }, "                   ", /* @__PURE__ */ React.createElement("h1", { className: "h4 mb-0" }, "Post a New Job"), "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-user-meta d-flex align-items-center gap-2" }, "                     ", /* @__PURE__ */ React.createElement("span", { className: "small fw-semibold" }, currentUser?.displayName || "Household"), "                     ", /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-primary" }, "Household"), "                     ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary btn-sm", type: "button", onClick: goBack }, "                       Back                     "), "                     ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary btn-sm", type: "button", onClick: handleLogout }, "                       Log Out                     "), "                   "), "                 "), "                  ", /* @__PURE__ */ React.createElement("div", { className: "profile-card mt-3" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "profile-card-head" }, "Post a New Job"), "                   ", /* @__PURE__ */ React.createElement("form", { className: "p-3 p-md-4", onSubmit: handleHouseholdJobSubmit }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "row g-3" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-12" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Job Title"), "                         ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "jobTitle", className: "form-control", placeholder: "e.g. House Cleaning - 3 Bedroom", value: householdJobForm.jobTitle, onChange: handleHouseholdJobChange }), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Service Type"), "                         ", /* @__PURE__ */ React.createElement("select", { name: "serviceType", className: "form-select", value: householdJobForm.serviceType, onChange: handleHouseholdJobChange }, "                           ", /* @__PURE__ */ React.createElement("option", { value: "" }, "---Select Service---"), "                           ", SKILLS.map((skill) => /* @__PURE__ */ React.createElement("option", { key: skill, value: skill }, "                               ", skill, "                             ")), "                         "), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Schedule Type"), "                         ", /* @__PURE__ */ React.createElement("select", { name: "scheduleType", className: "form-select", value: householdJobForm.scheduleType, onChange: handleHouseholdJobChange }, "                           ", /* @__PURE__ */ React.createElement("option", null, "One - Time"), "                           ", /* @__PURE__ */ React.createElement("option", null, "Part-Time"), "                           ", /* @__PURE__ */ React.createElement("option", null, "Full-Time"), "                         "), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Preferred Date"), "                         ", /* @__PURE__ */ React.createElement("input", { type: "date", name: "preferredDate", className: "form-control", value: householdJobForm.preferredDate, onChange: handleHouseholdJobChange }), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Preferred Time"), "                         ", /* @__PURE__ */ React.createElement("input", { type: "time", name: "preferredTime", className: "form-control", value: householdJobForm.preferredTime, onChange: handleHouseholdJobChange }), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-12" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Job Description"), "                         ", /* @__PURE__ */ React.createElement("textarea", { name: "description", className: "form-control", rows: "3", placeholder: "Describe the job in detail...", value: householdJobForm.description, onChange: handleHouseholdJobChange }), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Barangay"), "                         ", /* @__PURE__ */ React.createElement("select", { name: "barangay", className: "form-select", value: householdJobForm.barangay, onChange: handleHouseholdJobChange }, "                           ", /* @__PURE__ */ React.createElement("option", { value: "" }, "---Select Barangay---"), "                           ", renderBarangayOptions(), "                         "), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Street / House No."), "                         ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "streetAddress", className: "form-control", value: householdJobForm.streetAddress, onChange: handleHouseholdJobChange }), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Offered Rate (PHP)"), "                         ", /* @__PURE__ */ React.createElement("input", { type: "number", min: "0", step: "0.01", name: "offeredRate", className: "form-control", value: householdJobForm.offeredRate, onChange: handleHouseholdJobChange }), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                         ", /* @__PURE__ */ React.createElement("label", { className: "form-label fw-semibold" }, "Rate Type"), "                         ", /* @__PURE__ */ React.createElement("select", { name: "rateType", className: "form-select", value: householdJobForm.rateType, onChange: handleHouseholdJobChange }, "                           ", /* @__PURE__ */ React.createElement("option", null, "Per Day"), "                           ", /* @__PURE__ */ React.createElement("option", null, "Per Hour"), "                           ", /* @__PURE__ */ React.createElement("option", null, "Fixed Rate"), "                         "), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "col-12 d-flex gap-2" }, "                         ", /* @__PURE__ */ React.createElement("button", { type: "submit", className: "btn btn-primary" }, "                           Post Job                         "), "                         ", /* @__PURE__ */ React.createElement("button", { type: "button", className: "btn btn-outline-secondary", onClick: openHouseholdDashboard }, "                           Cancel                         "), "                       "), "                     "), "                   "), "                 "), "               "), "             "), "           "), "          ", view === "household-profile" && /* @__PURE__ */ React.createElement("section", { className: "worker-dashboard" }, "             ", /* @__PURE__ */ React.createElement("div", { className: "worker-layout" }, "               ", /* @__PURE__ */ React.createElement("aside", { className: "worker-sidebar" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-sidebar-head" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-logo" }, "GG"), "                   ", /* @__PURE__ */ React.createElement("p", { className: "worker-brand mb-0" }, "GawaGo Community Platform"), "                 "), "                 ", /* @__PURE__ */ React.createElement("nav", { className: "worker-nav" }, "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdDashboard }, "                     Dashboard                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdPostJob }, "                     Post a Job                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdMyJobs }, "                     My Jobs                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item active" }, "My Profile"), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdNotifications }, "                     Notifications                   "), "                 "), "               "), "                ", /* @__PURE__ */ React.createElement("div", { className: "worker-content" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "row g-3" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "col-lg-4" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "profile-card" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "profile-card-head" }, "My Profile"), "                       ", /* @__PURE__ */ React.createElement("div", { className: "p-3 text-center" }, "                         ", householdProfileForm.profilePhotoPreview ? /* @__PURE__ */ React.createElement("img", { src: householdProfileForm.profilePhotoPreview, alt: "Household profile", className: "profile-photo-large mb-2" }) : /* @__PURE__ */ React.createElement("div", { className: "profile-avatar mb-2" }, "                             ", (householdProfileForm.firstName || "H").slice(0, 1).toUpperCase(), "                           "), "                         ", /* @__PURE__ */ React.createElement("h2", { className: "h5 mb-1" }, "                           ", getDisplayName(householdProfileForm.firstName, householdProfileForm.lastName, householdProfileForm.username), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "text-muted mb-2" }, "@", householdProfileForm.username || "household"), "                         ", /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-primary" }, "Household"), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "px-3 pb-3" }, "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small" }, "                           ", /* @__PURE__ */ React.createElement("strong", null, "Barangay:"), " ", householdProfileForm.barangay || "Not set", "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small" }, "                           ", /* @__PURE__ */ React.createElement("strong", null, "Phone:"), " ", householdProfileForm.phone || "Not set", "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-2 small" }, "                           ", /* @__PURE__ */ React.createElement("strong", null, "Email:"), " ", householdProfileForm.email || "Not set", "                         "), "                       "), "                     "), "                   "), "                    ", /* @__PURE__ */ React.createElement("div", { className: "col-lg-8" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "profile-card" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "profile-card-head" }, "Edit Profile Information"), "                       ", /* @__PURE__ */ React.createElement("form", { className: "p-3", onSubmit: handleHouseholdProfileSave }, "                         ", /* @__PURE__ */ React.createElement("h3", { className: "h6 fw-bold mb-2" }, "Profile Photo"), "                         ", /* @__PURE__ */ React.createElement("div", { className: "mb-3" }, "                           ", /* @__PURE__ */ React.createElement("input", { type: "file", className: "form-control", name: "profilePhoto", accept: "image/*", onChange: handleHouseholdProfileChange }), "                           ", /* @__PURE__ */ React.createElement("p", { className: "form-text mb-0" }, "Accepted: JPG, PNG. Use a clear profile photo."), "                           ", householdProfileForm.profilePhotoPreview && /* @__PURE__ */ React.createElement("img", { src: householdProfileForm.profilePhotoPreview, alt: "Household profile preview", className: "img-fluid rounded border mt-2" }), "                         "), "                          ", /* @__PURE__ */ React.createElement("div", { className: "row g-2 mb-3" }, "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "First Name"), "                             ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "firstName", className: "form-control", value: householdProfileForm.firstName, onChange: handleHouseholdProfileChange }), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "Last Name"), "                             ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "lastName", className: "form-control", value: householdProfileForm.lastName, onChange: handleHouseholdProfileChange }), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "Username"), "                             ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "username", className: "form-control", value: householdProfileForm.username, disabled: true }), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "Email"), "                             ", /* @__PURE__ */ React.createElement("input", { type: "email", name: "email", className: "form-control", value: householdProfileForm.email, onChange: handleHouseholdProfileChange }), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "Phone Number"), "                             ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "phone", className: "form-control", value: householdProfileForm.phone, onChange: handleHouseholdProfileChange }), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-6" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "Barangay"), "                             ", /* @__PURE__ */ React.createElement("select", { name: "barangay", className: "form-select", value: householdProfileForm.barangay, onChange: handleHouseholdProfileChange }, "                               ", /* @__PURE__ */ React.createElement("option", { value: "" }, "---Select Barangay---"), "                               ", renderBarangayOptions(), "                             "), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-12" }, "                             ", /* @__PURE__ */ React.createElement("label", { className: "form-label small fw-semibold mb-1" }, "Street / House No."), "                             ", /* @__PURE__ */ React.createElement("input", { type: "text", name: "streetAddress", className: "form-control", value: householdProfileForm.streetAddress, onChange: handleHouseholdProfileChange }), "                           "), "                         "), "                          ", /* @__PURE__ */ React.createElement("div", { className: "d-flex gap-2" }, "                           ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", type: "submit" }, "                             Save Profile                           "), "                           ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary", type: "button", onClick: openHouseholdDashboard }, "                             Back to Dashboard                           "), "                         "), "                       "), "                     "), "                   "), "                 "), "               "), "             "), "           "), "          ", view === "household-my-jobs" && /* @__PURE__ */ React.createElement("section", { className: "worker-dashboard" }, "             ", /* @__PURE__ */ React.createElement("div", { className: "worker-layout" }, "               ", /* @__PURE__ */ React.createElement("aside", { className: "worker-sidebar" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-sidebar-head" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-logo" }, "GG"), "                   ", /* @__PURE__ */ React.createElement("p", { className: "worker-brand mb-0" }, "GawaGo Community Platform"), "                 "), "                 ", /* @__PURE__ */ React.createElement("nav", { className: "worker-nav" }, "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdDashboard }, "                     Dashboard                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdPostJob }, "                     Post a Job                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item active" }, "My Jobs"), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdProfile }, "                     My Profile                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdNotifications }, "                     Notifications                   "), "                 "), "               "), "                ", /* @__PURE__ */ React.createElement("div", { className: "worker-content" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-topbar" }, "                   ", /* @__PURE__ */ React.createElement("h1", { className: "h4 mb-0" }, "My Jobs"), "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-user-meta d-flex align-items-center gap-2" }, "                     ", /* @__PURE__ */ React.createElement("span", { className: "small fw-semibold" }, currentUser?.displayName || "Household"), "                     ", /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-primary" }, "Household"), "                     ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary btn-sm", type: "button", onClick: goBack }, "                       Back                     "), "                     ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary btn-sm", type: "button", onClick: handleLogout }, "                       Log Out                     "), "                   "), "                 "), "                  ", !householdJobs.length && /* @__PURE__ */ React.createElement("div", { className: "profile-card mt-3" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "p-4 text-center" }, "                       ", /* @__PURE__ */ React.createElement("h2", { className: "h5 mb-2" }, "No job posts yet"), "                       ", /* @__PURE__ */ React.createElement("p", { className: "text-muted mb-3" }, "                         Kapag nag-post ka ng job, lalabas dito ang details at matched workers.                       "), "                       ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: openHouseholdPostJob }, "                         Post a New Job                       "), "                     "), "                   "), "                  ", householdJobs.length > 0 && selectedJob && /* @__PURE__ */ React.createElement(React.Fragment, null, "                     ", /* @__PURE__ */ React.createElement("div", { className: "my-jobs-list mt-3" }, "                       ", householdJobs.map((job) => /* @__PURE__ */ React.createElement("button", { key: job.id, type: "button", className: `job-summary-card ${selectedJob.id === job.id ? "active" : ""}`, onClick: () => openHouseholdJobDetail(job.id) }, "                           ", /* @__PURE__ */ React.createElement("div", null, "                             ", /* @__PURE__ */ React.createElement("p", { className: "job-summary-title mb-1" }, job.jobTitle || job.serviceType), "                             ", /* @__PURE__ */ React.createElement("p", { className: "job-summary-meta mb-0" }, "                               ", job.serviceType, " ??? ", formatLocation(job.barangay, job.streetAddress), "                             "), "                           "), "                           ", /* @__PURE__ */ React.createElement("span", { className: `badge ${getJobStatusBadgeClass(job.status)}` }, "                             ", job.status, "                           "), "                         ")), "                     "), "                      ", /* @__PURE__ */ React.createElement("div", { className: "my-jobs-card mt-3" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "my-jobs-card-head d-flex justify-content-between align-items-center" }, "                         ", /* @__PURE__ */ React.createElement("h2", { className: "h6 fw-bold mb-0" }, selectedJob.jobTitle || selectedJob.serviceType), "                         ", /* @__PURE__ */ React.createElement("span", { className: `badge ${selectedJob.status === "Cancelled" ? "text-bg-danger" : "text-bg-primary"}` }, "                           ", selectedJob.status, "                         "), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "p-3" }, "                         ", /* @__PURE__ */ React.createElement("div", { className: "row g-3" }, "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-3" }, "                             ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "Service Type"), "                             ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 fw-semibold" }, selectedJob.serviceType), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-3" }, "                             ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "Schedule"), "                             ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 fw-semibold" }, formatScheduleLabel(selectedJob.scheduleType)), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-3" }, "                             ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "Date & Time"), "                             ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 fw-semibold" }, "                               ", formatDateTime(selectedJob.preferredDate, selectedJob.preferredTime), "                             "), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-3" }, "                             ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "Offered Rate"), "                             ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 fw-semibold text-primary" }, "                               ", formatRate(selectedJob.offeredRate, selectedJob.rateType), "                             "), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-3" }, "                             ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "Location"), "                             ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 fw-semibold" }, "                               ", formatLocation(selectedJob.barangay, selectedJob.streetAddress), "                             "), "                           "), "                           ", /* @__PURE__ */ React.createElement("div", { className: "col-md-9" }, "                             ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-1" }, "Description"), "                             ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 fw-semibold" }, "                               ", selectedJob.description || "No description provided.", "                             "), "                           "), "                         "), "                         ", selectedJob.status !== "Cancelled" && /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-danger btn-sm mt-3", type: "button", onClick: () => handleCancelJob(selectedJob.id) }, "                             Cancel Job                           "), "                       "), "                     "), "                      ", /* @__PURE__ */ React.createElement("div", { className: "my-jobs-card mt-3" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "my-jobs-card-head d-flex justify-content-between align-items-center" }, "                         ", /* @__PURE__ */ React.createElement("h2", { className: "h6 fw-bold mb-0" }, "Smart Matched Workers"), "                         ", /* @__PURE__ */ React.createElement("span", { className: "fw-semibold small" }, selectedMatchedWorkers.length, " worker(s) found"), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "small px-3 py-2 border-bottom bg-light" }, "                         Click a worker to view their full profile and description.                       "), "                        ", /* @__PURE__ */ React.createElement("div", { className: "p-2 p-md-3 d-grid gap-2" }, "                         ", selectedMatchedWorkers.map((worker, index) => /* @__PURE__ */ React.createElement("button", { type: "button", className: "matched-worker-item matched-worker-button", key: worker.id, onClick: () => openMatchedWorkerProfile(worker.id, selectedJob.id) }, "                             ", /* @__PURE__ */ React.createElement("div", { className: "d-flex align-items-center gap-3" }, "                               ", /* @__PURE__ */ React.createElement("span", { className: "match-rank" }, index + 1), "                               ", /* @__PURE__ */ React.createElement("div", { className: "profile-avatar match-avatar" }, "                                 ", (worker.avatar || worker.firstName || worker.username || "W").slice(0, 1).toUpperCase(), "                               "), "                               ", /* @__PURE__ */ React.createElement("div", { className: "flex-grow-1 text-start" }, "                                 ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 fw-semibold" }, "                                   ", getDisplayName(worker.firstName, worker.lastName, worker.username), "                                 "), "                                 ", /* @__PURE__ */ React.createElement("div", { className: "d-flex gap-2 flex-wrap" }, "                                   ", (worker.skills || []).slice(0, 2).map((skill) => /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-primary", key: `${worker.id}-${skill}` }, "                                       ", skill, "                                     ")), "                                   ", /* @__PURE__ */ React.createElement("span", { className: `badge ${worker.verification === "Verified" ? "text-bg-success" : "text-bg-warning"}` }, "                                     ", worker.verification || "Not Yet Verified", "                                   "), "                                   ", /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-light border text-dark" }, "                                     ", formatCurrency(worker.dailyRate), "/day                                   "), "                                   ", /* @__PURE__ */ React.createElement("span", { className: "small text-muted align-self-center" }, worker.rating), "                                 "), "                               "), "                               ", /* @__PURE__ */ React.createElement("div", { className: "distance-pill" }, "                                 ", /* @__PURE__ */ React.createElement("span", { className: "distance-value" }, worker.distanceLabel || formatDistance(worker.distanceKm, worker.distanceLabel) || "Distance unavailable"), "                                 ", /* @__PURE__ */ React.createElement("span", { className: "distance-label" }, "MATCH"), "                               "), "                             "), "                           ")), "                       "), "                     "), "                   "), "               "), "             "), "           "), "          ", view === "household-worker-profile" && selectedWorker && /* @__PURE__ */ React.createElement("section", { className: "worker-dashboard" }, "             ", /* @__PURE__ */ React.createElement("div", { className: "worker-layout" }, "               ", /* @__PURE__ */ React.createElement("aside", { className: "worker-sidebar" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-sidebar-head" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-logo" }, "GG"), "                   ", /* @__PURE__ */ React.createElement("p", { className: "worker-brand mb-0" }, "GawaGo Community Platform"), "                 "), "                 ", /* @__PURE__ */ React.createElement("nav", { className: "worker-nav" }, "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdDashboard }, "                     Dashboard                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdPostJob }, "                     Post a Job                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item active", onClick: openHouseholdMyJobs }, "                     My Jobs                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdProfile }, "                     My Profile                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item active", onClick: openHouseholdNotifications }, "                     Notifications                     ", householdUnreadCount > 0 && /* @__PURE__ */ React.createElement("span", { className: "nav-count-badge" }, householdUnreadCount), "                   "), "                 "), "               "), "                ", /* @__PURE__ */ React.createElement("div", { className: "worker-content" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "row g-3" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "col-lg-4" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "profile-card" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "p-3 text-center" }, "                         ", selectedWorkerPhoto ? /* @__PURE__ */ React.createElement("img", { className: "profile-photo-large mb-2", src: selectedWorkerPhoto, alt: `${getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username)} profile` }) : /* @__PURE__ */ React.createElement("div", { className: "profile-avatar mb-2" }, "                           ", (selectedWorker.avatar || selectedWorker.firstName || "W").slice(0, 1).toUpperCase(), "                         "), "                         ", /* @__PURE__ */ React.createElement("h2", { className: "h5 mb-1" }, "                           ", getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "small text-muted mb-2" }, "                           ", formatLocation(selectedWorker.barangay, selectedWorker.streetAddress), "                         "), "                         ", /* @__PURE__ */ React.createElement("span", { className: `badge ${selectedWorker.verification === "Verified" ? "text-bg-success" : "text-bg-warning"}` }, "                           ", selectedWorker.verification || "Not Yet Verified", "                         "), "                       "), "                       ", /* @__PURE__ */ React.createElement("div", { className: "px-3 pb-3" }, "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Rating"), "                           ", /* @__PURE__ */ React.createElement("strong", null, selectedWorker.rating || "No ratings yet"), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Jobs Done"), "                           ", /* @__PURE__ */ React.createElement("strong", null, selectedWorker.reviewsDone || 0), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Experience"), "                           ", /* @__PURE__ */ React.createElement("strong", null, selectedWorker.yearsExperience || 0, " yr(s)"), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Status"), "                           ", /* @__PURE__ */ React.createElement("strong", null, selectedWorker.status || "Available"), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Distance"), "                           ", /* @__PURE__ */ React.createElement("strong", null, selectedWorker.distanceLabel || formatDistance(selectedWorker.distanceKm, selectedWorker.distanceLabel) || "Distance unavailable"), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Hourly Rate"), "                           ", /* @__PURE__ */ React.createElement("strong", null, formatCurrency(selectedWorker.hourlyRate)), "                         "), "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-3 small d-flex justify-content-between" }, "                           ", /* @__PURE__ */ React.createElement("span", null, "Daily Rate"), "                           ", /* @__PURE__ */ React.createElement("strong", null, formatCurrency(selectedWorker.dailyRate)), "                         "), "                         ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary w-100 mb-2", type: "button", onClick: handleHireWorker }, "                           Hire This Worker                         "), "                         ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary w-100", type: "button", onClick: openHouseholdMyJobs }, "                           Go Back                         "), "                       "), "                     "), "                   "), "                    ", /* @__PURE__ */ React.createElement("div", { className: "col-lg-8" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "profile-card mb-3" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "profile-card-head" }, "About"), "                       ", /* @__PURE__ */ React.createElement("div", { className: "p-3" }, "                         ", /* @__PURE__ */ React.createElement("p", { className: "mb-0" }, selectedWorker.bio || "No description provided yet."), "                       "), "                     "), "                      ", /* @__PURE__ */ React.createElement("div", { className: "profile-card mb-3" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "profile-card-head" }, "Skills & Expertise"), "                       ", /* @__PURE__ */ React.createElement("div", { className: "p-3 d-flex gap-2 flex-wrap" }, "                         ", (selectedWorker.skills || []).map((skill) => /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-primary", key: `${selectedWorker.id}-${skill}` }, "                             ", skill, "                           ")), "                       "), "                     "), "                      ", /* @__PURE__ */ React.createElement("div", { className: "profile-card" }, "                       ", /* @__PURE__ */ React.createElement("div", { className: "profile-card-head" }, "Reviews & Ratings"), "                       ", /* @__PURE__ */ React.createElement("div", { className: "p-3 d-grid gap-3" }, "                         ", (selectedWorker.receivedReviews || []).length > 0 ? selectedWorker.receivedReviews.map((review) => /* @__PURE__ */ React.createElement("article", { key: review.id, className: "review-item" }, "                               ", /* @__PURE__ */ React.createElement("div", { className: "d-flex justify-content-between gap-3" }, "                                 ", /* @__PURE__ */ React.createElement("div", null, "                                   ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 fw-semibold" }, review.authorName || review.author || "User"), "                                   ", /* @__PURE__ */ React.createElement("p", { className: "mb-1 small text-muted" }, review.feedback || review.comment || ""), "                                   ", /* @__PURE__ */ React.createElement("p", { className: "mb-0 small text-muted" }, review.createdAt || review.date || "Recently"), "                                 "), "                                 ", /* @__PURE__ */ React.createElement("strong", null, review.rating != null ? `${review.rating}/5` : "Feedback"), "                               "), "                             ")) : /* @__PURE__ */ React.createElement("p", { className: "mb-0 text-muted" }, "No reviews yet."), "                       "), "                     "), "                   "), "                 "), "               "), "             "), "           "), "          ", view === "household-notifications" && /* @__PURE__ */ React.createElement("section", { className: "worker-dashboard" }, "             ", /* @__PURE__ */ React.createElement("div", { className: "worker-layout" }, "               ", /* @__PURE__ */ React.createElement("aside", { className: "worker-sidebar" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-sidebar-head" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-logo" }, "GG"), "                   ", /* @__PURE__ */ React.createElement("p", { className: "worker-brand mb-0" }, "GawaGo Community Platform"), "                 "), "                 ", /* @__PURE__ */ React.createElement("nav", { className: "worker-nav" }, "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdDashboard }, "                     Dashboard                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdPostJob }, "                     Post a Job                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdMyJobs }, "                     My Jobs                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item", onClick: openHouseholdProfile }, "                     My Profile                   "), "                   ", /* @__PURE__ */ React.createElement("button", { className: "worker-nav-item active", onClick: openHouseholdNotifications }, "                     Notifications                     ", householdUnreadCount > 0 && /* @__PURE__ */ React.createElement("span", { className: "nav-count-badge" }, householdUnreadCount), "                   "), "                 "), "               "), "                ", /* @__PURE__ */ React.createElement("div", { className: "worker-content" }, "                 ", /* @__PURE__ */ React.createElement("div", { className: "worker-topbar" }, "                   ", /* @__PURE__ */ React.createElement("h1", { className: "h4 mb-0 d-flex align-items-center gap-2" }, "                     Notifications                     ", householdUnreadCount > 0 && /* @__PURE__ */ React.createElement("span", { className: "nav-count-badge" }, householdUnreadCount), "                   "), "                   ", /* @__PURE__ */ React.createElement("div", { className: "worker-user-meta d-flex align-items-center gap-2" }, "                     ", /* @__PURE__ */ React.createElement("span", { className: "small fw-semibold" }, currentUser?.displayName || "Household"), "                     ", /* @__PURE__ */ React.createElement("span", { className: "badge text-bg-primary" }, "Household"), "                     ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary btn-sm", type: "button", onClick: goBack }, "                       Back                     "), "                     ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary btn-sm", type: "button", onClick: handleLogout }, "                       Log Out                     "), "                   "), "                 "), "                  ", /* @__PURE__ */ React.createElement("div", { className: "applications-filter mt-3" }, "                   ", /* @__PURE__ */ React.createElement("div", { className: "row g-2" }, "                     ", /* @__PURE__ */ React.createElement("div", { className: "col-md-4" }, "                       ", /* @__PURE__ */ React.createElement("select", { className: "form-select" }, "                         ", /* @__PURE__ */ React.createElement("option", null, "All Notifications"), "                         ", /* @__PURE__ */ React.createElement("option", null, "Job Updates"), "                         ", /* @__PURE__ */ React.createElement("option", null, "Worker Matches"), "                         ", /* @__PURE__ */ React.createElement("option", null, "Job Status"), "                       "), "                     "), "                     ", /* @__PURE__ */ React.createElement("div", { className: "col-md-3 ms-md-auto" }, "                       ", /* @__PURE__ */ React.createElement("button", { className: "btn btn-outline-secondary w-100", type: "button", onClick: () => markAllNotificationsRead(householdNotificationsWithReadState) }, "                         Mark All as Read                       "), "                     "), "                   "), "                 "), "                  ", /* @__PURE__ */ React.createElement("div", { className: "mt-3 d-grid gap-2" }, "                   ", householdNotificationsWithReadState.length > 0 ? householdNotificationsWithReadState.map((item) => /* @__PURE__ */ React.createElement("article", { className: `notification-card ${item.unread ? "unread" : ""}`, key: item.id, role: "button", tabIndex: 0, onClick: () => {
     markNotificationRead(item.id);
     openHouseholdNotificationWorker(item);
   }, onKeyDown: (event) => {
@@ -1419,5 +2645,6 @@ function App() {
 export {
   App as default
 };
+
 
 

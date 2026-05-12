@@ -15,6 +15,8 @@ class VerificationRequest(models.Model):
     worker = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="verification_requests")
     primary_id_name = models.CharField(max_length=255)
     secondary_doc_name = models.CharField(max_length=255)
+    primary_id_preview = models.TextField(blank=True, default="")
+    secondary_doc_preview = models.TextField(blank=True, default="")
     notes = models.TextField(blank=True, default="")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
     submitted_at = models.DateTimeField(auto_now_add=True)

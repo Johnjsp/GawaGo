@@ -1,25 +1,41 @@
 from django.contrib.auth.models import User
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.reviews.models import Review
 from apps.reviews.serializers import ReviewCreateSerializer, ReviewSerializer
+from apps.notifications.models import Notification
 
 
 class ReviewListCreateView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request):
-        reviews = Review.objects.filter(target=request.user).select_related("author", "target")
+        target_username = request.query_params.get("username") or request.query_params.get("target_username")
+        author_username = request.query_params.get("author_username")
+        reviews = Review.objects.select_related("author", "target")
+        if target_username:
+            reviews = reviews.filter(target__username=target_username)
+        if author_username:
+            reviews = reviews.filter(author__username=author_username)
+        if not target_username and not author_username:
+            if request.user.is_authenticated:
+                reviews = reviews.filter(target=request.user)
+            else:
+                return Response({"detail": "username or author_username is required."}, status=status.HTTP_400_BAD_REQUEST)
         return Response(ReviewSerializer(reviews, many=True).data)
 
     def post(self, request):
         serializer = ReviewCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         target_user = serializer.validated_data["target_username"]
-        author_profile = getattr(request.user, "profile", None)
+        author_user = request.user if request.user.is_authenticated else serializer.validated_data.get("author_username")
+        if not author_user:
+            return Response({"detail": "author_username is required when not authenticated."}, status=status.HTTP_400_BAD_REQUEST)
+
+        author_profile = getattr(author_user, "profile", None)
         target_profile = getattr(target_user, "profile", None)
 
         if not author_profile or not target_profile:
@@ -38,12 +54,18 @@ class ReviewListCreateView(APIView):
             return Response({"detail": "Workers cannot rate households."}, status=status.HTTP_400_BAD_REQUEST)
 
         review = Review.objects.create(
-            author=request.user,
+            author=author_user,
             target=target_user,
             author_role=author_role,
             target_role=target_role,
             job_title=serializer.validated_data.get("job_title", ""),
             rating=serializer.validated_data.get("rating") if author_role == "household" else None,
             feedback=serializer.validated_data.get("feedback", ""),
+        )
+        Notification.objects.create(
+            recipient=target_user,
+            notification_type=Notification.TYPE_ANALYTICS,
+            title="New review received",
+            message=f"You received a new review from {author_user.username}.",
         )
         return Response(ReviewSerializer(review).data, status=status.HTTP_201_CREATED)

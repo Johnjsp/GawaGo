@@ -4,7 +4,13 @@ DEBUG = True
 ALLOWED_HOSTS = ["*"]
 
 # Use SQLite locally when MySQL is not available.
-if os.environ.get("DJANGO_USE_SQLITE_FOR_DEV", "False") == "True":
+USE_SQLITE_FOR_DEV = os.environ.get("DJANGO_USE_SQLITE_FOR_DEV", "True") == "True"
+HAS_MYSQL_CONFIG = all(
+    os.environ.get(key)
+    for key in ("DB_NAME", "DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT")
+)
+
+if USE_SQLITE_FOR_DEV or not HAS_MYSQL_CONFIG:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -12,5 +18,17 @@ if os.environ.get("DJANGO_USE_SQLITE_FOR_DEV", "False") == "True":
         }
     }
 
-if os.environ.get("DJANGO_USE_CONSOLE_EMAIL", "False") == "True":
+if os.environ.get("CORS_ALLOWED_ORIGINS"):
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.environ["CORS_ALLOWED_ORIGINS"].split(",") if origin.strip()]
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+CORS_ALLOW_CREDENTIALS = True
+
+USE_CONSOLE_EMAIL = os.environ.get("DJANGO_USE_CONSOLE_EMAIL", "True") == "True"
+
+if USE_CONSOLE_EMAIL or not os.environ.get("EMAIL_HOST_USER") or not os.environ.get("EMAIL_HOST_PASSWORD"):
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

@@ -1,16 +1,25 @@
+from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from apps.accounts.models import PasswordResetRequest, UserProfile
+from apps.accounts.models import PasswordResetRequest, SignupVerificationRequest, UserProfile
+from apps.common.serializers import VerificationRequestSerializer
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source="user.username")
+    username = serializers.CharField(source="user.username", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    full_name = serializers.SerializerMethodField()
+    user_type = serializers.CharField(source="role", read_only=True)
+    verification_request = serializers.SerializerMethodField()
 
     class Meta:
         model = UserProfile
         fields = [
             "id",
             "username",
+            "email",
+            "full_name",
+            "user_type",
             "role",
             "skills",
             "hourly_rate",
@@ -22,8 +31,51 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "average_rating",
             "rating_count",
             "display_rating",
+            "verification_request",
         ]
         read_only_fields = ["display_rating"]
+
+    def get_full_name(self, obj):
+        return obj.user.get_full_name().strip() or obj.user.username
+
+    def get_verification_request(self, obj):
+        request_obj = obj.user.verification_requests.order_by("-submitted_at").first()
+        if not request_obj:
+            return None
+        return VerificationRequestSerializer(request_obj).data
+
+
+class RegisterSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    password = serializers.CharField(min_length=8, write_only=True)
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    role = serializers.ChoiceField(choices=UserProfile.ROLE_CHOICES, default=UserProfile.ROLE_WORKER)
+    skills = serializers.ListField(child=serializers.CharField(), required=False)
+    hourly_rate = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    daily_rate = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    location_label = serializers.CharField(required=False, allow_blank=True)
+    latitude = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
+    longitude = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
+
+
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField()
+
+
+class ProfileUpdateSerializer(serializers.Serializer):
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False)
+    role = serializers.ChoiceField(choices=UserProfile.ROLE_CHOICES, required=False)
+    skills = serializers.ListField(child=serializers.CharField(), required=False)
+    hourly_rate = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    daily_rate = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    location_label = serializers.CharField(required=False, allow_blank=True)
+    latitude = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
+    longitude = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
 
 
 class ForgotPasswordRequestSerializer(serializers.Serializer):
@@ -41,7 +93,18 @@ class ResetPasswordSerializer(serializers.Serializer):
     new_password = serializers.CharField(min_length=8)
 
 
+class VerifySignupSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    token = serializers.CharField(min_length=6, max_length=12)
+
+
 class PasswordResetRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = PasswordResetRequest
         fields = ["id", "email", "created_at", "expires_at", "used_at", "attempts"]
+
+
+class SignupVerificationRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SignupVerificationRequest
+        fields = ["id", "email", "created_at", "expires_at", "verified_at"]

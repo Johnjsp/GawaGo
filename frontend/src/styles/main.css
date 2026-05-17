@@ -850,6 +850,11 @@ body {
 .household-job-map-canvas {
   width: 100%;
   min-height: 360px;
+  touch-action: none;
+}
+
+.household-job-map-canvas .leaflet-container {
+  touch-action: none;
 }
 
 .household-job-map-canvas.manual-pin-active,

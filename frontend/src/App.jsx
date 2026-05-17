@@ -1,14 +1,14 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiRequest, clearAuthToken, getApiBaseUrl, getAuthToken, setAuthToken, setUnauthorizedHandler } from "./api/apiClient";
 import LocationDistanceMap from "./components/LocationDistanceMap";
 import "./styles/analytics.css";
 const SKILLS = ["House Cleaning", "Cooking", "Laundry", "Childcare", "Elder Care", "Gardening", "Electrical Work", "Plumbing", "Carpentry", "Painting", "Aircon Repair/Cleaning", "Welding", "Driving", "Other"];
-const BARANGAYS = ["Alitao", "Anos", "Ayaas", "Baguio", "Bakal", "Bucal", "Bulkan", "Calumpang", "Camaysa", "Dapdap", "Del Rosario", "Gibanga", "Ilasan", "Isabang", "Lalo", "Lakawan", "Lita", "Mateuna", "Mayowe", "Opias", "Palale", "Piis", "Rizaliana", "San Diego", "San Isidro", "San Roque", "Talolong", "Tongko", "Wakas", "Poblacion"];
+const BARANGAYS = ["Alitao", "Alupay", "Anos", "Ayaas", "Baguio", "Banilad", "Calumpang", "Camaysa", "Dapdap", "Gibanga", "Ibas", "Ilasan Ilaya", "Ilasan Ibaba", "Isabang", "Ipilan", "Katigan Kanluran", "Katigan Silangan", "Lalo", "Lakawan", "Lita", "Mateuna", "Mayowe", "Opias", "Palale Ilaya", "Palale Kanluran", "Palale Ibaba", "Palale Silangan", "Tamlong", "Talolong", "Tongko", "Wakas"];
 const STORAGE_KEYS = { workers: "gawago-registered-workers", households: "gawago-registered-households", jobs: "gawago-posted-jobs", verificationRequests: "gawago-verification-requests", notificationReads: "gawago-notification-reads" };
 const SUPER_ADMIN_ACCOUNT = { username: "superadmin", password: "superadmin123", displayName: "Super Admin" };
-const DEMO_DATA_VERSION = "v15";
+const DEMO_DATA_VERSION = "v17";
 const DEMO_VERSION_KEY = "gawago-demo-data-version";
 const API_BASE_URL = getApiBaseUrl();
 const ACCOUNTS_API_BASE_URL = `${API_BASE_URL}/accounts`;
@@ -20,59 +20,123 @@ const GMAIL_ADDRESS_PATTERN = /^[A-Z0-9._%+-]+@gmail\.com$/i;
 const OPENROUTESERVICE_API_KEY = import.meta.env.VITE_OPENROUTESERVICE_API_KEY || "";
 const OPENROUTESERVICE_SEARCH_URL = import.meta.env.VITE_OPENROUTESERVICE_SEARCH_URL || "https://api.openrouteservice.org/geocode/search";
 const OPENROUTESERVICE_REVERSE_URL = import.meta.env.VITE_OPENROUTESERVICE_REVERSE_URL || "https://api.openrouteservice.org/geocode/reverse";
-const TAYABAS_CITY_CENTER = { latitude: 13.9411, longitude: 121.5874 };
+const PHILIPPINES_MAP_CENTER = { latitude: 12.8797, longitude: 121.774 };
+const PHILIPPINES_MAP_BOUNDS = {
+  south: 4.5,
+  west: 116.87,
+  north: 21.3,
+  east: 126.65,
+};
+const TAYABAS_CITY_CENTER = { latitude: 13.956, longitude: 121.592 };
+const TAYABAS_MAP_BOUNDS = {
+  south: 13.905,
+  west: 121.535,
+  north: 14.005,
+  east: 121.635,
+};
 const ANALYTICS_CHART_COLORS = ["#667eea", "#28a745", "#ffc107", "#dc3545", "#17a2b8", "#4f2ea4"];
 const ANALYTICS_SERVICE_CATEGORIES = ["House Cleaning", "Plumbing", "Electrical Work", "Laundry", "Childcare"];
-const DEMO_HOUSEHOLD_ACCOUNTS = [
-  { id: "demo-household-1", username: "Household 1", password: "Household 1", firstName: "Household", lastName: "One", email: "household1@gmail.com", phone: "9170000001", barangay: "Poblacion", streetAddress: "Demo Street 1", latitude: 13.9411, longitude: 121.5874 },
-  { id: "demo-household-2", username: "Household 2", password: "Household 2", firstName: "Household", lastName: "Two", email: "household2@gmail.com", phone: "9170000002", barangay: "Isabang", streetAddress: "Demo Street 2", latitude: 13.9633, longitude: 121.5447 },
-  { id: "demo-household-3", username: "Household 3", password: "Household 3", firstName: "Household", lastName: "Three", email: "household3@gmail.com", phone: "9170000003", barangay: "San Roque", streetAddress: "Demo Street 3", latitude: 13.9431, longitude: 121.5827 },
-  { id: "demo-household-4", username: "Household 4", password: "Household 4", firstName: "Household", lastName: "Four", email: "household4@gmail.com", phone: "9170000004", barangay: "Calumpang", streetAddress: "Demo Street 4", latitude: 13.9404, longitude: 121.5528 },
-  { id: "demo-household-5", username: "Household 5", password: "Household 5", firstName: "Household", lastName: "Five", email: "household5@gmail.com", phone: "9170000005", barangay: "Dapdap", streetAddress: "Demo Street 5", latitude: 13.9616, longitude: 121.6168 },
+const SHARED_DEMO_PASSWORD = "GawaGo123";
+const DEMO_LOCATIONS = [
+  ["Alitao", 14.053732435726491, 121.53367247279074],
+  ["Alupay", 14.058062231209304, 121.60894317598026],
+  ["Anos", 13.99232619250926, 121.5687256763307],
+  ["Ayaas", 14.033228404082344, 121.61280358513223],
+  ["Baguio", 14.021320928095191, 121.58003973115441],
+  ["Banilad", 14.04366598567965, 121.60287713844916],
+  ["Calumpang", 13.976661577650393, 121.55620698162966],
+  ["Camaysa", 14.061311651286287, 121.55211748652624],
+  ["Dapdap", 14.059836954143305, 121.56928155311572],
+  ["Gibanga", 14.02426437684045, 121.52448299373229],
 ];
-const DEMO_WORKER_ACCOUNTS = [
-  { id: "demo-worker-1", username: "Worker1", password: "Worker123", firstName: "Worker", lastName: "One", email: "worker1@gmail.com", phone: "9180000001", barangay: "Poblacion", streetAddress: "Worker Street 1", bio: "Experienced home cleaner and laundry helper.", hourlyRate: "120.00", dailyRate: "650.00", yearsExperience: "3", skills: ["House Cleaning", "Laundry"], verification: "Verified", rating: "4.90", reviewsDone: 3, status: "Available", distanceKm: "0.00", latitude: 13.9411, longitude: 121.5874, avatar: "W", receivedReviews: [{ id: "demo-review-1", rating: 5, feedback: "Reliable and fast.", createdAt: "Recently" }, { id: "demo-review-2", rating: 5, feedback: "Great service.", createdAt: "Recently" }], givenFeedback: [], verificationNotifications: [], applicationNotifications: [] },
-  { id: "demo-worker-2", username: "Worker2", password: "Worker123", firstName: "Worker", lastName: "Two", email: "worker2@gmail.com", phone: "9180000002", barangay: "Isabang", streetAddress: "Worker Street 2", bio: "Plumbing and minor repair specialist.", hourlyRate: "180.00", dailyRate: "900.00", yearsExperience: "5", skills: ["Plumbing", "Carpentry"], verification: "Verified", rating: "4.50", reviewsDone: 2, status: "Available", distanceKm: "0.00", latitude: 13.9633, longitude: 121.5447, avatar: "W", receivedReviews: [{ id: "demo-review-3", rating: 4, feedback: "Good repair work.", createdAt: "Recently" }, { id: "demo-review-4", rating: 5, feedback: "Very professional.", createdAt: "Recently" }], givenFeedback: [], verificationNotifications: [], applicationNotifications: [] },
-  { id: "demo-worker-3", username: "Worker3", password: "Worker123", firstName: "Worker", lastName: "Three", email: "worker3@gmail.com", phone: "9180000003", barangay: "San Roque", streetAddress: "Worker Street 3", bio: "Electrical work and appliance troubleshooting.", hourlyRate: "200.00", dailyRate: "1000.00", yearsExperience: "4", skills: ["Electrical Work", "Aircon Repair/Cleaning"], verification: "Under Review", rating: "4.00", reviewsDone: 1, status: "Available", distanceKm: "0.00", latitude: 13.9431, longitude: 121.5827, avatar: "W", receivedReviews: [{ id: "demo-review-5", rating: 4, feedback: "Solved the issue.", createdAt: "Recently" }], givenFeedback: [], verificationNotifications: [], applicationNotifications: [] },
-  { id: "demo-worker-4", username: "Worker4", password: "Worker123", firstName: "Worker", lastName: "Four", email: "worker4@gmail.com", phone: "9180000004", barangay: "Calumpang", streetAddress: "Worker Street 4", bio: "Childcare and household support.", hourlyRate: "130.00", dailyRate: "700.00", yearsExperience: "2", skills: ["Childcare", "Cooking"], verification: "Rejected", rating: "3.00", reviewsDone: 1, status: "Available", distanceKm: "0.00", latitude: 13.9404, longitude: 121.5528, avatar: "W", receivedReviews: [{ id: "demo-review-6", rating: 3, feedback: "Completed basic tasks.", createdAt: "Recently" }], givenFeedback: [], verificationNotifications: [], applicationNotifications: [] },
-  { id: "demo-worker-5", username: "Worker5", password: "Worker123", firstName: "Worker", lastName: "Five", email: "worker5@gmail.com", phone: "9180000005", barangay: "Dapdap", streetAddress: "Worker Street 5", bio: "Laundry, cleaning, and cooking assistant.", hourlyRate: "110.00", dailyRate: "600.00", yearsExperience: "1", skills: ["Laundry", "House Cleaning", "Cooking"], verification: "Not Yet Verified", rating: "No ratings yet", reviewsDone: 0, status: "Available", distanceKm: "0.00", latitude: 13.9616, longitude: 121.6168, avatar: "W", receivedReviews: [], givenFeedback: [], verificationNotifications: [], applicationNotifications: [] },
+const NUMBER_WORDS = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
+const DEMO_HOUSEHOLD_ACCOUNTS = DEMO_LOCATIONS.map(([barangay, latitude, longitude], index) => ({
+  id: `demo-household-${index + 1}`,
+  username: `Household ${index + 1}`,
+  password: SHARED_DEMO_PASSWORD,
+  firstName: "Household",
+  lastName: NUMBER_WORDS[index],
+  email: `household${index + 1}@gmail.com`,
+  phone: `91700000${String(index + 1).padStart(2, "0")}`,
+  barangay,
+  streetAddress: `Demo Street ${index + 1}`,
+  latitude,
+  longitude,
+}));
+const DEMO_WORKER_TEMPLATES = [
+  { skills: ["House Cleaning", "Laundry"], hourlyRate: "120.00", dailyRate: "650.00", yearsExperience: "3", verification: "Verified", rating: "4.90", reviewsDone: 3 },
+  { skills: ["Plumbing", "Carpentry"], hourlyRate: "180.00", dailyRate: "900.00", yearsExperience: "5", verification: "Verified", rating: "4.50", reviewsDone: 2 },
+  { skills: ["Electrical Work", "Aircon Repair/Cleaning"], hourlyRate: "200.00", dailyRate: "1000.00", yearsExperience: "4", verification: "Under Review", rating: "4.00", reviewsDone: 1 },
+  { skills: ["Childcare", "Cooking"], hourlyRate: "130.00", dailyRate: "700.00", yearsExperience: "2", verification: "Rejected", rating: "3.00", reviewsDone: 1 },
+  { skills: ["Laundry", "House Cleaning", "Cooking"], hourlyRate: "110.00", dailyRate: "600.00", yearsExperience: "1", verification: "Not Yet Verified", rating: "No ratings yet", reviewsDone: 0 },
+  { skills: ["Gardening", "House Cleaning"], hourlyRate: "115.00", dailyRate: "620.00", yearsExperience: "2", verification: "Verified", rating: "4.70", reviewsDone: 2 },
+  { skills: ["Painting", "Carpentry"], hourlyRate: "170.00", dailyRate: "850.00", yearsExperience: "6", verification: "Verified", rating: "4.80", reviewsDone: 4 },
+  { skills: ["Elder Care", "Cooking"], hourlyRate: "150.00", dailyRate: "780.00", yearsExperience: "4", verification: "Under Review", rating: "4.20", reviewsDone: 1 },
+  { skills: ["Welding", "Electrical Work"], hourlyRate: "220.00", dailyRate: "1200.00", yearsExperience: "7", verification: "Verified", rating: "4.60", reviewsDone: 3 },
+  { skills: ["Driving", "Other"], hourlyRate: "160.00", dailyRate: "800.00", yearsExperience: "3", verification: "Not Yet Verified", rating: "No ratings yet", reviewsDone: 0 },
 ];
+const DEMO_WORKER_ACCOUNTS = DEMO_LOCATIONS.map(([barangay, latitude, longitude], index) => {
+  const template = DEMO_WORKER_TEMPLATES[index];
+  return {
+    id: `demo-worker-${index + 1}`,
+    username: `Worker${index + 1}`,
+    password: SHARED_DEMO_PASSWORD,
+    firstName: "Worker",
+    lastName: NUMBER_WORDS[index],
+    email: `worker${index + 1}@gmail.com`,
+    phone: `91800000${String(index + 1).padStart(2, "0")}`,
+    barangay,
+    streetAddress: `Worker Street ${index + 1}`,
+    bio: `Demo profile for Worker ${NUMBER_WORDS[index]}.`,
+    ...template,
+    status: "Available",
+    distanceKm: "0.00",
+    latitude,
+    longitude,
+    avatar: "W",
+    receivedReviews: template.reviewsDone > 0 ? [{ id: `demo-review-${index + 1}`, rating: Number.parseFloat(template.rating), feedback: "Demo review for analytics.", createdAt: "Recently" }] : [],
+    givenFeedback: [],
+    verificationNotifications: [],
+    applicationNotifications: [],
+  };
+});
 const DEMO_VERIFICATION_REQUESTS = [
   { id: "demo-verification-3", workerId: "demo-worker-3", workerUsername: "Worker3", workerName: "Worker Three", submittedAt: "Recently", reviewedAt: "", reviewedBy: "", status: "Pending", primaryIdName: "UMID", secondaryDocName: "Barangay Clearance", notes: "Awaiting admin review." },
   { id: "demo-verification-4", workerId: "demo-worker-4", workerUsername: "Worker4", workerName: "Worker Four", submittedAt: "Recently", reviewedAt: "Recently", reviewedBy: "Super Admin", status: "Rejected", primaryIdName: "Driver License", secondaryDocName: "NBI Clearance", notes: "Document image needs resubmission.", reviewNote: "Please upload clearer documents." },
 ];
 const DEMO_ACCOUNT_PASSWORDS = Object.fromEntries([...DEMO_HOUSEHOLD_ACCOUNTS, ...DEMO_WORKER_ACCOUNTS].map((account) => [account.username, account.password]));
 const BARANGAY_CENTERS = {
-  Alitao: { latitude: 13.9548, longitude: 121.6002 },
-  Anos: { latitude: 13.9317, longitude: 121.5715 },
-  Ayaas: { latitude: 13.9589, longitude: 121.5645 },
-  Baguio: { latitude: 13.9177, longitude: 121.5768 },
-  Bakal: { latitude: 13.9049, longitude: 121.5958 },
-  Bucal: { latitude: 13.9328, longitude: 121.6108 },
-  Bulkan: { latitude: 13.9477, longitude: 121.6224 },
-  Calumpang: { latitude: 13.9404, longitude: 121.5528 },
-  Camaysa: { latitude: 13.9743, longitude: 121.5841 },
-  Dapdap: { latitude: 13.9616, longitude: 121.6168 },
-  "Del Rosario": { latitude: 13.9463, longitude: 121.5919 },
-  Gibanga: { latitude: 13.9004, longitude: 121.5667 },
-  Ilasan: { latitude: 13.9225, longitude: 121.6281 },
-  Isabang: { latitude: 13.9633, longitude: 121.5447 },
-  Lalo: { latitude: 13.8878, longitude: 121.5871 },
-  Lakawan: { latitude: 13.9118, longitude: 121.5458 },
-  Lita: { latitude: 13.9699, longitude: 121.6037 },
-  Mateuna: { latitude: 13.9345, longitude: 121.6406 },
-  Mayowe: { latitude: 13.9126, longitude: 121.6164 },
-  Opias: { latitude: 13.9821, longitude: 121.6243 },
-  Palale: { latitude: 13.8913, longitude: 121.6247 },
-  Piis: { latitude: 13.9794, longitude: 121.5565 },
-  Poblacion: { latitude: 13.9411, longitude: 121.5874 },
-  Rizaliana: { latitude: 13.9476, longitude: 121.5339 },
-  "San Diego": { latitude: 13.9292, longitude: 121.5908 },
-  "San Isidro": { latitude: 13.9558, longitude: 121.5763 },
-  "San Roque": { latitude: 13.9431, longitude: 121.5827 },
-  Talolong: { latitude: 13.8824, longitude: 121.5526 },
-  Tongko: { latitude: 13.9948, longitude: 121.5948 },
-  Wakas: { latitude: 13.9263, longitude: 121.6047 },
+  Alitao: { latitude: 14.053732435726491, longitude: 121.53367247279074 },
+  Alupay: { latitude: 14.058062231209304, longitude: 121.60894317598026 },
+  Anos: { latitude: 13.99232619250926, longitude: 121.5687256763307 },
+  Ayaas: { latitude: 14.033228404082344, longitude: 121.61280358513223 },
+  Baguio: { latitude: 14.021320928095191, longitude: 121.58003973115441 },
+  Banilad: { latitude: 14.04366598567965, longitude: 121.60287713844916 },
+  Calumpang: { latitude: 13.976661577650393, longitude: 121.55620698162966 },
+  Camaysa: { latitude: 14.061311651286287, longitude: 121.55211748652624 },
+  Dapdap: { latitude: 14.059836954143305, longitude: 121.56928155311572 },
+  Gibanga: { latitude: 14.02426437684045, longitude: 121.52448299373229 },
+  Ibas: { latitude: 14.056263954528147, longitude: 121.5858639459556 },
+  "Ilasan Ilaya": { latitude: 14.076395444822706, longitude: 121.62660976250517 },
+  "Ilasan Ibaba": { latitude: 14.076395444822706, longitude: 121.62660976250517 },
+  Isabang: { latitude: 13.962274547948905, longitude: 121.56328409695064 },
+  Ipilan: { latitude: 14.033357570914804, longitude: 121.56833532099283 },
+  "Katigan Kanluran": { latitude: 14.046025691828351, longitude: 121.6202812396619 },
+  "Katigan Silangan": { latitude: 14.060227861113688, longitude: 121.62154538337464 },
+  Lalo: { latitude: 14.050261202405046, longitude: 121.55717481490423 },
+  Lakawan: { latitude: 14.009582881492914, longitude: 121.62560074991586 },
+  Lita: { latitude: 14.017699813459267, longitude: 121.59813443683436 },
+  Mateuna: { latitude: 14.023782235513432, longitude: 121.6406 },
+  Mayowe: { latitude: 13.97392868959356, longitude: 121.5783335732242 },
+  Opias: { latitude: 14.036073743242486, longitude: 121.59254781007984 },
+  "Palale Ilaya": { latitude: 14.054262032583141, longitude: 121.6530714222272 },
+  "Palale Kanluran": { latitude: 14.041216405063171, longitude: 121.6540020663721 },
+  "Palale Ibaba": { latitude: 14.061429877540817, longitude: 121.70714387691235 },
+  "Palale Silangan": { latitude: 14.089421743230861, longitude: 121.68915654043055 },
+  Tamlong: { latitude: 14.069116148209835, longitude: 121.60191813524901 },
+  Talolong: { latitude: 14.077712524215334, longitude: 121.61401135611793 },
+  Tongko: { latitude: 13.987459902846487, longitude: 121.60973707319776 },
+  Wakas: { latitude: 14.006911431929879, longitude: 121.60872288744254 },
 };
 let leafletAssetsPromise = null;
 let tayabasBarangayCentersPromise = null;
@@ -203,6 +267,35 @@ function buildBarangayAnalytics(records, accessor, valueKey) {
     barangay,
     [valueKey]: records.filter((record) => normalizeBarangayName(accessor(record)) === barangay).length,
   })).filter((item) => item[valueKey] > 0).sort((a, b) => b[valueKey] - a[valueKey]).slice(0, 8);
+}
+function buildBarangayHeatMapData(jobs, workers, verificationRequests, metric) {
+  return BARANGAYS.map((barangay) => {
+    const normalizedBarangay = normalizeBarangayName(barangay);
+    const barangayJobs = jobs.filter((job) => normalizeBarangayName(job.barangay) === normalizedBarangay);
+    const barangayWorkers = workers.filter((worker) => normalizeBarangayName(worker.barangay) === normalizedBarangay);
+    const value = metric === "workers"
+      ? barangayWorkers.length
+      : metric === "completed"
+        ? barangayJobs.filter((job) => job.status === "Completed").length
+        : metric === "verification"
+          ? verificationRequests.filter((request) => {
+              const worker = workers.find((item) => item.username === request.workerUsername || String(item.id) === String(request.workerId));
+              return ["Pending", "Under Review"].includes(request.status) && normalizeBarangayName(worker?.barangay) === normalizedBarangay;
+            }).length
+          : barangayJobs.length;
+    return {
+      barangay,
+      value,
+      jobs: barangayJobs.length,
+      workers: barangayWorkers.length,
+      completed: barangayJobs.filter((job) => job.status === "Completed").length,
+      pendingVerifications: verificationRequests.filter((request) => {
+        const worker = workers.find((item) => item.username === request.workerUsername || String(item.id) === String(request.workerId));
+        return ["Pending", "Under Review"].includes(request.status) && normalizeBarangayName(worker?.barangay) === normalizedBarangay;
+      }).length,
+      ...getBarangayCenter(barangay),
+    };
+  }).filter((item) => item.latitude && item.longitude);
 }
 function getWorkerRatingValue(worker) {
   const directRating = Number(worker?.averageRating ?? worker?.average_rating);
@@ -363,11 +456,18 @@ function buildMapPreviewUrl(latitude, longitude) {
   const marker = `${encodeURIComponent(numericLatitude.toFixed(6))}%2C${encodeURIComponent(numericLongitude.toFixed(6))}`;
   return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${marker}`;
 }
+function buildTayabasMapPreviewUrl() {
+  const left = encodeURIComponent(TAYABAS_MAP_BOUNDS.west.toFixed(6));
+  const bottom = encodeURIComponent(TAYABAS_MAP_BOUNDS.south.toFixed(6));
+  const right = encodeURIComponent(TAYABAS_MAP_BOUNDS.east.toFixed(6));
+  const top = encodeURIComponent(TAYABAS_MAP_BOUNDS.north.toFixed(6));
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik`;
+}
 function buildPhilippinesMapPreviewUrl() {
-  const left = encodeURIComponent("116.870000");
-  const bottom = encodeURIComponent("4.500000");
-  const right = encodeURIComponent("126.650000");
-  const top = encodeURIComponent("21.300000");
+  const left = encodeURIComponent(PHILIPPINES_MAP_BOUNDS.west.toFixed(6));
+  const bottom = encodeURIComponent(PHILIPPINES_MAP_BOUNDS.south.toFixed(6));
+  const right = encodeURIComponent(PHILIPPINES_MAP_BOUNDS.east.toFixed(6));
+  const top = encodeURIComponent(PHILIPPINES_MAP_BOUNDS.north.toFixed(6));
   return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik`;
 }
 function getOpenRouteServiceHeaders() {
@@ -434,8 +534,10 @@ function normalizeGeocodedAddress(address = {}, fallbackBarangay = "", fallbackS
   };
 }
 function buildCoordinateLocation(latitude, longitude, fallbackBarangay = "", fallbackStreetAddress = "", source = "device", warning = "") {
-  const resolvedLatitude = Number(Number(latitude).toFixed(7));
-  const resolvedLongitude = Number(Number(longitude).toFixed(7));
+  const numericLatitude = Number(latitude);
+  const numericLongitude = Number(longitude);
+  const resolvedLatitude = Number((Number.isFinite(numericLatitude) ? numericLatitude : PHILIPPINES_MAP_CENTER.latitude).toFixed(7));
+  const resolvedLongitude = Number((Number.isFinite(numericLongitude) ? numericLongitude : PHILIPPINES_MAP_CENTER.longitude).toFixed(7));
   const barangay = getFallbackBarangay(fallbackBarangay);
   const streetAddress = fallbackStreetAddress || formatCoordinateAddress(resolvedLatitude, resolvedLongitude);
   return {
@@ -448,6 +550,20 @@ function buildCoordinateLocation(latitude, longitude, fallbackBarangay = "", fal
     source,
     warning,
   };
+}
+function buildTayabasOnlyLocation(latitude, longitude, fallbackBarangay = "", fallbackStreetAddress = "", source = "address", warning = "") {
+  const selectedBarangay = getFallbackBarangay(fallbackBarangay);
+  const boundedPoint = isWithinTayabasBounds(latitude, longitude)
+    ? { latitude: Number(latitude), longitude: Number(longitude) }
+    : getBarangayCenter(selectedBarangay || "Poblacion");
+  return buildCoordinateLocation(
+    boundedPoint.latitude,
+    boundedPoint.longitude,
+    selectedBarangay || getFallbackBarangay("Poblacion"),
+    fallbackStreetAddress || `Barangay ${selectedBarangay || "Poblacion"}, Tayabas City`,
+    source,
+    warning || "Location is limited to Tayabas City for GawaGo job matching.",
+  );
 }
 async function fetchBarangayCenter(barangay) {
   if (!OPENROUTESERVICE_API_KEY) {
@@ -786,7 +902,8 @@ function normalizeProfileRecord(profile) {
   const { firstName, lastName, displayName } = splitFullName(profile.full_name, profile.username);
   const locationParts = parseLocationLabel(profile.location_label);
   return {
-    id: profile.id || profile.username,
+    id: profile.user_id || profile.userId || profile.user || profile.id || profile.username,
+    profileId: profile.id || null,
     username: profile.username || "",
     firstName,
     lastName,
@@ -882,6 +999,7 @@ function normalizeBackendJob(job) {
   }
   const applications = (job.applications || []).map(normalizeBackendApplication).filter(Boolean);
   const hiredApplications = applications.filter((application) => application.status === "Hired");
+  const parsedLocation = parseLocationLabel(job.location_label || job.locationLabel || job.barangay || "");
   return normalizeJobRecord({
     id: job.id,
     householdUsername: job.household_username || job.householdUsername || "",
@@ -892,8 +1010,8 @@ function normalizeBackendJob(job) {
     preferredDate: job.preferred_date || "",
     preferredTime: job.preferred_time || "",
     description: job.description || "",
-    barangay: job.location_label || job.barangay || "",
-    streetAddress: job.street_address || "",
+    barangay: parsedLocation.barangay || job.barangay || "",
+    streetAddress: job.street_address || parsedLocation.streetAddress || "",
     latitude: job.latitude ?? job.job_latitude ?? null,
     longitude: job.longitude ?? job.job_longitude ?? null,
     offeredRate: String(job.service_rate ?? "0.00"),
@@ -1057,13 +1175,17 @@ function getDemoCreatedAt(monthOffset, day = 8) {
   return date.toISOString();
 }
 function createDemoJobPostings() {
+  const location = (index) => {
+    const [barangay, latitude, longitude] = DEMO_LOCATIONS[index - 1];
+    return { barangay, streetAddress: `Demo Street ${index}`, latitude, longitude };
+  };
   return [
-    { id: "demo-job-1", householdUsername: "Household 1", householdName: "Household One", jobTitle: "House Cleaning Help", serviceType: "House Cleaning", scheduleType: "One-Time", preferredDate: "2026-05-18", preferredTime: "09:00", description: "General house cleaning for a small family home.", barangay: "Poblacion", streetAddress: "Demo Street 1", latitude: 13.9411, longitude: 121.5874, offeredRate: "700.00", rateType: "Per Day", workersNeeded: "1", status: "Open", matchedWorkerIds: ["demo-worker-1", "demo-worker-5"], applications: [{ id: "demo-app-1", workerId: "demo-worker-1", workerUsername: "Worker1", workerName: "Worker One", status: "Pending", appliedAt: "Recently" }], createdAt: getDemoCreatedAt(0, 3) },
-    { id: "demo-job-2", householdUsername: "Household 2", householdName: "Household Two", jobTitle: "Kitchen Plumbing Repair", serviceType: "Plumbing", scheduleType: "One-Time", preferredDate: "2026-05-20", preferredTime: "13:00", description: "Fix leaking kitchen sink.", barangay: "Isabang", streetAddress: "Demo Street 2", latitude: 13.9633, longitude: 121.5447, offeredRate: "950.00", rateType: "Fixed Rate", workersNeeded: "1", status: "Completed", matchedWorkerIds: ["demo-worker-2"], applications: [{ id: "demo-app-2", workerId: "demo-worker-2", workerUsername: "Worker2", workerName: "Worker Two", status: "Completed", appliedAt: "Recently" }], createdAt: getDemoCreatedAt(1, 5) },
-    { id: "demo-job-3", householdUsername: "Household 3", householdName: "Household Three", jobTitle: "Electrical Outlet Check", serviceType: "Electrical Work", scheduleType: "One-Time", preferredDate: "2026-04-12", preferredTime: "10:00", description: "Inspect and repair two electrical outlets.", barangay: "San Roque", streetAddress: "Demo Street 3", latitude: 13.9431, longitude: 121.5827, offeredRate: "1200.00", rateType: "Fixed Rate", workersNeeded: "1", status: "Completed", matchedWorkerIds: ["demo-worker-3"], applications: [{ id: "demo-app-3", workerId: "demo-worker-3", workerUsername: "Worker3", workerName: "Worker Three", status: "Completed", appliedAt: "Recently" }], createdAt: getDemoCreatedAt(2, 9) },
-    { id: "demo-job-4", householdUsername: "Household 4", householdName: "Household Four", jobTitle: "Laundry Assistance", serviceType: "Laundry", scheduleType: "Part-Time", preferredDate: "2026-03-22", preferredTime: "08:00", description: "Weekly laundry help.", barangay: "Calumpang", streetAddress: "Demo Street 4", latitude: 13.9404, longitude: 121.5528, offeredRate: "500.00", rateType: "Per Day", workersNeeded: "1", status: "Cancelled", matchedWorkerIds: ["demo-worker-5"], applications: [], createdAt: getDemoCreatedAt(3, 12) },
-    { id: "demo-job-5", householdUsername: "Household 5", householdName: "Household Five", jobTitle: "Childcare Support", serviceType: "Childcare", scheduleType: "Part-Time", preferredDate: "2026-02-15", preferredTime: "14:00", description: "Afternoon childcare support.", barangay: "Dapdap", streetAddress: "Demo Street 5", latitude: 13.9616, longitude: 121.6168, offeredRate: "750.00", rateType: "Per Day", workersNeeded: "1", status: "Open", matchedWorkerIds: ["demo-worker-4"], applications: [{ id: "demo-app-5", workerId: "demo-worker-4", workerUsername: "Worker4", workerName: "Worker Four", status: "Pending", appliedAt: "Recently" }], createdAt: getDemoCreatedAt(4, 15) },
-    { id: "demo-job-6", householdUsername: "Household 1", householdName: "Household One", jobTitle: "Cooking Support", serviceType: "Cooking", scheduleType: "One-Time", preferredDate: "2026-01-28", preferredTime: "16:00", description: "Meal preparation for family gathering.", barangay: "Poblacion", streetAddress: "Demo Street 1", latitude: 13.9411, longitude: 121.5874, offeredRate: "650.00", rateType: "Per Day", workersNeeded: "1", status: "Completed", matchedWorkerIds: ["demo-worker-5"], applications: [{ id: "demo-app-6", workerId: "demo-worker-5", workerUsername: "Worker5", workerName: "Worker Five", status: "Completed", appliedAt: "Recently" }], createdAt: getDemoCreatedAt(5, 18) },
+    { id: "demo-job-1", householdUsername: "Household 1", householdName: "Household One", jobTitle: "House Cleaning Help", serviceType: "House Cleaning", scheduleType: "One-Time", preferredDate: "2026-05-18", preferredTime: "09:00", description: "General house cleaning for a small family home.", ...location(1), offeredRate: "700.00", rateType: "Per Day", workersNeeded: "1", status: "Open", matchedWorkerIds: ["demo-worker-1", "demo-worker-5"], applications: [{ id: "demo-app-1", workerId: "demo-worker-1", workerUsername: "Worker1", workerName: "Worker One", status: "Pending", appliedAt: "Recently" }], createdAt: getDemoCreatedAt(0, 3) },
+    { id: "demo-job-2", householdUsername: "Household 2", householdName: "Household Two", jobTitle: "Kitchen Plumbing Repair", serviceType: "Plumbing", scheduleType: "One-Time", preferredDate: "2026-05-20", preferredTime: "13:00", description: "Fix leaking kitchen sink.", ...location(2), offeredRate: "950.00", rateType: "Fixed Rate", workersNeeded: "1", status: "Completed", matchedWorkerIds: ["demo-worker-2"], applications: [{ id: "demo-app-2", workerId: "demo-worker-2", workerUsername: "Worker2", workerName: "Worker Two", status: "Completed", appliedAt: "Recently" }], createdAt: getDemoCreatedAt(1, 5) },
+    { id: "demo-job-3", householdUsername: "Household 3", householdName: "Household Three", jobTitle: "Electrical Outlet Check", serviceType: "Electrical Work", scheduleType: "One-Time", preferredDate: "2026-04-12", preferredTime: "10:00", description: "Inspect and repair two electrical outlets.", ...location(3), offeredRate: "1200.00", rateType: "Fixed Rate", workersNeeded: "1", status: "Completed", matchedWorkerIds: ["demo-worker-3"], applications: [{ id: "demo-app-3", workerId: "demo-worker-3", workerUsername: "Worker3", workerName: "Worker Three", status: "Completed", appliedAt: "Recently" }], createdAt: getDemoCreatedAt(2, 9) },
+    { id: "demo-job-4", householdUsername: "Household 4", householdName: "Household Four", jobTitle: "Laundry Assistance", serviceType: "Laundry", scheduleType: "Part-Time", preferredDate: "2026-03-22", preferredTime: "08:00", description: "Weekly laundry help.", ...location(4), offeredRate: "500.00", rateType: "Per Day", workersNeeded: "1", status: "Cancelled", matchedWorkerIds: ["demo-worker-5"], applications: [], createdAt: getDemoCreatedAt(3, 12) },
+    { id: "demo-job-5", householdUsername: "Household 5", householdName: "Household Five", jobTitle: "Childcare Support", serviceType: "Childcare", scheduleType: "Part-Time", preferredDate: "2026-02-15", preferredTime: "14:00", description: "Afternoon childcare support.", ...location(5), offeredRate: "750.00", rateType: "Per Day", workersNeeded: "1", status: "Open", matchedWorkerIds: ["demo-worker-4"], applications: [{ id: "demo-app-5", workerId: "demo-worker-4", workerUsername: "Worker4", workerName: "Worker Four", status: "Pending", appliedAt: "Recently" }], createdAt: getDemoCreatedAt(4, 15) },
+    { id: "demo-job-6", householdUsername: "Household 1", householdName: "Household One", jobTitle: "Cooking Support", serviceType: "Cooking", scheduleType: "One-Time", preferredDate: "2026-01-28", preferredTime: "16:00", description: "Meal preparation for family gathering.", ...location(1), offeredRate: "650.00", rateType: "Per Day", workersNeeded: "1", status: "Completed", matchedWorkerIds: ["demo-worker-5"], applications: [{ id: "demo-app-6", workerId: "demo-worker-5", workerUsername: "Worker5", workerName: "Worker Five", status: "Completed", appliedAt: "Recently" }], createdAt: getDemoCreatedAt(5, 18) },
   ];
 }
 function getWorkerReviewSummary(worker) {
@@ -1087,6 +1209,158 @@ function getVerificationNotifications(requests, workers) {
     return { id: `verification-${request.id}`, title: `Verification ${request.status}`, message: `${getDisplayName(worker?.firstName, worker?.lastName, worker?.username)}'s documents are ${request.status.toLowerCase()}.`, date: request.submittedAt || request.reviewedAt || "Recently" };
   }).sort((a, b) => (STATUS_PRIORITY[a.title.split(" ").pop()] || 0) - (STATUS_PRIORITY[b.title.split(" ").pop()] || 0));
 }
+function buildTayabasLatLngBounds(L) {
+  return L.latLngBounds(
+    [TAYABAS_MAP_BOUNDS.south, TAYABAS_MAP_BOUNDS.west],
+    [TAYABAS_MAP_BOUNDS.north, TAYABAS_MAP_BOUNDS.east],
+  );
+}
+function isWithinTayabasBounds(latitude, longitude) {
+  const numericLatitude = Number(latitude);
+  const numericLongitude = Number(longitude);
+  return Number.isFinite(numericLatitude)
+    && Number.isFinite(numericLongitude)
+    && numericLatitude >= TAYABAS_MAP_BOUNDS.south
+    && numericLatitude <= TAYABAS_MAP_BOUNDS.north
+    && numericLongitude >= TAYABAS_MAP_BOUNDS.west
+    && numericLongitude <= TAYABAS_MAP_BOUNDS.east;
+}
+function clampToTayabasBounds(latitude, longitude) {
+  const numericLatitude = Number(latitude);
+  const numericLongitude = Number(longitude);
+  return {
+    latitude: Math.min(Math.max(Number.isFinite(numericLatitude) ? numericLatitude : TAYABAS_CITY_CENTER.latitude, TAYABAS_MAP_BOUNDS.south), TAYABAS_MAP_BOUNDS.north),
+    longitude: Math.min(Math.max(Number.isFinite(numericLongitude) ? numericLongitude : TAYABAS_CITY_CENTER.longitude, TAYABAS_MAP_BOUNDS.west), TAYABAS_MAP_BOUNDS.east),
+  };
+}
+function getHeatMapColor(value, maxValue) {
+  if (!value) {
+    return "#c8d3e8";
+  }
+  const intensity = maxValue ? value / maxValue : 0;
+  if (intensity >= 0.75) {
+    return "#dc3545";
+  }
+  if (intensity >= 0.5) {
+    return "#fd7e14";
+  }
+  if (intensity >= 0.25) {
+    return "#ffc107";
+  }
+  return "#20c997";
+}
+function SuperAdminHeatMap({ data, metricLabel }) {
+  const mapNodeRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const mapViewRef = useRef({ center: [PHILIPPINES_MAP_CENTER.latitude, PHILIPPINES_MAP_CENTER.longitude], zoom: 6, touched: false });
+  const [mapStatus, setMapStatus] = useState("loading");
+  const maxValue = Math.max(...data.map((item) => item.value), 1);
+  const rankedData = useMemo(() => [...data].filter((item) => item.value > 0).sort((a, b) => b.value - a.value).slice(0, 5), [data]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function renderMap() {
+      if (!mapNodeRef.current) {
+        return;
+      }
+      setMapStatus("loading");
+      try {
+        const L = await loadLeafletAssets();
+        if (cancelled || !L) {
+          return;
+        }
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.remove();
+          mapInstanceRef.current = null;
+        }
+        const map = L.map(mapNodeRef.current, {
+          zoomControl: true,
+          scrollWheelZoom: true,
+          dragging: true,
+          touchZoom: true,
+          tap: false,
+        }).setView(mapViewRef.current.center, mapViewRef.current.zoom);
+        mapInstanceRef.current = map;
+        map.dragging.enable();
+        map.touchZoom.enable();
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "&copy; OpenStreetMap contributors",
+        }).addTo(map);
+        const heatPoints = [];
+        data.forEach((item) => {
+          const color = getHeatMapColor(item.value, maxValue);
+          const radius = item.value > 0 ? 350 + (item.value / maxValue) * 1400 : 180;
+          const point = [item.latitude, item.longitude];
+          if (item.value > 0) {
+            heatPoints.push(point);
+          }
+          L.circle(point, {
+            radius,
+            color,
+            fillColor: color,
+            fillOpacity: item.value > 0 ? 0.42 : 0.12,
+            weight: item.value > 0 ? 2 : 1,
+          }).addTo(map).bindPopup(`
+            <strong>${item.barangay}</strong><br />
+            ${metricLabel}: ${item.value}<br />
+            Jobs: ${item.jobs}<br />
+            Workers: ${item.workers}<br />
+            Pending verifications: ${item.pendingVerifications}
+          `);
+        });
+        if (!mapViewRef.current.touched && heatPoints.length > 0) {
+          map.fitBounds(L.latLngBounds(heatPoints).pad(0.28));
+        }
+        map.on("moveend zoomend", () => {
+          const center = map.getCenter();
+          mapViewRef.current = { center: [center.lat, center.lng], zoom: map.getZoom(), touched: true };
+        });
+        setMapStatus("ready");
+      } catch (error) {
+        if (!cancelled) {
+          setMapStatus("fallback");
+        }
+      }
+    }
+    renderMap();
+    return () => {
+      cancelled = true;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [data, maxValue, metricLabel]);
+
+  return (
+    <div className="analytics-heatmap-layout">
+      <div className="analytics-heatmap-map" ref={mapNodeRef}>
+        {mapStatus !== "ready" && (
+          <div className="analytics-heatmap-fallback">
+            {mapStatus === "fallback" ? "Map tiles unavailable. Showing barangay ranking beside the map." : "Loading heat map..."}
+          </div>
+        )}
+      </div>
+      <div className="analytics-heatmap-side">
+        <div className="analytics-heatmap-legend">
+          <span><i className="heat-low" /> Low</span>
+          <span><i className="heat-mid" /> Medium</span>
+          <span><i className="heat-high" /> High</span>
+        </div>
+        <div className="analytics-heatmap-ranking">
+          {rankedData.length > 0 ? rankedData.map((item) => (
+            <div className="analytics-heatmap-rank" key={item.barangay}>
+              <span>{item.barangay}</span>
+              <strong>{item.value}</strong>
+            </div>
+          )) : (
+            <p className="small text-muted mb-0">No barangay data yet.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 function App() {
   ensureDemoVersion();
   const [dashboardMetrics, setDashboardMetrics] = useState({ openJobs: 0, verifiedWorkers: 0, completedJobs: 0, totalAccounts: 0, avgRating: null });
@@ -1106,6 +1380,7 @@ function App() {
   const [selectedVerificationRequestId, setSelectedVerificationRequestId] = useState(null);
   const [adminSection, setAdminSection] = useState("verification");
   const [superAdminSection, setSuperAdminSection] = useState("verification");
+  const [heatMapMetric, setHeatMapMetric] = useState("jobs");
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [selectedWorkerId, setSelectedWorkerId] = useState(null);
   const [notificationReads, setNotificationReads] = useState(() => getNotificationReadState());
@@ -1123,6 +1398,7 @@ function App() {
   const [householdJobLocationPreview, setHouseholdJobLocationPreview] = useState(null);
   const [householdJobMapMode, setHouseholdJobMapMode] = useState("preview");
   const householdJobMapRef = useRef(null);
+  const householdJobMapViewRef = useRef({ center: [PHILIPPINES_MAP_CENTER.latitude, PHILIPPINES_MAP_CENTER.longitude], zoom: 6, touched: false });
   const householdJobMapContainerIdRef = useRef(`household-job-map-${Math.random().toString(36).slice(2)}`);
   const householdJobBarangaySyncRef = useRef(0);
   useEffect(() => {
@@ -1520,7 +1796,7 @@ function App() {
 
     const title = document.createElement("h3");
     title.className = "household-job-map-title mb-2";
-    title.textContent = householdJobLocationPreview?.mapUrl ? "Check the saved job pin before posting" : householdJobMapMode === "manual" ? "Manual pin mode is active" : "The map starts at the Philippines, then drops a pin after location capture";
+    title.textContent = householdJobLocationPreview?.mapUrl ? "Check the saved job pin before posting" : householdJobMapMode === "manual" ? "Manual pin mode is active" : "The map opens on the Philippines, then drops a pin after location capture";
 
     const address = document.createElement("p");
     address.className = "small text-muted mb-2";
@@ -1532,7 +1808,7 @@ function App() {
 
     const accuracy = document.createElement("p");
     accuracy.className = "small mb-3 household-job-map-accuracy";
-    accuracy.textContent = householdJobLocationPreview?.accuracy ? `Reported device accuracy: about ${Math.round(householdJobLocationPreview.accuracy)} meters` : householdJobMapMode === "manual" ? "Click anywhere on the map to set the job location for someone else, then review the auto-filled address fields." : "Map opens at the Philippines by default and adds a pin after you confirm location.";
+    accuracy.textContent = householdJobLocationPreview?.accuracy ? `Reported device accuracy: about ${Math.round(householdJobLocationPreview.accuracy)} meters` : householdJobMapMode === "manual" ? "Click or drag anywhere in the Philippines map to set the exact job location, then review the auto-filled address fields." : "Map opens at the Philippines by default and adds a pin after you confirm location.";
 
     const mapWrap = document.createElement("div");
     mapWrap.className = "household-job-map-frame";
@@ -1571,8 +1847,13 @@ function App() {
         const mapInstance = L.map(mapNode, {
           zoomControl: true,
           scrollWheelZoom: true,
+          dragging: true,
+          touchZoom: true,
+          tap: false,
         });
         householdJobMapRef.current = mapInstance;
+        mapInstance.dragging.enable();
+        mapInstance.touchZoom.enable();
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: "&copy; OpenStreetMap contributors",
         }).addTo(mapInstance);
@@ -1585,28 +1866,40 @@ function App() {
             marker.remove();
           }
           marker = L.marker([latitude, longitude], { draggable: true }).addTo(mapInstance);
+          marker.dragging?.enable();
           marker.on("dragend", async () => {
             const draggedPoint = marker.getLatLng();
             try {
-              await placeHouseholdJobPin(draggedPoint.lat, draggedPoint.lng, source, true);
+              const nextLocation = await placeHouseholdJobPin(draggedPoint.lat, draggedPoint.lng, "manual", false);
+              if (nextLocation?.latitude != null && nextLocation?.longitude != null) {
+                marker.setLatLng([nextLocation.latitude, nextLocation.longitude]);
+              }
             } catch (error) {
               window.alert("We could not update the dragged pin yet. Please try again.");
             }
           });
         };
         if (householdJobLocationPreview?.latitude != null && householdJobLocationPreview?.longitude != null) {
-          mapInstance.setView([householdJobLocationPreview.latitude, householdJobLocationPreview.longitude], 15);
+          if (householdJobMapViewRef.current.touched) {
+            mapInstance.setView(householdJobMapViewRef.current.center, householdJobMapViewRef.current.zoom);
+          } else {
+            mapInstance.setView([householdJobLocationPreview.latitude, householdJobLocationPreview.longitude], 15);
+          }
           await syncMarker(householdJobLocationPreview.latitude, householdJobLocationPreview.longitude, householdJobLocationPreview.source || "manual");
         } else {
-          mapInstance.setView([12.8797, 121.774], 6);
+          mapInstance.setView(householdJobMapViewRef.current.center, householdJobMapViewRef.current.zoom);
         }
+        mapInstance.on("moveend zoomend", () => {
+          const center = mapInstance.getCenter();
+          householdJobMapViewRef.current = { center: [center.lat, center.lng], zoom: mapInstance.getZoom(), touched: true };
+        });
         mapInstance.on("click", async (event) => {
           if (householdJobMapMode !== "manual") {
             return;
           }
           try {
-            await syncMarker(event.latlng.lat, event.latlng.lng, "manual");
-            await placeHouseholdJobPin(event.latlng.lat, event.latlng.lng, "manual", true);
+            const nextLocation = await placeHouseholdJobPin(event.latlng.lat, event.latlng.lng, "manual", true);
+            await syncMarker(nextLocation.latitude, nextLocation.longitude, "manual");
           } catch (error) {
             window.alert("We could not use that pin yet. Please try another nearby spot.");
           }
@@ -2336,7 +2629,7 @@ function App() {
           ...existing,
           ...householdProfile,
           avatar: existing?.avatar || (householdProfile.firstName || householdProfile.username || "H").slice(0, 1).toUpperCase(),
-          phone: existing?.phone || "",
+          phone: householdProfile.phone || existing?.phone || "",
           receivedFeedback: existing?.receivedFeedback || [],
           givenFeedback: existing?.givenFeedback || [],
         };
@@ -2594,14 +2887,16 @@ function App() {
     const reverseResult = await reverseGeocodeCoordinates(latitude, longitude, householdJobForm.barangay, householdJobForm.streetAddress);
     const fallbackLocation = buildCoordinateLocation(latitude, longitude, await getNearestBarangayFromCoordinates(latitude, longitude), formatCoordinateAddress(latitude, longitude), source);
     const resolvedBarangay = getFallbackBarangay(reverseResult?.barangay || fallbackLocation.barangay);
-    const resolvedStreetAddress = reverseResult?.streetAddress || fallbackLocation.streetAddress || formatCoordinateAddress(latitude, longitude);
+    const resolvedLatitude = reverseResult?.latitude ?? fallbackLocation.latitude;
+    const resolvedLongitude = reverseResult?.longitude ?? fallbackLocation.longitude;
+    const resolvedStreetAddress = reverseResult?.streetAddress || fallbackLocation.streetAddress || formatCoordinateAddress(resolvedLatitude, resolvedLongitude);
     const resolvedLocation = {
-      latitude: Number(Number(latitude).toFixed(7)),
-      longitude: Number(Number(longitude).toFixed(7)),
+      latitude: Number(Number(resolvedLatitude).toFixed(7)),
+      longitude: Number(Number(resolvedLongitude).toFixed(7)),
       barangay: resolvedBarangay,
       streetAddress: resolvedStreetAddress,
       locationLabel: reverseResult?.locationLabel || formatLocation(resolvedBarangay, resolvedStreetAddress),
-      mapUrl: buildMapPreviewUrl(latitude, longitude),
+      mapUrl: buildMapPreviewUrl(resolvedLatitude, resolvedLongitude),
       source,
       warning: source === "manual" ? "Manual pin placed. Review the auto-filled address before posting." : reverseResult?.warning || "",
     };
@@ -2612,7 +2907,9 @@ function App() {
       barangay: getFallbackBarangay(resolvedLocation.barangay || prev.barangay),
       streetAddress: resolvedLocation.streetAddress || formatCoordinateAddress(resolvedLocation.latitude, resolvedLocation.longitude),
     }));
-    setHouseholdJobMapMode("preview");
+    if (source !== "manual") {
+      setHouseholdJobMapMode("preview");
+    }
     if (showSuccessMessage) {
       window.alert(source === "manual" ? "Manual pin saved. Barangay and street fields were updated automatically." : "Location updated.");
     }
@@ -3225,6 +3522,7 @@ function App() {
             first_name: householdForm.firstName.trim(),
             last_name: householdForm.lastName.trim(),
             role: "household",
+            phone: householdForm.phone.trim(),
             location_label: resolvedLocation?.locationLabel || formatLocation(householdForm.barangay, householdForm.streetAddress),
             latitude: resolvedLocation?.latitude ?? null,
             longitude: resolvedLocation?.longitude ?? null,
@@ -3723,6 +4021,14 @@ function App() {
       { name: "Pending", value: pendingVerificationRequests.length },
       { name: "Rejected", value: Math.max(rejectedVerificationRequests.length, rejectedWorkerVerifications) },
     ];
+    const heatMapOptions = [
+      { id: "jobs", label: "Job Demand" },
+      { id: "workers", label: "Worker Availability" },
+      { id: "completed", label: "Completed Services" },
+      { id: "verification", label: "Pending Verifications" },
+    ];
+    const selectedHeatMapOption = heatMapOptions.find((option) => option.id === heatMapMetric) || heatMapOptions[0];
+    const heatMapData = buildBarangayHeatMapData(postedJobs, registeredWorkers, verificationRequests, selectedHeatMapOption.id);
     const recentAuditLogs = [
       ...verificationRequests.slice(0, 6).map((request) => ({
         id: `verification-${request.id}`,
@@ -3973,6 +4279,20 @@ function App() {
                         <div className="col-md-6 col-xl-2"><div className="metric-card analytics-summary-card"><p className="metric-label mb-1">Active Jobs</p><p className="metric-value mb-0">{activeJobs}</p></div></div>
                         <div className="col-md-6 col-xl-2"><div className="metric-card analytics-summary-card"><p className="metric-label mb-1">Completed Jobs</p><p className="metric-value mb-0">{completedServices}</p></div></div>
                         <div className="col-md-6 col-xl-2"><div className="metric-card analytics-summary-card"><p className="metric-label mb-1">Pending Verifications</p><p className="metric-value mb-0">{pendingVerificationRequests.length}</p></div></div>
+                      </div>
+
+                      <div className="profile-card analytics-card">
+                        <div className="profile-card-head analytics-heatmap-head">
+                          <span>Barangay Heat Map</span>
+                          <div className="btn-group btn-group-sm analytics-heatmap-tabs" role="group" aria-label="Heat map metric">
+                            {heatMapOptions.map((option) => (
+                              <button key={option.id} type="button" className={`btn ${heatMapMetric === option.id ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setHeatMapMetric(option.id)}>
+                                {option.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <SuperAdminHeatMap data={heatMapData} metricLabel={selectedHeatMapOption.label} />
                       </div>
 
                       <div className="row g-3 mt-1">

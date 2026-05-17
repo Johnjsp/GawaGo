@@ -61,6 +61,8 @@ class RegisterView(APIView):
                 first_name=data.get("first_name", ""),
                 last_name=data.get("last_name", ""),
             )
+            user.is_active = False
+            user.save(update_fields=["is_active"])
             profile = UserProfile.objects.create(
                 user=user,
                 role=data["role"],
@@ -77,7 +79,7 @@ class RegisterView(APIView):
             SignupVerificationRequest.create_request(user, token)
         return Response(
             {
-                "detail": "Account created. You can now login.",
+                "detail": "Account created. Verify your email to activate it.",
                 "verification_code": token,
                 "user": {
                     "id": user.id,

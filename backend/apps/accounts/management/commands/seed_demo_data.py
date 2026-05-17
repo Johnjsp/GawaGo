@@ -11,20 +11,73 @@ from apps.jobs.models import JobApplication, JobPosting
 from apps.reviews.models import Review
 
 
+SHARED_DEMO_PASSWORD = "GawaGo123"
+
+DEMO_LOCATIONS = [
+    ("Alitao", "14.0537324", "121.5336725"),
+    ("Alupay", "14.0580622", "121.6089432"),
+    ("Anos", "13.9923262", "121.5687257"),
+    ("Ayaas", "14.0332284", "121.6128036"),
+    ("Baguio", "14.0213209", "121.5800397"),
+    ("Banilad", "14.0436660", "121.6028771"),
+    ("Calumpang", "13.9766616", "121.5562070"),
+    ("Camaysa", "14.0613117", "121.5521175"),
+    ("Dapdap", "14.0598370", "121.5692816"),
+    ("Gibanga", "14.0242644", "121.5244830"),
+]
+
+NUMBER_WORDS = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"]
+
 HOUSEHOLDS = [
-    {"username": "Household 1", "password": "Household 1", "first_name": "Household", "last_name": "One", "email": "household1@gmail.com", "phone": "9170000001", "barangay": "Poblacion", "street": "Demo Street 1", "lat": "13.9411000", "lng": "121.5874000"},
-    {"username": "Household 2", "password": "Household 2", "first_name": "Household", "last_name": "Two", "email": "household2@gmail.com", "phone": "9170000002", "barangay": "Isabang", "street": "Demo Street 2", "lat": "13.9633000", "lng": "121.5447000"},
-    {"username": "Household 3", "password": "Household 3", "first_name": "Household", "last_name": "Three", "email": "household3@gmail.com", "phone": "9170000003", "barangay": "San Roque", "street": "Demo Street 3", "lat": "13.9431000", "lng": "121.5827000"},
-    {"username": "Household 4", "password": "Household 4", "first_name": "Household", "last_name": "Four", "email": "household4@gmail.com", "phone": "9170000004", "barangay": "Calumpang", "street": "Demo Street 4", "lat": "13.9404000", "lng": "121.5528000"},
-    {"username": "Household 5", "password": "Household 5", "first_name": "Household", "last_name": "Five", "email": "household5@gmail.com", "phone": "9170000005", "barangay": "Dapdap", "street": "Demo Street 5", "lat": "13.9616000", "lng": "121.6168000"},
+    {
+        "username": f"Household {index}",
+        "password": SHARED_DEMO_PASSWORD,
+        "first_name": "Household",
+        "last_name": NUMBER_WORDS[index - 1],
+        "email": f"household{index}@gmail.com",
+        "phone": f"91700000{index:02d}",
+        "barangay": barangay,
+        "street": f"Demo Street {index}",
+        "lat": lat,
+        "lng": lng,
+    }
+    for index, (barangay, lat, lng) in enumerate(DEMO_LOCATIONS, start=1)
+]
+
+WORKER_TEMPLATES = [
+    (["House Cleaning", "Laundry"], "120.00", "650.00", 3, "verified", "4.90", 3),
+    (["Plumbing", "Carpentry"], "180.00", "900.00", 5, "verified", "4.50", 2),
+    (["Electrical Work", "Aircon Repair/Cleaning"], "200.00", "1000.00", 4, "pending", "4.00", 1),
+    (["Childcare", "Cooking"], "130.00", "700.00", 2, "rejected", "3.00", 1),
+    (["Laundry", "House Cleaning", "Cooking"], "110.00", "600.00", 1, "pending", None, 0),
+    (["Gardening", "House Cleaning"], "115.00", "620.00", 2, "verified", "4.70", 2),
+    (["Painting", "Carpentry"], "170.00", "850.00", 6, "verified", "4.80", 4),
+    (["Elder Care", "Cooking"], "150.00", "780.00", 4, "pending", "4.20", 1),
+    (["Welding", "Electrical Work"], "220.00", "1200.00", 7, "verified", "4.60", 3),
+    (["Driving", "Other"], "160.00", "800.00", 3, "pending", None, 0),
 ]
 
 WORKERS = [
-    {"username": "Worker1", "password": "Worker123", "first_name": "Worker", "last_name": "One", "email": "worker1@gmail.com", "phone": "9180000001", "barangay": "Poblacion", "street": "Worker Street 1", "lat": "13.9411000", "lng": "121.5874000", "skills": ["House Cleaning", "Laundry"], "hourly": "120.00", "daily": "650.00", "years": 3, "verification": "verified", "rating": "4.90", "rating_count": 3},
-    {"username": "Worker2", "password": "Worker123", "first_name": "Worker", "last_name": "Two", "email": "worker2@gmail.com", "phone": "9180000002", "barangay": "Isabang", "street": "Worker Street 2", "lat": "13.9633000", "lng": "121.5447000", "skills": ["Plumbing", "Carpentry"], "hourly": "180.00", "daily": "900.00", "years": 5, "verification": "verified", "rating": "4.50", "rating_count": 2},
-    {"username": "Worker3", "password": "Worker123", "first_name": "Worker", "last_name": "Three", "email": "worker3@gmail.com", "phone": "9180000003", "barangay": "San Roque", "street": "Worker Street 3", "lat": "13.9431000", "lng": "121.5827000", "skills": ["Electrical Work", "Aircon Repair/Cleaning"], "hourly": "200.00", "daily": "1000.00", "years": 4, "verification": "pending", "rating": "4.00", "rating_count": 1},
-    {"username": "Worker4", "password": "Worker123", "first_name": "Worker", "last_name": "Four", "email": "worker4@gmail.com", "phone": "9180000004", "barangay": "Calumpang", "street": "Worker Street 4", "lat": "13.9404000", "lng": "121.5528000", "skills": ["Childcare", "Cooking"], "hourly": "130.00", "daily": "700.00", "years": 2, "verification": "rejected", "rating": "3.00", "rating_count": 1},
-    {"username": "Worker5", "password": "Worker123", "first_name": "Worker", "last_name": "Five", "email": "worker5@gmail.com", "phone": "9180000005", "barangay": "Dapdap", "street": "Worker Street 5", "lat": "13.9616000", "lng": "121.6168000", "skills": ["Laundry", "House Cleaning", "Cooking"], "hourly": "110.00", "daily": "600.00", "years": 1, "verification": "pending", "rating": None, "rating_count": 0},
+    {
+        "username": f"Worker{index}",
+        "password": SHARED_DEMO_PASSWORD,
+        "first_name": "Worker",
+        "last_name": NUMBER_WORDS[index - 1],
+        "email": f"worker{index}@gmail.com",
+        "phone": f"91800000{index:02d}",
+        "barangay": DEMO_LOCATIONS[index - 1][0],
+        "street": f"Worker Street {index}",
+        "lat": DEMO_LOCATIONS[index - 1][1],
+        "lng": DEMO_LOCATIONS[index - 1][2],
+        "skills": template[0],
+        "hourly": template[1],
+        "daily": template[2],
+        "years": template[3],
+        "verification": template[4],
+        "rating": template[5],
+        "rating_count": template[6],
+    }
+    for index, template in enumerate(WORKER_TEMPLATES, start=1)
 ]
 
 JOBS = [
@@ -34,6 +87,12 @@ JOBS = [
     {"household": "Household 4", "worker": "Worker5", "title": "Laundry Assistance", "skill": "Laundry", "status": JobPosting.STATUS_CANCELLED, "application_status": None, "barangay": "Calumpang", "lat": "13.9404000", "lng": "121.5528000", "rate": "500.00", "months_ago": 3},
     {"household": "Household 5", "worker": "Worker4", "title": "Childcare Support", "skill": "Childcare", "status": JobPosting.STATUS_OPEN, "application_status": JobApplication.STATUS_PENDING, "barangay": "Dapdap", "lat": "13.9616000", "lng": "121.6168000", "rate": "750.00", "months_ago": 4},
     {"household": "Household 1", "worker": "Worker5", "title": "Cooking Support", "skill": "Cooking", "status": JobPosting.STATUS_COMPLETED, "application_status": JobApplication.STATUS_CLOSED, "barangay": "Poblacion", "lat": "13.9411000", "lng": "121.5874000", "rate": "650.00", "months_ago": 5},
+    {"household": "Household 6", "worker": "Worker6", "title": "Garden Cleanup", "skill": "Gardening", "status": JobPosting.STATUS_OPEN, "application_status": JobApplication.STATUS_PENDING, "barangay": "Del Rosario", "lat": "13.9463000", "lng": "121.5919000", "rate": "680.00", "months_ago": 0},
+    {"household": "Household 7", "worker": "Worker7", "title": "Room Repainting", "skill": "Painting", "status": JobPosting.STATUS_ASSIGNED, "application_status": JobApplication.STATUS_HIRED, "barangay": "San Isidro", "lat": "13.9558000", "lng": "121.5763000", "rate": "900.00", "months_ago": 1},
+    {"household": "Household 8", "worker": "Worker8", "title": "Elder Care Visit", "skill": "Elder Care", "status": JobPosting.STATUS_COMPLETED, "application_status": JobApplication.STATUS_CLOSED, "barangay": "Bucal", "lat": "13.9328000", "lng": "121.6108000", "rate": "820.00", "months_ago": 2},
+    {"household": "Household 9", "worker": "Worker9", "title": "Gate Welding Repair", "skill": "Welding", "status": JobPosting.STATUS_COMPLETED, "application_status": JobApplication.STATUS_CLOSED, "barangay": "Talolong", "lat": "13.8824000", "lng": "121.5526000", "rate": "1300.00", "months_ago": 3},
+    {"household": "Household 10", "worker": "Worker10", "title": "Family Driver Needed", "skill": "Driving", "status": JobPosting.STATUS_CANCELLED, "application_status": None, "barangay": "Wakas", "lat": "13.9263000", "lng": "121.6047000", "rate": "850.00", "months_ago": 4},
+    {"household": "Household 6", "worker": "Worker1", "title": "Deep Cleaning Follow-up", "skill": "House Cleaning", "status": JobPosting.STATUS_OPEN, "application_status": JobApplication.STATUS_PENDING, "barangay": "Del Rosario", "lat": "13.9463000", "lng": "121.5919000", "rate": "720.00", "months_ago": 5},
 ]
 
 REVIEWS = [
@@ -42,6 +101,10 @@ REVIEWS = [
     {"author": "Household 3", "target": "Worker3", "job_title": "Electrical Outlet Check", "rating": 4, "feedback": "Solved the issue."},
     {"author": "Household 5", "target": "Worker4", "job_title": "Childcare Support", "rating": 3, "feedback": "Completed basic tasks."},
     {"author": "Household 1", "target": "Worker5", "job_title": "Cooking Support", "rating": 4, "feedback": "Helpful and punctual."},
+    {"author": "Household 6", "target": "Worker6", "job_title": "Garden Cleanup", "rating": 5, "feedback": "Clean work and friendly service."},
+    {"author": "Household 7", "target": "Worker7", "job_title": "Room Repainting", "rating": 5, "feedback": "Neat finish and on schedule."},
+    {"author": "Household 8", "target": "Worker8", "job_title": "Elder Care Visit", "rating": 4, "feedback": "Kind and attentive."},
+    {"author": "Household 9", "target": "Worker9", "job_title": "Gate Welding Repair", "rating": 5, "feedback": "Strong repair work."},
 ]
 
 
@@ -125,6 +188,10 @@ class Command(BaseCommand):
 
     def _upsert_job(self, users, job_data):
         household = users[job_data["household"]]
+        household_profile = getattr(household, "profile", None)
+        job_location_label = household_profile.location_label if household_profile and household_profile.location_label else job_data["barangay"]
+        job_latitude = household_profile.latitude if household_profile and household_profile.latitude is not None else Decimal(job_data["lat"])
+        job_longitude = household_profile.longitude if household_profile and household_profile.longitude is not None else Decimal(job_data["lng"])
         job, created = JobPosting.objects.update_or_create(
             household=household,
             title=job_data["title"],
@@ -133,9 +200,9 @@ class Command(BaseCommand):
                 "required_skill": job_data["skill"],
                 "schedule": "Demo schedule",
                 "description": f"Demo {job_data['skill']} request for analytics.",
-                "location_label": job_data["barangay"],
-                "latitude": Decimal(job_data["lat"]),
-                "longitude": Decimal(job_data["lng"]),
+                "location_label": job_location_label,
+                "latitude": job_latitude,
+                "longitude": job_longitude,
                 "service_rate": Decimal(job_data["rate"]),
                 "worker_slots": 1,
                 "status": job_data["status"],

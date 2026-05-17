@@ -10,7 +10,7 @@ from apps.accounts.models import PasswordResetRequest, UserProfile
 
 
 class RegisterLoginFlowTests(TestCase):
-    def test_registered_worker_can_login_immediately(self):
+    def test_registered_worker_must_verify_before_login(self):
         register_response = self.client.post(
             reverse("register"),
             {
@@ -26,8 +26,24 @@ class RegisterLoginFlowTests(TestCase):
         self.assertEqual(register_response.status_code, 201)
 
         user = User.objects.get(username="JuanWorker")
-        self.assertTrue(user.is_active)
+        self.assertFalse(user.is_active)
         self.assertTrue(user.check_password("worker-pass123"))
+
+        login_response = self.client.post(
+            reverse("login"),
+            {"username": "JuanWorker", "password": "worker-pass123"},
+            content_type="application/json",
+        )
+        self.assertEqual(login_response.status_code, 403)
+
+        verify_response = self.client.post(
+            reverse("verify-signup"),
+            {"email": "juan.worker@gmail.com", "token": register_response.json()["verification_code"]},
+            content_type="application/json",
+        )
+        self.assertEqual(verify_response.status_code, 200)
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
 
         login_response = self.client.post(
             reverse("login"),

@@ -34,6 +34,126 @@
   min-height: 14.5rem;
 }
 
+.analytics-heatmap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.analytics-heatmap-tabs {
+  flex-wrap: wrap;
+}
+
+.analytics-heatmap-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(14rem, 18rem);
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.analytics-heatmap-map {
+  position: relative;
+  min-height: 25rem;
+  overflow: hidden;
+  border: 1px solid rgba(173, 197, 255, 0.82);
+  border-radius: 0.75rem;
+  background: #eef4ff;
+  touch-action: none;
+}
+
+.analytics-heatmap-map .leaflet-container {
+  min-height: 25rem;
+  touch-action: none;
+}
+
+.analytics-heatmap-fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  color: #5f6b7b;
+  font-size: 0.9rem;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.92), rgba(238, 244, 255, 0.88));
+}
+
+.analytics-heatmap-side {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+
+.analytics-heatmap-legend {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(173, 197, 255, 0.82);
+  border-radius: 0.75rem;
+  background: #f8fbff;
+}
+
+.analytics-heatmap-legend span {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #42526b;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.analytics-heatmap-legend i {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 999px;
+}
+
+.analytics-heatmap-legend .heat-low {
+  background: #20c997;
+}
+
+.analytics-heatmap-legend .heat-mid {
+  background: #ffc107;
+}
+
+.analytics-heatmap-legend .heat-high {
+  background: #dc3545;
+}
+
+.analytics-heatmap-ranking {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.analytics-heatmap-rank {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(173, 197, 255, 0.82);
+  border-radius: 0.65rem;
+  background: #ffffff;
+  color: #25324a;
+}
+
+.analytics-heatmap-rank span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-heatmap-rank strong {
+  color: #0d6efd;
+  font-size: 1rem;
+}
+
 .analytics-table th {
   color: #5f6b7b;
   font-size: 0.8rem;
@@ -122,6 +242,15 @@
   .analytics-chart-wrap {
     min-height: 15rem;
     padding-inline: 0.25rem;
+  }
+
+  .analytics-heatmap-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-heatmap-map,
+  .analytics-heatmap-map .leaflet-container {
+    min-height: 20rem;
   }
 
   .analytics-rating-summary {

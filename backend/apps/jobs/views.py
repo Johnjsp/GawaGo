@@ -6,7 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.jobs.models import JobApplication, JobPosting
+from apps.jobs.models import JobApplication, JobImage, JobPosting
 from apps.jobs.serializers import (
     JobApplicationCreateSerializer,
     JobApplicationSerializer,
@@ -31,7 +31,11 @@ def ensure_worker_profile(user, role_hint=""):
 
 class JobViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
-    queryset = JobPosting.objects.select_related("household").prefetch_related("applications", "applications__worker").order_by("-created_at")
+    queryset = JobPosting.objects.select_related("household").prefetch_related(
+        "applications",
+        "applications__worker",
+        "images",
+    ).order_by("-created_at")
     serializer_class = JobPostingSerializer
 
     def get_queryset(self):
@@ -54,6 +58,16 @@ class JobViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = JobCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        image_files = request.FILES.getlist("images")
+        if image_files and len(image_files) > 5:
+            return Response({"detail": "You can upload up to 5 images only."}, status=status.HTTP_400_BAD_REQUEST)
+        allowed_types = {"image/jpeg", "image/png", "image/webp"}
+        max_file_size = 5 * 1024 * 1024
+        for image_file in image_files:
+            if image_file.content_type not in allowed_types:
+                return Response({"detail": "Only JPG, PNG, and WebP images are allowed."}, status=status.HTTP_400_BAD_REQUEST)
+            if image_file.size > max_file_size:
+                return Response({"detail": "Each image must be 5MB or smaller."}, status=status.HTTP_400_BAD_REQUEST)
         if request.user.is_authenticated:
             household = request.user
         else:
@@ -77,6 +91,8 @@ class JobViewSet(viewsets.ModelViewSet):
             worker_slots=serializer.validated_data["worker_slots"],
             status=serializer.validated_data.get("status", JobPosting.STATUS_OPEN),
         )
+        for index, image_file in enumerate(image_files):
+            JobImage.objects.create(job=job, image=image_file, order=index)
         return Response(JobPostingSerializer(job).data, status=status.HTTP_201_CREATED)
 
     def perform_update(self, serializer):

@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GawaGo Recent Jobs View Modal Preview</title>
+    <style>
+      :root {
+        --navy: #08183a;
+        --blue: #2459f5;
+        --blue-soft: #eaf0ff;
+        --line: #b4c8ff;
+        --panel: #f8fbff;
+        --text: #061948;
+        --muted: #53617d;
+        --success: #dcfce9;
+        --success-text: #05603a;
+        --danger: #ffe4e6;
+        --danger-text: #a1122b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: Arial, sans-serif;
+        background: #eef4ff;
+      }
+
+      button {
+        cursor: pointer;
+        font: inherit;
+      }
+
+      .topbar {
+        height: 78px;
+        display: grid;
+        place-items: center;
+        background: var(--navy);
+        color: #fff;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .layout {
+        min-height: calc(100vh - 78px);
+        display: grid;
+        grid-template-columns: 260px 1fr;
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 22px 14px;
+        background: linear-gradient(180deg, #18315b, #1f49e5);
+        color: #fff;
+      }
+
+      .brand {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding-bottom: 18px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+        font-weight: 700;
+      }
+
+      .logo {
+        width: 30px;
+        height: 30px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        background: #fff;
+        color: #2444d8;
+        font-size: 12px;
+      }
+
+      .nav-item,
+      .logout {
+        width: 100%;
+        min-height: 44px;
+        padding: 0 14px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+        text-align: left;
+        font-weight: 700;
+      }
+
+      .nav-item.active {
+        background: rgba(255, 255, 255, 0.18);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+      }
+
+      .logout {
+        margin-top: auto;
+        text-align: center;
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .content {
+        padding: 20px;
+      }
+
+      .welcome {
+        width: min(360px, 100%);
+        padding: 20px 28px;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: #fff;
+        box-shadow: 0 14px 40px rgba(8, 24, 58, 0.08);
+        text-align: center;
+        font-size: 20px;
+        font-weight: 800;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin: 20px 0 28px;
+      }
+
+      .stat {
+        min-height: 100px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fff;
+      }
+
+      .stat span {
+        display: block;
+        margin-bottom: 16px;
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .stat strong {
+        font-size: 32px;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        letter-spacing: 0;
+      }
+
+      .table-card {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fff;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 16px;
+        border-bottom: 1px solid #d8e2ff;
+        text-align: left;
+      }
+
+      th {
+        background: #e8efff;
+        font-weight: 800;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .badge {
+        display: inline-flex;
+        min-width: 92px;
+        justify-content: center;
+        padding: 7px 14px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .badge.completed {
+        border: 1px solid #8be0b3;
+        background: var(--success);
+        color: var(--success-text);
+      }
+
+      .badge.cancelled {
+        border: 1px solid #ffb8c2;
+        background: var(--danger);
+        color: var(--danger-text);
+      }
+
+      .view-btn,
+      .primary-btn,
+      .ghost-btn {
+        min-height: 38px;
+        padding: 0 16px;
+        border-radius: 7px;
+        font-weight: 800;
+      }
+
+      .view-btn,
+      .ghost-btn {
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--blue);
+      }
+
+      .primary-btn {
+        border: 1px solid var(--blue);
+        background: var(--blue);
+        color: #fff;
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 22px;
+        background: rgba(25, 17, 18, 0.38);
+      }
+
+      .modal-backdrop.open {
+        display: flex;
+      }
+
+      .job-modal {
+        width: min(620px, 100%);
+        max-height: calc(100vh - 48px);
+        overflow: auto;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 28px 70px rgba(8, 24, 58, 0.28);
+      }
+
+      .modal-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 22px;
+        border-bottom: 1px solid #dbe5ff;
+      }
+
+      .modal-head p {
+        margin: 8px 0 0;
+        color: var(--muted);
+      }
+
+      .close-btn {
+        width: 36px;
+        height: 36px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        color: var(--text);
+        font-size: 20px;
+        line-height: 1;
+      }
+
+      .modal-body {
+        padding: 22px;
+      }
+
+      .worker-card {
+        display: grid;
+        grid-template-columns: 84px 1fr;
+        gap: 16px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+
+      .avatar {
+        width: 84px;
+        height: 84px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        background: #fff;
+        color: var(--blue);
+        font-size: 28px;
+        font-weight: 900;
+      }
+
+      .worker-card h3 {
+        margin-top: 4px;
+      }
+
+      .facts {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .fact {
+        min-height: 76px;
+        padding: 12px;
+        border: 1px solid #d6e1ff;
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .fact span {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .review-box,
+      .cancel-box {
+        margin-top: 16px;
+        padding: 16px;
+        border-radius: 8px;
+        background: var(--blue-soft);
+      }
+
+      .review-box p,
+      .cancel-box p {
+        margin: 8px 0 0;
+        color: var(--muted);
+      }
+
+      .modal-actions {
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+        padding: 0 22px 22px;
+      }
+
+      .reviews-page {
+        display: none;
+      }
+
+      .reviews-page.open {
+        display: block;
+      }
+
+      .dashboard-page.hidden {
+        display: none;
+      }
+
+      .reviews-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fff;
+      }
+
+      .reviews-head p {
+        margin: 12px 0 0;
+        color: var(--muted);
+      }
+
+      .review-list {
+        margin-top: 18px;
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fff;
+      }
+
+      .review-item {
+        display: grid;
+        grid-template-columns: 56px 1fr auto;
+        gap: 16px;
+        align-items: start;
+        padding: 16px;
+        border: 1px solid #d2ddff;
+        border-radius: 8px;
+        background: var(--blue-soft);
+      }
+
+      @media (max-width: 820px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          min-height: auto;
+        }
+
+        .stats,
+        .facts {
+          grid-template-columns: 1fr;
+        }
+
+        .table-card {
+          overflow-x: auto;
+        }
+
+        table {
+          min-width: 760px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">GawaGo</header>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="logo">GG</div>
+          <div>GawaGo Community Platform</div>
+        </div>
+        <button class="nav-item active" type="button">Dashboard</button>
+        <button class="nav-item" type="button">Post a Job</button>
+        <button class="nav-item" type="button">My Jobs</button>
+        <button class="nav-item" type="button" onclick="openReviews()">My Profile</button>
+        <button class="nav-item" type="button">Notifications</button>
+        <button class="logout" type="button">Log Out</button>
+      </aside>
+
+      <main class="content">
+        <section class="dashboard-page" id="dashboardPage">
+          <div class="welcome">Welcome, marga felonia</div>
+
+          <div class="stats">
+            <article class="stat">
+              <span>In Progress</span>
+              <strong>1</strong>
+            </article>
+            <article class="stat">
+              <span>Cancelled Jobs</span>
+              <strong>1</strong>
+            </article>
+            <article class="stat">
+              <span>Completed</span>
+              <strong>1</strong>
+            </article>
+          </div>
+
+          <h2>Recent Post Jobs</h2>
+          <div class="table-card" style="margin-top: 12px">
+            <table>
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Barangay</th>
+                  <th>Rate</th>
+                  <th>Status</th>
+                  <th>Applications</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>House Cleaning</td>
+                  <td>Abokado Road</td>
+                  <td>PHP 99.98 / Per Day</td>
+                  <td><span class="badge completed">Completed</span></td>
+                  <td>1</td>
+                  <td><button class="view-btn" type="button" onclick="openJobModal('completed')">View</button></td>
+                </tr>
+                <tr>
+                  <td>Cooking</td>
+                  <td>Abokado Road</td>
+                  <td>PHP 111.00 / Per Day</td>
+                  <td><span class="badge cancelled">Cancelled</span></td>
+                  <td>0</td>
+                  <td><button class="view-btn" type="button" onclick="openJobModal('cancelled')">View</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="reviews-page" id="reviewsPage">
+          <div style="font-weight: 800; margin-bottom: 14px">View all Reviews Household</div>
+          <div class="reviews-head">
+            <div>
+              <h1>All Reviews you Submitted</h1>
+              <p>Review history for workers you rated through GawaGo.</p>
+            </div>
+            <button class="ghost-btn" type="button" onclick="openDashboard()">Back</button>
+          </div>
+          <div class="review-list">
+            <article class="review-item">
+              <div class="avatar" style="width: 48px; height: 48px; font-size: 18px">J</div>
+              <div>
+                <h3>john joseph</h3>
+                <p style="margin: 8px 0">Very good service. The house cleaning was completed properly.</p>
+                <p style="margin: 0; color: var(--muted)">2026-05-23T23:30:21.464168+08:00</p>
+                <button class="view-btn" type="button" style="margin-top: 12px">View more</button>
+              </div>
+              <strong>5.0/5</strong>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="jobModal" aria-hidden="true">
+      <article class="job-modal">
+        <div class="modal-head">
+          <div>
+            <h2 id="modalTitle">Completed Job</h2>
+            <p id="modalSubtitle">Worker profile and completed service details.</p>
+          </div>
+          <button class="close-btn" type="button" aria-label="Close" onclick="closeJobModal()">x</button>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-actions" id="modalActions"></div>
+      </article>
+    </div>
+
+    <script>
+      const completedTemplate = `
+        <section class="worker-card">
+          <div class="avatar">J</div>
+          <div>
+            <h3>john joseph</h3>
+            <p style="margin: 8px 0 0; color: var(--muted)">Verified House Cleaning worker</p>
+            <div class="facts">
+              <div class="fact"><span>Service</span><strong>House Cleaning</strong></div>
+              <div class="fact"><span>Rate</span><strong>PHP 99.98 / Per Day</strong></div>
+              <div class="fact"><span>Location</span><strong>Abokado Road</strong></div>
+              <div class="fact"><span>Rating Given</span><strong>5.0/5</strong></div>
+            </div>
+          </div>
+        </section>
+        <section class="review-box">
+          <h3>Your submitted review</h3>
+          <p>Very good service. The house cleaning was completed properly.</p>
+        </section>
+      `;
+
+      const cancelledTemplate = `
+        <section class="cancel-box">
+          <h3>Cancelled Job Post</h3>
+          <p>This view keeps the previous job post details only. No worker profile is shown because no completed service happened.</p>
+          <div class="facts">
+            <div class="fact"><span>Service</span><strong>Cooking</strong></div>
+            <div class="fact"><span>Barangay</span><strong>Abokado Road</strong></div>
+            <div class="fact"><span>Rate</span><strong>PHP 111.00 / Per Day</strong></div>
+            <div class="fact"><span>Applications</span><strong>0</strong></div>
+          </div>
+        </section>
+      `;
+
+      function openJobModal(type) {
+        const modal = document.getElementById("jobModal");
+        const title = document.getElementById("modalTitle");
+        const subtitle = document.getElementById("modalSubtitle");
+        const body = document.getElementById("modalBody");
+        const actions = document.getElementById("modalActions");
+
+        if (type === "completed") {
+          title.textContent = "Completed Job";
+          subtitle.textContent = "Worker profile and the rating you submitted.";
+          body.innerHTML = completedTemplate;
+          actions.innerHTML = `
+            <button class="ghost-btn" type="button" onclick="closeJobModal()">Close</button>
+            <button class="primary-btn" type="button" onclick="openReviews()">View all Reviews</button>
+          `;
+        } else {
+          title.textContent = "Cancelled Job";
+          subtitle.textContent = "Previous cancelled job post details.";
+          body.innerHTML = cancelledTemplate;
+          actions.innerHTML = `<button class="primary-btn" type="button" onclick="closeJobModal()">Done</button>`;
+        }
+
+        modal.classList.add("open");
+        modal.setAttribute("aria-hidden", "false");
+      }
+
+      function closeJobModal() {
+        const modal = document.getElementById("jobModal");
+        modal.classList.remove("open");
+        modal.setAttribute("aria-hidden", "true");
+      }
+
+      function openReviews() {
+        closeJobModal();
+        document.getElementById("dashboardPage").classList.add("hidden");
+        document.getElementById("reviewsPage").classList.add("open");
+      }
+
+      function openDashboard() {
+        document.getElementById("reviewsPage").classList.remove("open");
+        document.getElementById("dashboardPage").classList.remove("hidden");
+      }
+
+      document.getElementById("jobModal").addEventListener("click", (event) => {
+        if (event.target.id === "jobModal") {
+          closeJobModal();
+        }
+      });
+    </script>
+  </body>
+</html>

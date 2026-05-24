@@ -3,6 +3,10 @@
   gap: 1rem;
 }
 
+.superadmin-analytics > .row {
+  margin-top: 0 !important;
+}
+
 .analytics-section-head {
   display: flex;
   align-items: center;
@@ -17,11 +21,15 @@
 }
 
 .analytics-summary-card {
-  min-height: 8.25rem;
+  min-height: 7.5rem;
 }
 
 .analytics-card {
   overflow: hidden;
+}
+
+.analytics-chart-grid .analytics-card {
+  min-height: 22.5rem;
 }
 
 .analytics-chart-wrap {

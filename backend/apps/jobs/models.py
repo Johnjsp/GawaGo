@@ -1,5 +1,11 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
+
+
+def job_image_path(instance, filename):
+    dated_path = timezone.now().strftime("jobs/%Y/%m/%d")
+    return f"{dated_path}/{filename}"
 
 
 class JobPosting(models.Model):
@@ -30,6 +36,19 @@ class JobPosting(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+
+class JobImage(models.Model):
+    job = models.ForeignKey(JobPosting, on_delete=models.CASCADE, related_name="images")
+    image = models.ImageField(upload_to=job_image_path)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "uploaded_at"]
+
+    def __str__(self) -> str:
+        return f"Image for {self.job.title}"
 
 
 class JobApplication(models.Model):

@@ -1,0 +1,50 @@
+import { BARANGAYS, BARANGAY_CENTERS, TAYABAS_CITY_CENTER } from "../constants/appConstants";
+
+export function normalizeBarangayName(value) {
+  const normalized = String(value || "").trim().replace(/^barangay\s+/i, "");
+  if (!normalized) {
+    return "";
+  }
+  return BARANGAYS.find((barangay) => barangay.toLowerCase() === normalized.toLowerCase()) || normalized;
+}
+
+export function findTayabasBarangayFromText(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (!normalized) {
+    return "";
+  }
+  return BARANGAYS.find((barangay) => {
+    const escapedBarangay = barangay.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?:^|[^a-z])(?:barangay\\s+)?${escapedBarangay}(?:$|[^a-z])`, "i").test(normalized);
+  }) || "";
+}
+
+export function getFallbackBarangay(value = "") {
+  const matchedBarangay = findTayabasBarangayFromText(value) || BARANGAYS.find((barangay) => barangay.toLowerCase() === String(value || "").trim().replace(/^barangay\s+/i, "").toLowerCase());
+  return matchedBarangay || "Poblacion";
+}
+
+export function getBarangayCenter(barangay) {
+  const resolvedBarangay = getFallbackBarangay(barangay);
+  return {
+    barangay: resolvedBarangay,
+    ...(BARANGAY_CENTERS[resolvedBarangay] || TAYABAS_CITY_CENTER),
+  };
+}
+
+export function parseLocationLabel(locationLabel) {
+  const parts = String(locationLabel || "").split(",").map((part) => part.trim()).filter(Boolean);
+  const barangayIndex = parts.findIndex((part) => BARANGAYS.some((barangay) => barangay.toLowerCase() === part.replace(/^barangay\s+/i, "").trim().toLowerCase()));
+  if (barangayIndex >= 0) {
+    const barangay = normalizeBarangayName(parts[barangayIndex]);
+    const streetParts = parts.filter((_, index) => index !== barangayIndex).filter((part) => !/^(tayabas|tayabas city|quezon|philippines)$/i.test(part));
+    return {
+      barangay,
+      streetAddress: streetParts.join(", "),
+    };
+  }
+  return {
+    barangay: normalizeBarangayName(parts[0] || ""),
+    streetAddress: parts.slice(1).join(", "),
+  };
+}

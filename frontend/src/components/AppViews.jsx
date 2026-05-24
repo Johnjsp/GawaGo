@@ -1,0 +1,4032 @@
+import React, { useEffect, useMemo, useState } from "react";
+import HomeView from "./HomeView";
+import JobImageUpload from "./JobImageUpload";
+import LocationDistanceMap from "./LocationDistanceMap";
+import { haversineDistanceKm } from "../utils/locationServices";
+export default function AppViews({
+  SKILLS,
+  adminSection,
+  adminVisibleWorkers,
+  approvedVerificationRequests,
+  buildMatchedWorkersForJob,
+  currentHousehold,
+  currentUser,
+  currentWorker,
+  dashboardMetrics,
+  formatCurrency,
+  formatDateTime,
+  formatDistance,
+  formatLocation,
+  formatRate,
+  formatScheduleLabel,
+  getDisplayName,
+  getJobStatusBadgeClass,
+  goBack,
+  handleAdminApproveVerification,
+  handleAdminRejectVerification,
+  handleApplyToJob,
+  handleCancelJob,
+  handleConfirmJobCompleted,
+  handleHireWorker,
+  handleHouseholdChange,
+  handleHouseholdJobChange,
+  handleHouseholdJobSubmit,
+  handleHouseholdProfileChange,
+  handleHouseholdProfileSave,
+  handleHouseholdRegisterSubmit,
+  handleHouseholdReviewSubmit,
+  handleLoginChange,
+  handleLoginSubmit,
+  handleLogout,
+  handleVerificationChange,
+  handleVerificationSubmit,
+  handleWorkerChange,
+  handleWorkerFeedbackForReviewSubmit,
+  handleWorkerProfileChange,
+  handleWorkerProfileSave,
+  handleWorkerRegisterSubmit,
+  householdForm,
+  householdJobForm,
+  householdJobImages,
+  householdJobs,
+  householdNotificationsWithReadState,
+  householdProfileForm,
+  householdReviewForm,
+  householdUnreadCount,
+  loginForm,
+  markAllNotificationsRead,
+  markNotificationRead,
+  openAdminDashboard,
+  openAdminWorkersHistory,
+  openFilePreview,
+  openForgotPassword,
+  openHouseholdDashboard,
+  openHouseholdFeedbackAll,
+  openHouseholdJobDetail,
+  openHouseholdMyJobs,
+  openHouseholdNotificationWorker,
+  openHouseholdNotifications,
+  openHouseholdPostJob,
+  openHouseholdProfile,
+  openHouseholdRegister,
+  openHouseholdReviewsAll,
+  openLogin,
+  openMatchedWorkerProfile,
+  openVerificationRequest,
+  openWorkerApplications,
+  openWorkerDashboard,
+  openWorkerFindJobs,
+  openWorkerGetVerified,
+  openWorkerJobDetail,
+  openWorkerNotifications,
+  openWorkerProfile,
+  openWorkerRegister,
+  pendingVerificationRequests,
+  registeredWorkers,
+  rejectedVerificationRequests,
+  renderBarangayOptions,
+  selectedJob,
+  selectedMatchedWorkers,
+  selectedVerificationRequest,
+  selectedVerificationRequestId,
+  selectedWorker,
+  selectedWorkerPhoto,
+  setHouseholdReviewForm,
+  setSelectedJobId,
+  setSelectedWorkerId,
+  toggleSkill,
+  toggleWorkerProfileSkill,
+  verificationForm,
+  verificationRequests,
+  view,
+  workerApplicationUnreadCount,
+  workerApplications,
+  workerForm,
+  workerMatchedJobs,
+  workerMiniPhoto,
+  workerNotificationsWithReadState,
+  workerProfileForm,
+  workerUnreadCount,
+  workerVisibleJobs,
+}) {
+  const [householdFeedbackDateFilter, setHouseholdFeedbackDateFilter] = useState("");
+  const [householdJobStatusFilter, setHouseholdJobStatusFilter] = useState("All");
+  const [householdNotificationDateFilter, setHouseholdNotificationDateFilter] = useState("");
+  const [householdReviewDateFilter, setHouseholdReviewDateFilter] = useState("");
+  const [householdReviewRatingFilter, setHouseholdReviewRatingFilter] = useState("");
+  const [workerFeedbackDateFilter, setWorkerFeedbackDateFilter] = useState("");
+  const [workerHouseholdReplyDrafts, setWorkerHouseholdReplyDrafts] = useState({});
+  const [workerRatingDateFilter, setWorkerRatingDateFilter] = useState("");
+  const [workerProfilePanel, setWorkerProfilePanel] = useState("profile");
+  const [workerJobTypeFilter, setWorkerJobTypeFilter] = useState("All Types");
+  const [workerBarangayFilter, setWorkerBarangayFilter] = useState("");
+  const [workerMarketSearch, setWorkerMarketSearch] = useState("");
+  const [householdDashboardDetailJobId, setHouseholdDashboardDetailJobId] = useState(null);
+  const [householdDashboardReviewOpen, setHouseholdDashboardReviewOpen] = useState(false);
+  const [householdProfileEditing, setHouseholdProfileEditing] = useState(false);
+  const householdWorkerFeedback = currentHousehold?.receivedFeedback || [];
+  const householdSubmittedReviews = currentHousehold?.givenFeedback || [];
+  const workerHouseholdReviews = currentWorker?.receivedReviews || [];
+  const workerHouseholdFeedback = workerHouseholdReviews.filter((review) => review.feedback || review.comment);
+  const workerHouseholdRatings = workerHouseholdReviews.filter((review) => review.rating != null);
+  useEffect(() => {
+    if (view !== "worker-profile" && workerProfilePanel !== "profile") {
+      setWorkerProfilePanel("profile");
+    }
+  }, [view, workerProfilePanel]);
+  useEffect(() => {
+    if (view === "worker-profile" && workerProfilePanel === "ratings") {
+      setWorkerProfilePanel("feedback");
+    }
+  }, [view, workerProfilePanel]);
+  useEffect(() => {
+    if (householdJobStatusFilter === "Cancelled") {
+      setHouseholdJobStatusFilter("All");
+    }
+  }, [householdJobStatusFilter]);
+  useEffect(() => {
+    if (view !== "household-profile" && householdProfileEditing) {
+      setHouseholdProfileEditing(false);
+    }
+  }, [householdProfileEditing, view]);
+  const workerMarketCategories = useMemo(() => {
+    return SKILLS.filter((serviceType) => serviceType !== "Other").map((serviceType) => {
+      const categoryJobs = workerVisibleJobs.filter((job) => job.serviceType === serviceType);
+      const matchesWorkerSkills = (currentWorker?.skills || []).includes(serviceType);
+      return {
+        serviceType,
+        openJobs: categoryJobs.length,
+        matchesWorkerSkills,
+      };
+    });
+  }, [SKILLS, currentWorker, workerVisibleJobs]);
+  const filteredWorkerMarketCategories = useMemo(() => {
+    const searchTerm = workerMarketSearch.trim().toLowerCase();
+    if (!searchTerm) {
+      return workerMarketCategories;
+    }
+    return workerMarketCategories.filter((category) => category.serviceType.toLowerCase().includes(searchTerm));
+  }, [workerMarketCategories, workerMarketSearch]);
+  const filteredWorkerVisibleJobs = useMemo(() => {
+    return workerVisibleJobs.filter((job) => {
+      const matchesJobType = workerJobTypeFilter === "All Types" || job.serviceType === workerJobTypeFilter;
+      const matchesBarangay =
+        !workerBarangayFilter.trim() ||
+        String(job.barangay || "")
+          .toLowerCase()
+          .includes(workerBarangayFilter.trim().toLowerCase());
+      return matchesJobType && matchesBarangay;
+    });
+  }, [workerBarangayFilter, workerJobTypeFilter, workerVisibleJobs]);
+  const openWorkerFindJobsForCategory = (serviceType) => {
+    setWorkerJobTypeFilter(serviceType);
+    setWorkerBarangayFilter("");
+    openWorkerFindJobs();
+  };
+  const openAllWorkerFindJobs = () => {
+    setWorkerJobTypeFilter("All Types");
+    setWorkerBarangayFilter("");
+    openWorkerFindJobs();
+  };
+  const filteredHouseholdNotifications = useMemo(() => {
+    if (!householdNotificationDateFilter) {
+      return householdNotificationsWithReadState;
+    }
+    return householdNotificationsWithReadState.filter((notification) => {
+      const notificationDate = new Date(notification.date || notification.createdAt || "");
+      if (Number.isNaN(notificationDate.getTime())) {
+        return false;
+      }
+      return notificationDate.toISOString().slice(0, 10) === householdNotificationDateFilter;
+    });
+  }, [householdNotificationDateFilter, householdNotificationsWithReadState]);
+  const filteredHouseholdWorkerFeedback = useMemo(() => {
+    if (!householdFeedbackDateFilter) {
+      return householdWorkerFeedback;
+    }
+    return householdWorkerFeedback.filter((review) => {
+      const reviewDate = new Date(review.createdAt || review.date || "");
+      if (Number.isNaN(reviewDate.getTime())) {
+        return false;
+      }
+      return reviewDate.toISOString().slice(0, 10) === householdFeedbackDateFilter;
+    });
+  }, [householdFeedbackDateFilter, householdWorkerFeedback]);
+  const filteredHouseholdSubmittedReviews = useMemo(() => {
+    return householdSubmittedReviews.filter((review) => {
+      if (householdReviewDateFilter) {
+        const reviewDate = new Date(review.createdAt || review.date || "");
+        if (Number.isNaN(reviewDate.getTime()) || reviewDate.toISOString().slice(0, 10) !== householdReviewDateFilter) {
+          return false;
+        }
+      }
+      if (householdReviewRatingFilter) {
+        return String(review.rating || "") === householdReviewRatingFilter;
+      }
+      return true;
+    });
+  }, [householdReviewDateFilter, householdReviewRatingFilter, householdSubmittedReviews]);
+  const filteredWorkerHouseholdFeedback = useMemo(() => {
+    if (!workerFeedbackDateFilter) {
+      return workerHouseholdReviews;
+    }
+    return workerHouseholdReviews.filter((review) => {
+      const reviewDate = new Date(review.createdAt || review.date || "");
+      if (Number.isNaN(reviewDate.getTime())) {
+        return false;
+      }
+      return reviewDate.toISOString().slice(0, 10) === workerFeedbackDateFilter;
+    });
+  }, [workerFeedbackDateFilter, workerHouseholdReviews]);
+  const filteredWorkerHouseholdRatings = useMemo(() => {
+    if (!workerRatingDateFilter) {
+      return workerHouseholdRatings;
+    }
+    return workerHouseholdRatings.filter((review) => {
+      const reviewDate = new Date(review.createdAt || review.date || "");
+      if (Number.isNaN(reviewDate.getTime())) {
+        return false;
+      }
+      return reviewDate.toISOString().slice(0, 10) === workerRatingDateFilter;
+    });
+  }, [workerHouseholdRatings, workerRatingDateFilter]);
+  const hasSentHouseholdFeedbackForReview = (review) =>
+    (currentWorker?.givenFeedback || []).some((feedback) => {
+      const sameHousehold =
+        (feedback.targetUsername && review.authorUsername && feedback.targetUsername === review.authorUsername) ||
+        (feedback.targetName && review.authorName && feedback.targetName === review.authorName);
+      const sameJob = !review.jobTitle || !feedback.jobTitle || feedback.jobTitle === review.jobTitle;
+      return sameHousehold && sameJob;
+    });
+  const submitHouseholdFeedbackReply = (event, review) => {
+    event.preventDefault();
+    const draftKey = review.id || `${review.authorUsername}-${review.createdAt}`;
+    handleWorkerFeedbackForReviewSubmit(review, workerHouseholdReplyDrafts[draftKey] || "");
+    setWorkerHouseholdReplyDrafts((prev) => ({
+      ...prev,
+      [draftKey]: "",
+    }));
+  };
+  const selectedWorkerJobLatitude = selectedJob?.latitude ?? currentHousehold?.latitude ?? null;
+  const selectedWorkerJobLongitude = selectedJob?.longitude ?? currentHousehold?.longitude ?? null;
+  const selectedWorkerCalculatedDistanceKm = selectedWorker
+    ? haversineDistanceKm(
+        selectedWorkerJobLatitude,
+        selectedWorkerJobLongitude,
+        selectedWorker.latitude ?? null,
+        selectedWorker.longitude ?? null,
+      )
+    : null;
+  const selectedWorkerDistanceKm = selectedWorkerCalculatedDistanceKm ?? selectedWorker?.distanceKm ?? null;
+  const householdDashboardDetailJob =
+    householdJobs.find((job) => String(job.id) === String(householdDashboardDetailJobId)) || null;
+  function getAssignedWorkerForJob(job) {
+    if (!job) {
+      return null;
+    }
+    const acceptedApplication =
+      (job.applications || []).find((application) => ["Completed", "Hired"].includes(application.status)) ||
+      (job.applications || []).find((application) => application.status !== "Rejected") ||
+      null;
+    const matchedWorker =
+      acceptedApplication &&
+      registeredWorkers.find(
+        (worker) =>
+          String(worker.id) === String(acceptedApplication.workerId) ||
+          worker.username === acceptedApplication.workerUsername ||
+          getDisplayName(worker.firstName, worker.lastName, worker.username) === acceptedApplication.workerName,
+      );
+    if (matchedWorker) {
+      return matchedWorker;
+    }
+    const matchedWorkerId = (job.matchedWorkerIds || [])[0];
+    return registeredWorkers.find((worker) => String(worker.id) === String(matchedWorkerId)) || null;
+  }
+  const householdDashboardDetailWorker = getAssignedWorkerForJob(householdDashboardDetailJob);
+  const selectedJobAssignedWorker = getAssignedWorkerForJob(selectedJob);
+  function getHouseholdReviewForJobWorker(job, worker) {
+    if (!job || !worker) {
+      return null;
+    }
+    const workerNames = [
+      worker.username,
+      worker.workerUsername,
+      getDisplayName(worker.firstName, worker.lastName, worker.username),
+    ].filter(Boolean);
+    const jobTitles = [job.jobTitle, job.serviceType].filter(Boolean);
+    return (
+      (currentHousehold?.givenFeedback || []).find((review) => {
+        const sameWorker =
+          workerNames.includes(review.targetUsername) ||
+          workerNames.includes(review.targetName) ||
+          workerNames.includes(review.target);
+        const sameJob = !review.jobTitle || jobTitles.includes(review.jobTitle);
+        return sameWorker && sameJob && review.rating != null;
+      }) || null
+    );
+  }
+  const activeHouseholdJobs = useMemo(
+    () =>
+      householdJobs.filter((job) => {
+        if (job.status === "Cancelled") {
+          return false;
+        }
+        if (job.status !== "Completed") {
+          return true;
+        }
+        return !getHouseholdReviewForJobWorker(job, getAssignedWorkerForJob(job));
+      }),
+    [currentHousehold?.givenFeedback, householdJobs, registeredWorkers],
+  );
+  const filteredHouseholdJobs = useMemo(() => {
+    if (householdJobStatusFilter === "All") {
+      return activeHouseholdJobs;
+    }
+    return activeHouseholdJobs.filter(
+      (job) => String(job.status || "").toLowerCase() === householdJobStatusFilter.toLowerCase(),
+    );
+  }, [activeHouseholdJobs, householdJobStatusFilter]);
+  const selectedJobWorkerReview = getHouseholdReviewForJobWorker(selectedJob, selectedJobAssignedWorker);
+  const householdDashboardWorkerReview = getHouseholdReviewForJobWorker(
+    householdDashboardDetailJob,
+    householdDashboardDetailWorker,
+  );
+  const openHouseholdDashboardJobPanel = (job) => {
+    const worker = getAssignedWorkerForJob(job);
+    setHouseholdDashboardDetailJobId(job.id);
+    setHouseholdDashboardReviewOpen(false);
+    setSelectedJobId(job.id);
+    setSelectedWorkerId(
+      worker
+        ? worker.id
+        : {
+            workerId: (job.applications || [])[0]?.workerId,
+            workerUsername: (job.applications || [])[0]?.workerUsername,
+            workerName: (job.applications || [])[0]?.workerName,
+          },
+    );
+  };
+  const closeHouseholdDashboardJobPanel = () => {
+    setHouseholdDashboardDetailJobId(null);
+    setHouseholdDashboardReviewOpen(false);
+  };
+  const openHouseholdDashboardReviewsFromJob = () => {
+    closeHouseholdDashboardJobPanel();
+    openHouseholdReviewsAll();
+  };
+  const handleHouseholdProfileEditSubmit = (event) => {
+    if (!householdProfileEditing) {
+      event.preventDefault();
+      setHouseholdProfileEditing(true);
+      return;
+    }
+    handleHouseholdProfileSave(event);
+    setHouseholdProfileEditing(false);
+  };
+
+  return (
+    <div className="app-shell">
+      <main>
+        {(view === "home" || view === "login") && (
+          <HomeView
+            dashboardMetrics={dashboardMetrics}
+            initialShowLogin={view === "login"}
+            loginForm={loginForm}
+            onLoginChange={handleLoginChange}
+            onLoginSubmit={handleLoginSubmit}
+            onOpenForgotPassword={openForgotPassword}
+            onOpenHouseholdRegister={openHouseholdRegister}
+            onOpenWorkerRegister={openWorkerRegister}
+          />
+        )}
+        {view === "register-worker" && (
+          <section className="login-section py-5">
+            <div className="container login-page-wrap">
+              <h1 className="h3 mb-3">Register as Worker</h1>
+              <div className="login-shell shadow-sm">
+                <div className="login-topbar d-flex align-items-center px-3">
+                  <span className="badge rounded-pill text-bg-light text-primary me-2">GG</span>
+                  <span className="small fw-semibold">GawaGo Community Platform</span>
+                </div>
+                <div className="register-card mx-auto my-4">
+                  <div className="register-card-head">
+                    <h2 className="h5 mb-0">Register as Worker</h2>
+                  </div>
+                  <form className="p-3 p-md-4" onSubmit={handleWorkerRegisterSubmit}>
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">First Name</label>
+                        <input
+                          type="text"
+                          name="firstName"
+                          className="form-control"
+                          value={workerForm.firstName}
+                          onChange={handleWorkerChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Last Name</label>
+                        <input
+                          type="text"
+                          name="lastName"
+                          className="form-control"
+                          value={workerForm.lastName}
+                          onChange={handleWorkerChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Username</label>
+                        <input
+                          type="text"
+                          name="username"
+                          className="form-control"
+                          value={workerForm.username}
+                          onChange={handleWorkerChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Email</label>
+                        <input
+                          type="email"
+                          name="email"
+                          className="form-control"
+                          value={workerForm.email}
+                          onChange={handleWorkerChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Phone Number</label>
+                        <div className="input-group">
+                          <span className="input-group-text">+63</span>
+                          <input
+                            type="tel"
+                            name="phone"
+                            className="form-control"
+                            placeholder="9XXXXXXXXX"
+                            inputMode="numeric"
+                            maxLength={10}
+                            value={workerForm.phone}
+                            onChange={handleWorkerChange}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Barangay</label>
+                        <select
+                          name="barangay"
+                          className="form-select"
+                          value={workerForm.barangay}
+                          onChange={handleWorkerChange}
+                        >
+                          <option value="">---Select Barangay---</option>
+                          {renderBarangayOptions()}
+                        </select>
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label fw-semibold">Street / House No</label>
+                        <input
+                          type="text"
+                          name="streetAddress"
+                          className="form-control"
+                          placeholder="e.g. 45 Mabini St."
+                          value={workerForm.streetAddress}
+                          onChange={handleWorkerChange}
+                        />
+                        <p className="form-text mb-0">Location coverage: Tayabas City, Quezon only.</p>
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label fw-semibold">Bio / About me</label>
+                        <textarea
+                          name="bio"
+                          className="form-control"
+                          rows="3"
+                          placeholder="Tell households about yourself and your experience..."
+                          value={workerForm.bio}
+                          onChange={handleWorkerChange}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label fw-semibold">Hourly Rate (PHP)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          name="hourlyRate"
+                          className="form-control"
+                          value={workerForm.hourlyRate}
+                          onChange={handleWorkerChange}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label fw-semibold">Daily Rate (PHP)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          name="dailyRate"
+                          className="form-control"
+                          value={workerForm.dailyRate}
+                          onChange={handleWorkerChange}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label fw-semibold">Years of Experience</label>
+                        <input
+                          type="number"
+                          min="0"
+                          name="yearsExperience"
+                          className="form-control"
+                          value={workerForm.yearsExperience}
+                          onChange={handleWorkerChange}
+                        />
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label fw-semibold">
+                          {" "}
+                          Skills <span className="fw-normal text-muted">(Select all that apply)</span>
+                        </label>
+                        <div className="skills-grid">
+                          {SKILLS.map((skill) => (
+                            <label key={skill} className="form-check">
+                              <input
+                                type="checkbox"
+                                className="form-check-input"
+                                checked={workerForm.skills.includes(skill)}
+                                onChange={() => toggleSkill(skill)}
+                              />
+                              <span className="form-check-label">{skill}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      {workerForm.skills.includes("Other") && (
+                        <div className="col-12">
+                          <label className="form-label fw-semibold">Other skill</label>
+                          <input
+                            type="text"
+                            name="customSkill"
+                            className="form-control"
+                            placeholder="Enter your other skill"
+                            value={workerForm.customSkill}
+                            onChange={handleWorkerChange}
+                          />
+                        </div>
+                      )}
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Password</label>
+                        <input
+                          type="password"
+                          name="password"
+                          className="form-control"
+                          value={workerForm.password}
+                          onChange={handleWorkerChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Confirm Password</label>
+                        <input
+                          type="password"
+                          name="confirmPassword"
+                          className="form-control"
+                          value={workerForm.confirmPassword}
+                          onChange={handleWorkerChange}
+                        />
+                      </div>
+                      <div className="col-12">
+                        <button type="submit" className="btn btn-primary w-100">
+                          {" "}
+                          Create Worker Account{" "}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                  <div className="login-card-foot text-center p-3">
+                    <p className="small mb-0">
+                      {" "}
+                      Already have an account?
+                      <button type="button" className="btn btn-link btn-sm align-baseline p-0" onClick={openLogin}>
+                        {" "}
+                        Login here{" "}
+                      </button>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "register-household" && (
+          <section className="login-section py-5">
+            <div className="container login-page-wrap">
+              <h1 className="h3 mb-3">Register as Household</h1>
+              <div className="login-shell shadow-sm">
+                <div className="login-topbar d-flex align-items-center px-3">
+                  <span className="badge rounded-pill text-bg-light text-primary me-2">GG</span>
+                  <span className="small fw-semibold">GawaGo Community Platform</span>
+                </div>
+                <div className="register-card register-card-sm mx-auto my-4">
+                  <div className="register-card-head">
+                    <h2 className="h5 mb-0">Register as Household</h2>
+                  </div>
+                  <form className="p-3 p-md-4" onSubmit={handleHouseholdRegisterSubmit}>
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">First Name</label>
+                        <input
+                          type="text"
+                          name="firstName"
+                          className="form-control"
+                          value={householdForm.firstName}
+                          onChange={handleHouseholdChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Last Name</label>
+                        <input
+                          type="text"
+                          name="lastName"
+                          className="form-control"
+                          value={householdForm.lastName}
+                          onChange={handleHouseholdChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Username</label>
+                        <input
+                          type="text"
+                          name="username"
+                          className="form-control"
+                          value={householdForm.username}
+                          onChange={handleHouseholdChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Email</label>
+                        <input
+                          type="email"
+                          name="email"
+                          className="form-control"
+                          value={householdForm.email}
+                          onChange={handleHouseholdChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Phone Number</label>
+                        <div className="input-group">
+                          <span className="input-group-text">+63</span>
+                          <input
+                            type="tel"
+                            name="phone"
+                            className="form-control"
+                            placeholder="9XXXXXXXXX"
+                            inputMode="numeric"
+                            maxLength={10}
+                            value={householdForm.phone}
+                            onChange={handleHouseholdChange}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Barangay</label>
+                        <select
+                          name="barangay"
+                          className="form-select"
+                          value={householdForm.barangay}
+                          onChange={handleHouseholdChange}
+                        >
+                          <option value="">---Select Barangay---</option>
+                          {renderBarangayOptions()}
+                        </select>
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label fw-semibold">Street / House No</label>
+                        <input
+                          type="text"
+                          name="streetAddress"
+                          className="form-control"
+                          placeholder="e.g. 45 Mabini St."
+                          value={householdForm.streetAddress}
+                          onChange={handleHouseholdChange}
+                        />
+                        <p className="form-text mb-0">Location coverage: Tayabas City, Quezon only.</p>
+                      </div>
+                      {workerForm.skills.includes("Other") && (
+                        <div className="col-12">
+                          <label className="form-label fw-semibold">Other skill</label>
+                          <input
+                            type="text"
+                            name="customSkill"
+                            className="form-control"
+                            placeholder="Enter your other skill"
+                            value={workerForm.customSkill}
+                            onChange={handleWorkerChange}
+                          />
+                        </div>
+                      )}
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Password</label>
+                        <input
+                          type="password"
+                          name="password"
+                          className="form-control"
+                          value={householdForm.password}
+                          onChange={handleHouseholdChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Confirm Password</label>
+                        <input
+                          type="password"
+                          name="confirmPassword"
+                          className="form-control"
+                          value={householdForm.confirmPassword}
+                          onChange={handleHouseholdChange}
+                        />
+                      </div>
+                      <div className="col-12">
+                        <button type="submit" className="btn btn-primary w-100">
+                          {" "}
+                          Create Household Account{" "}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                  <div className="login-card-foot text-center p-3">
+                    <p className="small mb-0">
+                      {" "}
+                      Already have an account?
+                      <button type="button" className="btn btn-link btn-sm align-baseline p-0" onClick={openLogin}>
+                        {" "}
+                        Login here{" "}
+                      </button>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "worker-dashboard" && (
+          <section className="worker-dashboard worker-dashboard-home">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item active">Dashboard</button>
+                  <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
+                    {" "}
+                    Find Jobs{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerProfile}>
+                    {" "}
+                    My Profile{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerApplications}>
+                    {" "}
+                    My Applications{" "}
+                    {workerApplicationUnreadCount > 0 && (
+                      <span className="nav-count-badge">{workerApplicationUnreadCount}</span>
+                    )}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerGetVerified}>
+                    {" "}
+                    Get Verified{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerNotifications}>
+                    {" "}
+                    Notifications{" "}
+                    {workerUnreadCount > 0 && <span className="nav-count-badge">{workerUnreadCount}</span>}
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <div className="worker-dashboard-welcome-strip">
+                  Welcome, {currentUser?.displayName || "Worker"}
+                </div>
+
+                <div className="worker-dashboard-stats">
+                  <div className="metric-card">
+                    <p className="metric-label mb-1">Open Jobs</p>
+                    <p className="metric-value mb-0">{workerVisibleJobs.length}</p>
+                  </div>
+                  <div className="metric-card">
+                    <p className="metric-label mb-1">Skill Matches</p>
+                    <p className="metric-value mb-0">{workerMatchedJobs.length}</p>
+                  </div>
+                  <div className="metric-card">
+                    <p className="metric-label mb-1">Your Rating</p>
+                    <p className="metric-value worker-rating-value mb-0">{currentWorker?.rating || "No ratings yet"}</p>
+                  </div>
+                  <div className="metric-card">
+                    <p className="metric-label mb-1">Verification</p>
+                    <span
+                      className={`badge ${currentWorker?.verification === "Verified" ? "text-bg-success" : "text-bg-warning"}`}
+                    >
+                      {currentWorker?.verification || "Pending"}
+                    </span>
+                  </div>
+                </div>
+
+                <section className="worker-market-panel">
+                  <div className="worker-market-head">
+                    <h2>Job Market Overview</h2>
+                    <input
+                      className="form-control worker-market-search"
+                      type="search"
+                      placeholder="Search work category..."
+                      value={workerMarketSearch}
+                      onChange={(event) => setWorkerMarketSearch(event.target.value)}
+                    />
+                  </div>
+                  <div className="worker-market-grid">
+                    {filteredWorkerMarketCategories.length > 0 ? (
+                      filteredWorkerMarketCategories.map((category) => (
+                      <article className="worker-market-card" key={category.serviceType}>
+                        <div>
+                          <h3>{category.serviceType}</h3>
+                          <p>{category.openJobs} open jobs</p>
+                        </div>
+                        <div className="worker-market-card-actions">
+                          <span className={`badge ${category.matchesWorkerSkills ? "text-bg-primary" : "text-bg-light"}`}>
+                            {category.matchesWorkerSkills ? "Matches your skills" : "Available market"}
+                          </span>
+                          <button
+                            className="btn btn-outline-secondary btn-sm"
+                            type="button"
+                            onClick={() => openWorkerFindJobsForCategory(category.serviceType)}
+                          >
+                            View All
+                          </button>
+                        </div>
+                      </article>
+                      ))
+                    ) : (
+                      <article className="worker-market-card worker-market-empty">
+                        <div>
+                          <h3>No categories found</h3>
+                          <p>Try searching another work category.</p>
+                        </div>
+                      </article>
+                    )}
+                  </div>
+                </section>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "worker-find-jobs" && (
+          <section className="worker-dashboard">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openWorkerDashboard}>
+                    {" "}
+                    Dashboard{" "}
+                  </button>
+                  <button className="worker-nav-item active">Find Jobs</button>
+                  <button className="worker-nav-item" onClick={openWorkerProfile}>
+                    {" "}
+                    My Profile{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerApplications}>
+                    {" "}
+                    My Applications{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerGetVerified}>
+                    {" "}
+                    Get Verified{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerNotifications}>
+                    {" "}
+                    Notifications{" "}
+                    {workerUnreadCount > 0 && <span className="nav-count-badge">{workerUnreadCount}</span>}
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <div className="worker-topbar">
+                  <h1 className="h4 mb-0">
+                    {" "}
+                    Available Jobs <span className="badge text-bg-primary">{filteredWorkerVisibleJobs.length}</span>
+                  </h1>
+                </div>
+                <div className="jobs-filter-panel mt-3">
+                  <div className="row g-2 align-items-end">
+                    <div className="col-md-4">
+                      <label className="form-label fw-semibold mb-1">Filter by Job Type</label>
+                      <select
+                        className="form-select"
+                        value={workerJobTypeFilter}
+                        onChange={(event) => setWorkerJobTypeFilter(event.target.value)}
+                      >
+                        <option>All Types</option>
+                        {workerMarketCategories.map((category) => (
+                          <option key={category.serviceType}>{category.serviceType}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label fw-semibold mb-1">Barangay</label>
+                      <input
+                        className="form-control"
+                        placeholder="e.g. Poblacion"
+                        value={workerBarangayFilter}
+                        onChange={(event) => setWorkerBarangayFilter(event.target.value)}
+                      />
+                    </div>
+                    <div className="col-md-2">
+                      <button className="btn btn-primary w-100" type="button">
+                        Filter
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <p className="small text-primary fw-semibold mt-3 mb-2">Jobs matching your skills appear first</p>
+                <div className="row g-3">
+                  {filteredWorkerVisibleJobs.length > 0 ? (
+                    filteredWorkerVisibleJobs.map((job) => (
+                      <div className="col-lg-6" key={job.id}>
+                        <article className="job-card">
+                          <div className="d-flex justify-content-between align-items-start">
+                            <div>
+                              <h2 className="h5 mb-1">{job.jobTitle || job.serviceType}</h2>
+                              <p className="text-muted mb-1">{job.description || "No description provided."}</p>
+                            </div>
+                            <span className={`badge ${job.matchesSkill ? "text-bg-primary" : "text-bg-secondary"}`}>
+                              {job.matchesSkill ? "Matches Your Skills" : "Suggested"}
+                            </span>
+                          </div>
+                          <p className="mb-1">{formatLocation(job.barangay, job.streetAddress)}</p>
+                          <p className="mb-1">{formatDateTime(job.preferredDate, job.preferredTime)}</p>
+                          <p className="mb-1 text-primary">{formatRate(job.offeredRate, job.rateType)}</p>
+                          <p className="mb-3">{job.householdName || "Household"}</p>
+                          <div className="d-flex gap-2">
+                            <button
+                              className="btn btn-outline-secondary btn-sm flex-fill"
+                              type="button"
+                              onClick={() => openWorkerJobDetail(job.id)}
+                            >
+                              {" "}
+                              View Details{" "}
+                            </button>
+                            <button
+                              className="btn btn-primary btn-sm flex-fill"
+                              type="button"
+                              onClick={() => handleApplyToJob(job.id)}
+                            >
+                              {" "}
+                              Apply Now{" "}
+                            </button>
+                          </div>
+                        </article>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="col-12">
+                      <div className="profile-card">
+                        <div className="p-4 text-center text-muted">
+                          {" "}
+                          {workerJobTypeFilter === "All Types"
+                            ? "Wala pang household job posts na available ngayon."
+                            : `Wala pang household job posts para sa ${workerJobTypeFilter}.`}{" "}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {view === "worker-profile" && workerProfilePanel === "feedback" && (
+          <section className="worker-dashboard household-feedback-all-page">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openWorkerDashboard}>
+                    Dashboard
+                  </button>
+                  <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
+                    Find Jobs
+                  </button>
+                  <button className="worker-nav-item active" onClick={() => setWorkerProfilePanel("profile")}>
+                    My Profile
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerApplications}>
+                    My Applications
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerGetVerified}>
+                    Get Verified
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerNotifications}>
+                    Notifications
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <main className="household-feedback-all-container">
+                  <section className="household-feedback-hero">
+                    <div>
+                      <h1>All Feedback & Ratings by Households</h1>
+                      <p>Household ratings and comments about your completed services.</p>
+                    </div>
+                    <button
+                      className="btn btn-outline-secondary btn-sm"
+                      type="button"
+                      onClick={() => setWorkerProfilePanel("profile")}
+                    >
+                      Back
+                    </button>
+                  </section>
+
+                  <section className="household-feedback-list-panel" aria-label="All household feedback and ratings">
+                    <div className="household-feedback-filter">
+                      <label className="form-label mb-0" htmlFor="worker-feedback-date">
+                        Filter Date
+                      </label>
+                      <input
+                        id="worker-feedback-date"
+                        type="date"
+                        className="form-control"
+                        value={workerFeedbackDateFilter}
+                        onChange={(event) => setWorkerFeedbackDateFilter(event.target.value)}
+                      />
+                      {workerFeedbackDateFilter && (
+                        <button
+                          className="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          onClick={() => setWorkerFeedbackDateFilter("")}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="household-feedback-list">
+                      {filteredWorkerHouseholdFeedback.length > 0 ? (
+                        filteredWorkerHouseholdFeedback.map((review, index) => {
+                          const authorName = review.authorName || review.author || "Household";
+                          const initial = authorName.slice(0, 1).toUpperCase() || "H";
+                          const draftKey = review.id || `${review.authorUsername}-${review.createdAt}`;
+                          const replySent = hasSentHouseholdFeedbackForReview(review);
+                          return (
+                            <article className="household-feedback-item" key={review.id || `${review.createdAt}-${index}`}>
+                              <div className="household-feedback-avatar">{initial}</div>
+                              <div className="household-feedback-copy">
+                                <div className="household-review-title-row">
+                                  <h2>{authorName}</h2>
+                                  {review.rating != null && <strong>{review.rating}/5</strong>}
+                                </div>
+                                <p>{review.feedback || review.comment || "No comment provided."}</p>
+                                <small>{review.createdAt || review.date || "Recently"}</small>
+                                {replySent ? (
+                                  <p className="small text-muted mb-0 mt-2">Anonymous feedback already sent to household.</p>
+                                ) : (
+                                  <form
+                                    className="d-grid gap-2 mt-3"
+                                    onSubmit={(event) => submitHouseholdFeedbackReply(event, review)}
+                                  >
+                                    <label className="form-label fw-semibold mb-0" htmlFor={`worker-reply-${draftKey}`}>
+                                      Send feedback to household
+                                    </label>
+                                    <textarea
+                                      className="form-control"
+                                      id={`worker-reply-${draftKey}`}
+                                      rows="3"
+                                      placeholder="Write feedback for the household..."
+                                      value={workerHouseholdReplyDrafts[draftKey] || ""}
+                                      onChange={(event) =>
+                                        setWorkerHouseholdReplyDrafts((prev) => ({
+                                          ...prev,
+                                          [draftKey]: event.target.value,
+                                        }))
+                                      }
+                                    />
+                                    <button className="btn btn-primary btn-sm justify-self-start" type="submit">
+                                      Send Feedback
+                                    </button>
+                                  </form>
+                                )}
+                              </div>
+                            </article>
+                          );
+                        })
+                      ) : (
+                        <article className="household-feedback-empty">
+                          <h2>No feedback or ratings found</h2>
+                          <p>
+                            {workerFeedbackDateFilter
+                              ? "No household feedback or ratings match the selected date."
+                              : "No household feedback or ratings have been submitted for this worker yet."}
+                          </p>
+                        </article>
+                      )}
+                    </div>
+                  </section>
+                </main>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "worker-profile" && workerProfilePanel === "ratings" && (
+          <section className="worker-dashboard household-feedback-all-page household-reviews-all-page">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openWorkerDashboard}>
+                    Dashboard
+                  </button>
+                  <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
+                    Find Jobs
+                  </button>
+                  <button className="worker-nav-item active" onClick={() => setWorkerProfilePanel("profile")}>
+                    My Profile
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerApplications}>
+                    My Applications
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerGetVerified}>
+                    Get Verified
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerNotifications}>
+                    Notifications
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <main className="household-feedback-all-container">
+                  <section className="household-feedback-hero">
+                    <div>
+                      <h1>All Ratings by Households</h1>
+                      <p>Rating history from households after completed jobs.</p>
+                    </div>
+                    <button
+                      className="btn btn-outline-secondary btn-sm"
+                      type="button"
+                      onClick={() => setWorkerProfilePanel("profile")}
+                    >
+                      Back
+                    </button>
+                  </section>
+
+                  <section className="household-feedback-list-panel" aria-label="All household ratings">
+                    <div className="household-feedback-filter">
+                      <label className="form-label mb-0" htmlFor="worker-rating-date">
+                        Filter Date
+                      </label>
+                      <input
+                        id="worker-rating-date"
+                        type="date"
+                        className="form-control"
+                        value={workerRatingDateFilter}
+                        onChange={(event) => setWorkerRatingDateFilter(event.target.value)}
+                      />
+                      {workerRatingDateFilter && (
+                        <button
+                          className="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          onClick={() => setWorkerRatingDateFilter("")}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="household-feedback-list">
+                      {filteredWorkerHouseholdRatings.length > 0 ? (
+                        filteredWorkerHouseholdRatings.map((review, index) => {
+                          const authorName = review.authorName || review.author || "Household";
+                          const initial = authorName.slice(0, 1).toUpperCase() || "H";
+                          return (
+                            <article className="household-feedback-item" key={review.id || `${review.createdAt}-${index}`}>
+                              <div className="household-feedback-avatar">{initial}</div>
+                              <div className="household-feedback-copy">
+                                <div className="household-review-title-row">
+                                  <h2>{authorName}</h2>
+                                  <strong>{review.rating != null ? `${review.rating}/5` : "No rating"}</strong>
+                                </div>
+                                <p>{review.feedback || review.comment || "No comment provided."}</p>
+                                <small>{review.createdAt || review.date || "Recently"}</small>
+                                <details className="household-feedback-more">
+                                  <summary>View more</summary>
+                                  <p>This rating came from a household after a completed service.</p>
+                                </details>
+                              </div>
+                            </article>
+                          );
+                        })
+                      ) : (
+                        <article className="household-feedback-empty">
+                          <h2>No ratings found</h2>
+                          <p>
+                            {workerRatingDateFilter
+                              ? "No household ratings match the selected date."
+                              : "No household ratings have been submitted for this worker yet."}
+                          </p>
+                        </article>
+                      )}
+                    </div>
+                  </section>
+                </main>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "worker-profile" && workerProfilePanel === "profile" && (
+          <section className="worker-dashboard profile-page household-profile-page worker-profile-page">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openWorkerDashboard}>
+                    {" "}
+                    Dashboard{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
+                    {" "}
+                    Find Jobs{" "}
+                  </button>
+                  <button className="worker-nav-item active">My Profile</button>
+                  <button className="worker-nav-item" onClick={openWorkerApplications}>
+                    {" "}
+                    My Applications{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerGetVerified}>
+                    {" "}
+                    Get Verified{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerNotifications}>
+                    {" "}
+                    Notifications{" "}
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <div className="row g-3">
+                  <div className="col-lg-4">
+                    <div className="profile-card">
+                      <div className="profile-card-head">My Profile</div>
+                      <div className="p-4 text-center">
+                        {workerMiniPhoto ? (
+                          <img src={workerMiniPhoto} alt="Worker profile" className="profile-photo-large mb-2" />
+                        ) : (
+                          <div className="profile-avatar mb-2">
+                            {(workerProfileForm.firstName || "W").slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                        <h2 className="h5 mb-1">
+                          {getDisplayName(
+                            workerProfileForm.firstName,
+                            workerProfileForm.lastName,
+                            workerProfileForm.username,
+                          )}
+                        </h2>
+                        <p className="text-muted mb-2">@{workerProfileForm.username || "worker"}</p>
+                        <span className="badge text-bg-primary">Worker</span>
+                      </div>
+                      <div className="px-4 pb-4">
+                        <p className="mb-1 small">
+                          <strong>Barangay:</strong>
+                          {workerProfileForm.barangay || "Not set"}
+                        </p>
+                        <p className="mb-1 small">
+                          <strong>Phone:</strong>
+                          {workerProfileForm.phone || "Not set"}
+                        </p>
+                        <p className="mb-2 small">
+                          <strong>Email:</strong>
+                          {workerProfileForm.email || "Not set"}
+                        </p>
+                        <hr className="my-2" />
+                        <p className="mb-1 small">
+                          <strong>Verification:</strong>
+                          <span
+                            className={`badge ${currentWorker?.verification === "Verified" ? "text-bg-success" : "text-bg-warning"}`}
+                          >
+                            {currentWorker?.verification || "Pending"}
+                          </span>
+                        </p>
+                        <p className="mb-1 small">
+                          <strong>Rating:</strong> {currentWorker?.rating || "No ratings yet"}
+                        </p>
+                        <p className="mb-1 small">
+                          <strong>Jobs Done:</strong> {currentWorker?.reviewsDone || 0}
+                        </p>
+                        <p className="mb-1 small">
+                          <strong>Hourly Rate:</strong> PHP {workerProfileForm.hourlyRate || "0.00"}
+                        </p>
+                        <p className="mb-2 small">
+                          <strong>Daily Rate:</strong> PHP {workerProfileForm.dailyRate || "0.00"}
+                        </p>
+                        <div className="d-flex gap-1 flex-wrap">
+                          {(workerProfileForm.skills || []).length === 0 ? (
+                            <span className="badge text-bg-secondary">No skills selected yet</span>
+                          ) : (
+                            workerProfileForm.skills.map((skill) => (
+                              <span key={skill} className="badge text-bg-primary">
+                                {skill}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-lg-8">
+                    <div className="profile-card">
+                      <div className="profile-card-head">Edit Profile Information</div>
+                      <form className="p-3" onSubmit={handleWorkerProfileSave}>
+                        <h3 className="h6 fw-bold mb-2">Profile Photo</h3>
+                        <div className="mb-3">
+                          <input
+                            type="file"
+                            className="form-control"
+                            name="profilePhoto"
+                            accept="image/*"
+                            onChange={handleWorkerProfileChange}
+                          />
+                          <p className="form-text mb-0">Accepted: JPG, PNG. Clear face photo recommended.</p>
+                          {workerProfileForm.profilePhotoPreview && (
+                            <img
+                              src={workerProfileForm.profilePhotoPreview}
+                              alt="Worker profile preview"
+                              className="img-fluid rounded border mt-2"
+                            />
+                          )}
+                        </div>
+                        <h3 className="h6 fw-bold mb-2">Personal Information</h3>
+                        <div className="row g-2 mb-3">
+                          <div className="col-md-6">
+                            <label className="form-label small fw-semibold mb-1">First Name</label>
+                            <input
+                              name="firstName"
+                              className="form-control"
+                              value={workerProfileForm.firstName}
+                              onChange={handleWorkerProfileChange}
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label small fw-semibold mb-1">Last Name</label>
+                            <input
+                              name="lastName"
+                              className="form-control"
+                              value={workerProfileForm.lastName}
+                              onChange={handleWorkerProfileChange}
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label small fw-semibold mb-1">Email</label>
+                            <input
+                              type="email"
+                              name="email"
+                              className="form-control"
+                              value={workerProfileForm.email}
+                              onChange={handleWorkerProfileChange}
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label small fw-semibold mb-1">Phone Number</label>
+                            <input
+                              name="phone"
+                              className="form-control"
+                              value={workerProfileForm.phone}
+                              onChange={handleWorkerProfileChange}
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label small fw-semibold mb-1">Barangay</label>
+                            <select
+                              name="barangay"
+                              className="form-select"
+                              value={workerProfileForm.barangay}
+                              onChange={handleWorkerProfileChange}
+                            >
+                              <option value="">---Select Barangay---</option>
+                              {renderBarangayOptions()}
+                            </select>
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label small fw-semibold mb-1">Street / House No.</label>
+                            <input
+                              name="streetAddress"
+                              className="form-control"
+                              value={workerProfileForm.streetAddress}
+                              onChange={handleWorkerProfileChange}
+                            />
+                          </div>
+                        </div>
+                        <h3 className="h6 fw-bold mb-2">Worker Information</h3>
+                        <div className="mb-2">
+                          <label className="form-label small fw-semibold mb-1">Bio / About Me</label>
+                          <textarea
+                            name="bio"
+                            className="form-control"
+                            rows="3"
+                            value={workerProfileForm.bio}
+                            onChange={handleWorkerProfileChange}
+                          />
+                        </div>
+                        <div className="row g-2 mb-3">
+                          <div className="col-md-4">
+                            <label className="form-label small fw-semibold mb-1">Availability</label>
+                            <div className="form-check mt-1">
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                id="availability"
+                                name="availability"
+                                checked={workerProfileForm.availability}
+                                onChange={handleWorkerProfileChange}
+                              />
+                              <label className="form-check-label" htmlFor="availability">
+                                {" "}
+                                Available{" "}
+                              </label>
+                            </div>
+                          </div>
+                          <div className="col-md-4">
+                            <label className="form-label small fw-semibold mb-1">Hourly Rate (PHP)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              name="hourlyRate"
+                              className="form-control"
+                              value={workerProfileForm.hourlyRate}
+                              onChange={handleWorkerProfileChange}
+                            />
+                          </div>
+                          <div className="col-md-4">
+                            <label className="form-label small fw-semibold mb-1">Daily Rate (PHP)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              name="dailyRate"
+                              className="form-control"
+                              value={workerProfileForm.dailyRate}
+                              onChange={handleWorkerProfileChange}
+                            />
+                          </div>
+                        </div>
+                        <div className="mb-3">
+                          <label className="form-label fw-semibold">
+                            {" "}
+                            Skills <span className="fw-normal text-muted">(Select all that apply)</span>
+                          </label>
+                          <div className="skills-grid">
+                            {SKILLS.map((skill) => (
+                              <label key={skill} className="form-check">
+                                <input
+                                  type="checkbox"
+                                  className="form-check-input"
+                                  checked={workerProfileForm.skills.includes(skill)}
+                                  onChange={() => toggleWorkerProfileSkill(skill)}
+                                />
+                                <span className="form-check-label">{skill}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="d-flex gap-2">
+                          <button className="btn btn-primary" type="submit">
+                            {" "}
+                            Save Changes{" "}
+                          </button>
+                          <button className="btn btn-outline-secondary" type="button" onClick={openWorkerDashboard}>
+                            {" "}
+                            Cancel{" "}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+                <section className="profile-footer" aria-labelledby="worker-profile-feedback-title">
+                  <h2 className="household-profile-feedback-title" id="worker-profile-feedback-title">
+                    Feedback & Rating
+                  </h2>
+                  <div className="profile-feedback-grid">
+                    <article className="profile-feedback-card profile-feedback-card-wide">
+                      <header className="profile-card-header feedback-header">
+                        <span>Feedback & Ratings from Households</span>
+                        <button
+                          type="button"
+                          className="btn btn-light btn-sm rounded-pill"
+                          onClick={() => setWorkerProfilePanel("feedback")}
+                        >
+                          View More
+                        </button>
+                      </header>
+                      <div className="p-3 d-grid gap-2">
+                        {workerHouseholdReviews.slice(0, 2).length > 0 ? (
+                          workerHouseholdReviews
+                            .slice(0, 2)
+                            .map((review) => (
+                              <div className="review-item" key={review.id || `${review.authorName}-${review.createdAt}`}>
+                                <div className="d-flex justify-content-between gap-2">
+                                  <p className="mb-1 fw-semibold">{review.authorName || review.author || "Household"}</p>
+                                  {review.rating != null && <strong>{review.rating}/5</strong>}
+                                </div>
+                                <p className="mb-1 small text-muted">
+                                  {review.feedback || review.comment || "No comment provided."}
+                                </p>
+                                <p className="mb-0 small text-muted">{review.createdAt || review.date || "Recently"}</p>
+                              </div>
+                            ))
+                        ) : (
+                          <div className="review-item">
+                            <p className="mb-0 text-muted">No household feedback or ratings yet.</p>
+                          </div>
+                        )}
+                      </div>
+                    </article>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "worker-applications" && (
+          <section className="worker-dashboard">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openWorkerDashboard}>
+                    {" "}
+                    Dashboard{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
+                    {" "}
+                    Find Jobs{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerProfile}>
+                    {" "}
+                    My Profile{" "}
+                  </button>
+                  <button className="worker-nav-item active">
+                    {" "}
+                    My Applications{" "}
+                    {workerApplicationUnreadCount > 0 && (
+                      <span className="nav-count-badge">{workerApplicationUnreadCount}</span>
+                    )}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerGetVerified}>
+                    {" "}
+                    Get Verified{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerNotifications}>
+                    {" "}
+                    Notifications{" "}
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <div className="worker-topbar">
+                  <h1 className="h4 mb-0">My Applications</h1>
+                </div>
+                <div className="applications-filter mt-3">
+                  <div className="row g-2">
+                    <div className="col-md-4">
+                      <select className="form-select">
+                        <option>All Status</option>
+                        <option>Pending</option>
+                        <option>In Progress</option>
+                        <option>Completed</option>
+                      </select>
+                    </div>
+                    <div className="col-md-2">
+                      <button className="btn btn-primary w-100">Filter</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="card border-0 shadow-sm mt-3">
+                  <div className="table-responsive">
+                    <table className="table align-middle mb-0">
+                      <thead>
+                        <tr>
+                          <th>Job</th>
+                          <th>Household</th>
+                          <th>Distance</th>
+                          <th>Rate</th>
+                          <th>Status</th>
+                          <th>Applied</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {workerApplications.length > 0 ? (
+                          workerApplications.map((job) => (
+                            <tr key={`${job.id}-${job.appliedAt}`}>
+                              <td>{job.jobTitle || job.serviceType}</td>
+                              <td>{job.householdName || "Household"}</td>
+                              <td>{formatLocation(job.barangay, job.streetAddress)}</td>
+                              <td>{formatRate(job.offeredRate, job.rateType)}</td>
+                              <td>{job.applicationStatus || "Pending"}</td>
+                              <td>{job.appliedAt}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="6" className="text-center text-muted py-4">
+                              {" "}
+                              No applications yet.{" "}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "worker-get-verified" && (
+          <section className="worker-dashboard worker-get-verified-page">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openWorkerDashboard}>
+                    {" "}
+                    Dashboard{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
+                    {" "}
+                    Find Jobs{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerProfile}>
+                    {" "}
+                    My Profile{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerApplications}>
+                    {" "}
+                    My Applications{" "}
+                    {workerApplicationUnreadCount > 0 && (
+                      <span className="nav-count-badge">{workerApplicationUnreadCount}</span>
+                    )}
+                  </button>
+                  <button className="worker-nav-item active">Get Verified</button>
+                  <button className="worker-nav-item" onClick={openWorkerNotifications}>
+                    {" "}
+                    Notifications{" "}
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                {currentWorker?.verification === "Verified" ? (
+                  <div className="verification-wrap verification-approved-wrap">
+                    <div className="verification-card verification-approved-card">
+                      <div className="verification-card-head">Get Verified</div>
+                      <div className="verification-approved-body">
+                        <section className="verification-approved-banner">
+                          <h2>You're already verified</h2>
+                          <p>Your verification is already approved by the admin, so the details below are now read-only.</p>
+                        </section>
+
+                        <div className="verification-approved-grid">
+                          <article className="verification-approved-box">
+                            <p className="verification-approved-label">Primary ID</p>
+                            <p className="verification-approved-value">
+                              {currentWorker.verificationSubmission?.primaryIdName || "Primary ID"}
+                            </p>
+                            {currentWorker.verificationSubmission?.primaryIdPreview ? (
+                              <button
+                                type="button"
+                                className="verification-file-button"
+                                onClick={() => openFilePreview(currentWorker.verificationSubmission.primaryIdPreview)}
+                              >
+                                View Primary ID
+                              </button>
+                            ) : (
+                              <span className="verification-file-button disabled">Primary ID</span>
+                            )}
+                          </article>
+
+                          <article className="verification-approved-box">
+                            <p className="verification-approved-label">Supporting Documents</p>
+                            <p className="verification-approved-value">
+                              {currentWorker.verificationSubmission?.secondaryDocName || "Supporting document"}
+                            </p>
+                            {currentWorker.verificationSubmission?.secondaryDocPreview ? (
+                              <button
+                                type="button"
+                                className="verification-file-button"
+                                onClick={() => openFilePreview(currentWorker.verificationSubmission.secondaryDocPreview)}
+                              >
+                                View Supporting Document
+                              </button>
+                            ) : (
+                              <span className="verification-file-button disabled">Supporting Document</span>
+                            )}
+                          </article>
+                        </div>
+
+                        <section className="verification-approved-box verification-approved-note">
+                          <p className="verification-approved-label">Admin Note</p>
+                          <p className="verification-approved-value mb-0">
+                            {currentWorker.verificationSubmission?.reviewNote ||
+                              (currentWorker.verificationReviewedBy
+                                ? `Verified by ${currentWorker.verificationReviewedBy} on ${currentWorker.verificationReviewedAt}.`
+                                : "Verified by admin.")}
+                          </p>
+                        </section>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="verification-wrap">
+                    <div className="verification-card">
+                      <div className="verification-card-head">Submit Verification Documents</div>
+                      <form className="p-3 p-md-4" onSubmit={handleVerificationSubmit}>
+                        <div className="verification-note mb-3">
+                          <p className="mb-0 small">
+                            <strong>Why get verified?</strong> Verified workers appear higher in smart matching and help
+                            households trust your profile faster.{" "}
+                          </p>
+                        </div>
+                        <div className="mb-3">
+                          <label className="form-label fw-semibold">Primary ID Document</label>
+                          <input
+                            type="file"
+                            className="form-control"
+                            name="primaryId"
+                            onChange={handleVerificationChange}
+                          />
+                          <p className="form-text mb-0"> Accepted: Government-issued ID (SSS, GSIS, Passport, etc.) </p>
+                          {verificationForm.primaryIdName && (
+                            <p className="small text-muted mt-1 mb-0">Selected: {verificationForm.primaryIdName}</p>
+                          )}
+                        </div>
+                        <div className="mb-3">
+                          <label className="form-label fw-semibold">Supporting Document</label>
+                          <input
+                            type="file"
+                            className="form-control"
+                            name="secondaryDoc"
+                            onChange={handleVerificationChange}
+                          />
+                          <p className="form-text mb-0">
+                            {" "}
+                            Accepted: Barangay clearance, NBI clearance, certificate of employment, etc.{" "}
+                          </p>
+                          {verificationForm.secondaryDocName && (
+                            <p className="small text-muted mt-1 mb-0">Selected: {verificationForm.secondaryDocName}</p>
+                          )}
+                        </div>
+                        <div className="mb-3">
+                          <label className="form-label fw-semibold">Additional Notes (Optional)</label>
+                          <textarea
+                            className="form-control"
+                            rows="3"
+                            name="notes"
+                            placeholder="Add any notes about your submitted documents..."
+                            value={verificationForm.notes}
+                            onChange={handleVerificationChange}
+                          />
+                        </div>
+                        <div className="d-flex gap-2">
+                          <button type="submit" className="btn btn-primary">
+                            {" "}
+                            Submit Documents{" "}
+                          </button>
+                          <button type="button" className="btn btn-outline-secondary" onClick={openWorkerDashboard}>
+                            {" "}
+                            Cancel{" "}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "worker-notifications" && (
+          <section className="worker-dashboard">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openWorkerDashboard}>
+                    {" "}
+                    Dashboard{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
+                    {" "}
+                    Find Jobs{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerProfile}>
+                    {" "}
+                    My Profile{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerApplications}>
+                    {" "}
+                    My Applications{" "}
+                    {workerApplicationUnreadCount > 0 && (
+                      <span className="nav-count-badge">{workerApplicationUnreadCount}</span>
+                    )}
+                  </button>
+                  <button className="worker-nav-item" onClick={openWorkerGetVerified}>
+                    {" "}
+                    Get Verified{" "}
+                  </button>
+                  <button className="worker-nav-item active">Notifications</button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <div className="worker-topbar">
+                  <h1 className="h4 mb-0">Notifications</h1>
+                </div>
+                <div className="d-flex justify-content-end mt-3">
+                  <button
+                    className="btn btn-outline-secondary worker-mark-read-button"
+                    type="button"
+                    onClick={() => markAllNotificationsRead(workerNotificationsWithReadState)}
+                  >
+                    {" "}
+                    Mark All as Read{" "}
+                  </button>
+                </div>
+                <div className="mt-3 d-grid gap-2">
+                  {workerNotificationsWithReadState.map((item) => (
+                    <article
+                      className={`notification-card ${item.unread ? "unread" : ""}`}
+                      key={item.id}
+                    >
+                      <p className="small text-muted mb-1">{item.date}</p>
+                      <h2 className="h6 mb-1">{item.title}</h2>
+                      <p className="mb-0">{item.message}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "admin-dashboard" && (
+          <section className="worker-dashboard">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">Admin Panel</p>
+                </div>
+                <nav className="worker-nav">
+                  <button
+                    className={`worker-nav-item ${adminSection === "verification" ? "active" : ""}`}
+                    onClick={openAdminDashboard}
+                  >
+                    {" "}
+                    Verification Queue{" "}
+                  </button>
+                  <button
+                    className={`worker-nav-item ${adminSection === "history" ? "active" : ""}`}
+                    onClick={openAdminWorkersHistory}
+                  >
+                    {" "}
+                    Workers History{" "}
+                  </button>
+                </nav>
+              </aside>
+              <div className="worker-content">
+                <div className="worker-topbar">
+                  <h1 className="h4 mb-0">
+                    {adminSection === "history" ? "Workers History" : "Verification Dashboard"}
+                  </h1>
+                  <div className="worker-user-meta d-flex align-items-center gap-2">
+                    <span className="badge text-bg-dark">Admin</span>
+                    <button className="btn btn-outline-secondary btn-sm" type="button" onClick={goBack}>
+                      {" "}
+                      Back{" "}
+                    </button>
+                    <button className="btn btn-outline-secondary btn-sm" type="button" onClick={handleLogout}>
+                      {" "}
+                      Log Out{" "}
+                    </button>
+                  </div>
+                </div>
+                {adminSection === "verification" ? (
+                  <React.Fragment>
+                    <div className="row g-3 mt-1">
+                      <div className="col-md-6 col-xl-3">
+                        <div className="metric-card">
+                          <p className="metric-label mb-1">Pending</p>
+                          <p className="metric-value mb-0">{pendingVerificationRequests.length}</p>
+                        </div>
+                      </div>
+                      <div className="col-md-6 col-xl-3">
+                        <div className="metric-card">
+                          <p className="metric-label mb-1">Under Review</p>
+                          <p className="metric-value mb-0">
+                            {verificationRequests.filter((item) => item.status === "Under Review").length}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="col-md-6 col-xl-3">
+                        <div className="metric-card">
+                          <p className="metric-label mb-1">Approved</p>
+                          <p className="metric-value mb-0">{approvedVerificationRequests.length}</p>
+                        </div>
+                      </div>
+                      <div className="col-md-6 col-xl-3">
+                        <div className="metric-card">
+                          <p className="metric-label mb-1">Rejected</p>
+                          <p className="metric-value mb-0">{rejectedVerificationRequests.length}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="card border-0 shadow-sm mt-4">
+                      <div className="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h2 className="h6 mb-0 fw-bold">Worker Verification Requests</h2>
+                        <span className="small text-muted">{verificationRequests.length} total</span>
+                      </div>
+                      {selectedVerificationRequest && (
+                        <div className="p-3 border-bottom bg-light">
+                          <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                            <div>
+                              <h3 className="h6 mb-1">{selectedVerificationRequest.workerName}</h3>
+                              <p className="small text-muted mb-0">@{selectedVerificationRequest.workerUsername}</p>
+                            </div>
+                            <span
+                              className={`badge ${selectedVerificationRequest.status === "Approved" ? "text-bg-success" : selectedVerificationRequest.status === "Rejected" ? "text-bg-danger" : "text-bg-warning"}`}
+                            >
+                              {selectedVerificationRequest.status}
+                            </span>
+                          </div>
+                          <div className="row g-2 mt-2">
+                            {selectedVerificationRequest.primaryIdPreview && (
+                              <div className="col-md-6">
+                                <div className="verification-note h-100">
+                                  <p className="small fw-semibold mb-2">Primary ID Preview</p>
+                                  <button
+                                    type="button"
+                                    className="btn btn-link p-0 border-0"
+                                    onClick={() => openFilePreview(selectedVerificationRequest.primaryIdPreview)}
+                                  >
+                                    <img
+                                      src={selectedVerificationRequest.primaryIdPreview}
+                                      alt="Primary ID preview"
+                                      className="img-fluid rounded border"
+                                    />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            {selectedVerificationRequest.secondaryDocPreview && (
+                              <div className="col-md-6">
+                                <div className="verification-note h-100">
+                                  <p className="small fw-semibold mb-2">Supporting Doc Preview</p>
+                                  <a
+                                    href={selectedVerificationRequest.secondaryDocPreview}
+                                    download={selectedVerificationRequest.secondaryDocName || "supporting-doc"}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="d-inline-block"
+                                  >
+                                    <img
+                                      src={selectedVerificationRequest.secondaryDocPreview}
+                                      alt="Supporting document preview"
+                                      className="img-fluid rounded border"
+                                    />
+                                  </a>
+                                  <p className="small text-muted mb-0 mt-2">Click to download the file.</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <div className="p-3 d-grid gap-3">
+                        {verificationRequests.length > 0 ? (
+                          verificationRequests.map((request) => (
+                            <article
+                              className={`verification-admin-card ${selectedVerificationRequestId === request.id ? "selected" : ""}`}
+                              key={request.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => openVerificationRequest(request.id)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  openVerificationRequest(request.id);
+                                }
+                              }}
+                            >
+                              <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                <div>
+                                  <h3 className="h6 mb-1">{request.workerName}</h3>
+                                  <p className="small text-muted mb-1">@{request.workerUsername}</p>
+                                  <p className="small mb-1">
+                                    <strong>Status:</strong>
+                                    {request.status}
+                                  </p>
+                                  <p className="small mb-1">
+                                    <strong>Submitted:</strong>
+                                    {request.submittedAt}
+                                  </p>
+                                  {request.reviewedAt && (
+                                    <p className="small mb-1">
+                                      <strong>Reviewed:</strong>
+                                      {request.reviewedAt}
+                                    </p>
+                                  )}
+                                  {request.reviewNote && (
+                                    <p className="small mb-0">
+                                      <strong>Admin Note:</strong>
+                                      {request.reviewNote}
+                                    </p>
+                                  )}
+                                </div>
+                                <span
+                                  className={`badge ${request.status === "Approved" ? "text-bg-success" : request.status === "Rejected" ? "text-bg-danger" : "text-bg-warning"}`}
+                                >
+                                  {request.status}
+                                </span>
+                              </div>
+                              <div className="row g-2 mt-2">
+                                <div className="col-md-4">
+                                  <div className="verification-note h-100">
+                                    <p className="small fw-semibold mb-1">Primary ID</p>
+                                    <p className="mb-0 small">{request.primaryIdName}</p>
+                                  </div>
+                                </div>
+                                <div className="col-md-4">
+                                  <div className="verification-note h-100">
+                                    <p className="small fw-semibold mb-1">Supporting Doc</p>
+                                    <p className="mb-0 small">{request.secondaryDocName}</p>
+                                  </div>
+                                </div>
+                                <div className="col-md-4">
+                                  <div className="verification-note h-100">
+                                    <p className="small fw-semibold mb-1">Notes</p>
+                                    <p className="mb-0 small">{request.notes || "No additional notes provided."}</p>
+                                  </div>
+                                </div>
+                              </div>
+                              {request.status === "Pending" || request.status === "Under Review" ? (
+                                <div className="d-flex gap-2 mt-3 flex-wrap">
+                                  <button
+                                    type="button"
+                                    className="btn btn-success btn-sm"
+                                    onClick={() => handleAdminApproveVerification(request.id)}
+                                  >
+                                    {" "}
+                                    Approve{" "}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-danger btn-sm"
+                                    onClick={() => handleAdminRejectVerification(request.id)}
+                                  >
+                                    {" "}
+                                    Reject{" "}
+                                  </button>
+                                </div>
+                              ) : null}
+                            </article>
+                          ))
+                        ) : (
+                          <div className="text-center text-muted py-4">No verification requests yet.</div>
+                        )}
+                      </div>
+                    </div>
+                  </React.Fragment>
+                ) : (
+                  <div className="card border-0 shadow-sm mt-4">
+                    <div className="card-header bg-white d-flex justify-content-between align-items-center">
+                      <h2 className="h6 mb-0 fw-bold">Workers History</h2>
+                      <span className="small text-muted">Verified and submitted workers</span>
+                    </div>
+                    <div className="table-responsive">
+                      <table className="table align-middle mb-0">
+                        <thead>
+                          <tr>
+                            <th>Worker</th>
+                            <th>Verification</th>
+                            <th>Submitted</th>
+                            <th>Reviewed By</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {adminVisibleWorkers.length > 0 ? (
+                            adminVisibleWorkers.map((worker) => (
+                              <tr key={worker.id}>
+                                <td>{getDisplayName(worker.firstName, worker.lastName, worker.username)}</td>
+                                <td>
+                                  <span
+                                    className={`badge ${worker.verification === "Verified" ? "text-bg-success" : worker.verification === "Under Review" ? "text-bg-warning" : "text-bg-secondary"}`}
+                                  >
+                                    {worker.verification || "Not Yet Verified"}
+                                  </span>
+                                </td>
+                                <td>{worker.verificationSubmission?.submittedAt || "None"}</td>
+                                <td>{worker.verificationReviewedBy || "None"}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="4" className="text-center text-muted py-4">
+                                {" "}
+                                No verified or registered workers to display.{" "}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "household-post-job" && (
+          <section className="worker-dashboard household-post-job-page">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openHouseholdDashboard}>
+                    {" "}
+                    Dashboard{" "}
+                  </button>
+                  <button className="worker-nav-item active">Post a Job</button>
+                  <button className="worker-nav-item" onClick={openHouseholdMyJobs}>
+                    {" "}
+                    My Jobs{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdProfile}>
+                    {" "}
+                    My Profile{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdNotifications}>
+                    {" "}
+                    Notifications{" "}
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <div className="profile-card household-post-job-card">
+                  <h1 className="household-post-job-title">Post a New Job</h1>
+                  <form className="p-3 p-md-4 household-job-form-shell" onSubmit={handleHouseholdJobSubmit}>
+                    <div className="row g-3">
+                      <div className="col-12">
+                        <label className="form-label fw-semibold">Job Title</label>
+                        <input
+                          type="text"
+                          name="jobTitle"
+                          className="form-control"
+                          placeholder="e.g. House Cleaning - 3 Bedroom"
+                          value={householdJobForm.jobTitle}
+                          onChange={handleHouseholdJobChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Service Type</label>
+                        <select
+                          name="serviceType"
+                          className="form-select"
+                          value={householdJobForm.serviceType}
+                          onChange={handleHouseholdJobChange}
+                        >
+                          <option value="">---Select Service---</option>
+                          {SKILLS.map((skill) => (
+                            <option key={skill} value={skill}>
+                              {skill}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Schedule Type</label>
+                        <select
+                          name="scheduleType"
+                          className="form-select"
+                          value={householdJobForm.scheduleType}
+                          onChange={handleHouseholdJobChange}
+                        >
+                          <option>One - Time</option>
+                          <option>Part-Time</option>
+                          <option>Full-Time</option>
+                        </select>
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Preferred Date</label>
+                        <input
+                          type="date"
+                          name="preferredDate"
+                          className="form-control"
+                          value={householdJobForm.preferredDate}
+                          onChange={handleHouseholdJobChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Preferred Time</label>
+                        <input
+                          type="time"
+                          name="preferredTime"
+                          className="form-control"
+                          value={householdJobForm.preferredTime}
+                          onChange={handleHouseholdJobChange}
+                        />
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label fw-semibold">Job Description</label>
+                        <textarea
+                          name="description"
+                          className="form-control"
+                          rows="3"
+                          placeholder="Describe the job in detail..."
+                          value={householdJobForm.description}
+                          onChange={handleHouseholdJobChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Barangay</label>
+                        <select
+                          name="barangay"
+                          className="form-select"
+                          value={householdJobForm.barangay}
+                          onChange={handleHouseholdJobChange}
+                        >
+                          <option value="">---Select Barangay---</option>
+                          {renderBarangayOptions()}
+                        </select>
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Street / House No.</label>
+                        <input
+                          type="text"
+                          name="streetAddress"
+                          className="form-control"
+                          value={householdJobForm.streetAddress}
+                          onChange={handleHouseholdJobChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Workers Needed</label>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          name="workersNeeded"
+                          className="form-control"
+                          value={householdJobForm.workersNeeded}
+                          onChange={handleHouseholdJobChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Offered Rate</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          name="offeredRate"
+                          className="form-control"
+                          value={householdJobForm.offeredRate}
+                          onChange={handleHouseholdJobChange}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold">Rate Type</label>
+                        <select
+                          name="rateType"
+                          className="form-select"
+                          value={householdJobForm.rateType}
+                          onChange={handleHouseholdJobChange}
+                        >
+                          <option>Per Day</option>
+                          <option>Per Hour</option>
+                          <option>Fixed Rate</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="household-reference-images">
+                      <label className="form-label fw-semibold">Reference Images</label>
+                      <JobImageUpload maxImages={5} maxFileSize={5 * 1024 * 1024} onImagesChange={householdJobImages.onChange} />
+                    </div>
+                    <div className="household-post-actions">
+                      <button type="submit" className="btn btn-primary">
+                        Post Job
+                      </button>
+                      <button type="button" className="btn btn-outline-secondary" onClick={openHouseholdDashboard}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "household-profile" && (
+          <section className="worker-dashboard profile-page household-profile-page">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openHouseholdDashboard}>
+                    {" "}
+                    Dashboard{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdPostJob}>
+                    {" "}
+                    Post a Job{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdMyJobs}>
+                    {" "}
+                    My Jobs{" "}
+                  </button>
+                  <button className="worker-nav-item active">My Profile</button>
+                  <button className="worker-nav-item" onClick={openHouseholdNotifications}>
+                    {" "}
+                    Notifications{" "}
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <main className="profile-container" aria-labelledby="household-profile-title">
+                  <h1 className="household-profile-page-title">My Profile Household</h1>
+                  <div className="profile-row">
+                  <section className="profile-column" aria-labelledby="household-profile-title">
+                    <div className="profile-card profile-summary-card">
+                      <header className="profile-card-header" id="household-profile-title">My Profile</header>
+                      <div className="profile-summary-body text-center">
+                        {householdProfileForm.profilePhotoPreview ? (
+                          <img
+                            src={householdProfileForm.profilePhotoPreview}
+                            alt="Household profile"
+                            className="profile-photo-large mb-2"
+                          />
+                        ) : (
+                          <div className="profile-avatar mb-2">
+                            {(householdProfileForm.firstName || "H").slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                        <h2 className="h5 mb-1">
+                          {getDisplayName(
+                            householdProfileForm.firstName,
+                            householdProfileForm.lastName,
+                            householdProfileForm.username,
+                          )}
+                        </h2>
+                        <p className="text-muted mb-2">@{householdProfileForm.username || "household"}</p>
+                        <span className="badge text-bg-primary">Household</span>
+                      </div>
+                      <div className="profile-summary-list">
+                        <p><strong>Account Type:</strong> Household</p>
+                        <p><strong>Barangay:</strong> {householdProfileForm.barangay || "Not set"}</p>
+                        <p><strong>Phone Number:</strong> {householdProfileForm.phone || "Not set"}</p>
+                        <p><strong>Email:</strong> {householdProfileForm.email || "Not set"}</p>
+                      </div>
+                    </div>
+                  </section>
+                  <section className="profile-edit-card" aria-labelledby="household-edit-profile-title">
+                    <header className="profile-card-header" id="household-edit-profile-title">Edit Profile Information</header>
+                      <form className="profile-edit-form" onSubmit={handleHouseholdProfileEditSubmit}>
+                        <div className="profile-form-field profile-form-field-full">
+                          <label className="form-label fw-semibold" htmlFor="household-profile-photo">Profile Photo</label>
+                          <input
+                            id="household-profile-photo"
+                            type="file"
+                            className="form-control"
+                            name="profilePhoto"
+                            accept="image/*"
+                            disabled={!householdProfileEditing}
+                            onChange={handleHouseholdProfileChange}
+                          />
+                          <p className="form-text mb-0">Accepted: JPG, PNG. Use a clear profile photo.</p>
+                          {householdProfileForm.profilePhotoPreview && (
+                            <img
+                              src={householdProfileForm.profilePhotoPreview}
+                              alt="Household profile preview"
+                              className="img-fluid rounded border mt-2"
+                            />
+                          )}
+                        </div>
+                        <div className="profile-form-grid">
+                          <div className="profile-form-field">
+                            <label className="form-label fw-semibold" htmlFor="household-first-name">First Name</label>
+                            <input
+                              id="household-first-name"
+                              type="text"
+                              name="firstName"
+                              className="form-control"
+                              value={householdProfileForm.firstName}
+                              disabled={!householdProfileEditing}
+                              onChange={handleHouseholdProfileChange}
+                            />
+                          </div>
+                          <div className="profile-form-field">
+                            <label className="form-label fw-semibold" htmlFor="household-last-name">Last Name</label>
+                            <input
+                              id="household-last-name"
+                              type="text"
+                              name="lastName"
+                              className="form-control"
+                              value={householdProfileForm.lastName}
+                              disabled={!householdProfileEditing}
+                              onChange={handleHouseholdProfileChange}
+                            />
+                          </div>
+                          <div className="profile-form-field">
+                            <label className="form-label fw-semibold" htmlFor="household-username">Username</label>
+                            <input
+                              id="household-username"
+                              type="text"
+                              name="username"
+                              className="form-control"
+                              value={householdProfileForm.username}
+                              disabled
+                            />
+                          </div>
+                          <div className="profile-form-field">
+                            <label className="form-label fw-semibold" htmlFor="household-email">Email</label>
+                            <input
+                              id="household-email"
+                              type="email"
+                              name="email"
+                              className="form-control"
+                              value={householdProfileForm.email}
+                              disabled={!householdProfileEditing}
+                              onChange={handleHouseholdProfileChange}
+                            />
+                          </div>
+                          <div className="profile-form-field">
+                            <label className="form-label fw-semibold" htmlFor="household-phone">Phone Number</label>
+                            <input
+                              id="household-phone"
+                              type="text"
+                              name="phone"
+                              className="form-control"
+                              value={householdProfileForm.phone}
+                              disabled={!householdProfileEditing}
+                              onChange={handleHouseholdProfileChange}
+                            />
+                          </div>
+                          <div className="profile-form-field">
+                            <label className="form-label fw-semibold" htmlFor="household-barangay">Barangay</label>
+                            <select
+                              id="household-barangay"
+                              name="barangay"
+                              className="form-select"
+                              value={householdProfileForm.barangay}
+                              disabled={!householdProfileEditing}
+                              onChange={handleHouseholdProfileChange}
+                            >
+                              <option value="">---Select Barangay---</option>
+                              {renderBarangayOptions()}
+                            </select>
+                          </div>
+                          <div className="profile-form-field profile-form-field-full">
+                            <label className="form-label fw-semibold" htmlFor="household-street">Street / House No.</label>
+                            <input
+                              id="household-street"
+                              type="text"
+                              name="streetAddress"
+                              className="form-control"
+                              value={householdProfileForm.streetAddress}
+                              disabled={!householdProfileEditing}
+                              onChange={handleHouseholdProfileChange}
+                            />
+                          </div>
+                        </div>
+                        <div className="profile-form-actions">
+                          <button className="btn btn-primary profile-save-button" type="submit">
+                            {householdProfileEditing ? "Save Changes" : "Edit Profile"}
+                          </button>
+                        </div>
+                      </form>
+                  </section>
+                  </div>
+                <section className="profile-footer" aria-labelledby="household-profile-feedback-title">
+                  <h2 className="household-profile-feedback-title" id="household-profile-feedback-title">Feedback & Rating</h2>
+                  <div className="profile-feedback-grid">
+                    <article className="profile-feedback-card">
+                      <header className="profile-card-header feedback-header">
+                        <span>Feedback from Workers</span>
+                        <button
+                          type="button"
+                          className="btn btn-light btn-sm rounded-pill"
+                          onClick={openHouseholdFeedbackAll}
+                        >
+                          View All
+                        </button>
+                      </header>
+                      <div className="p-3 d-grid gap-2">
+                        {(currentHousehold?.receivedFeedback || []).slice(0, 2).length > 0 ? (
+                          (currentHousehold?.receivedFeedback || []).slice(0, 2).map((review) => (
+                            <div className="review-item" key={review.id || `${review.authorName}-${review.createdAt}`}>
+                              <p className="mb-1 fw-semibold">Anonymous Worker</p>
+                              <p className="mb-1 small text-muted">{review.feedback || review.comment || "No comment provided."}</p>
+                              <p className="mb-0 small text-muted">{review.createdAt || review.date || "Recently"}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="review-item">
+                            <p className="mb-0 text-muted">No worker feedback yet.</p>
+                          </div>
+                        )}
+                      </div>
+                    </article>
+                    <article className="profile-feedback-card">
+                      <header className="profile-card-header feedback-header">
+                        <span>Reviews You Submitted</span>
+                        <button
+                          type="button"
+                          className="btn btn-light btn-sm rounded-pill"
+                          onClick={openHouseholdReviewsAll}
+                        >
+                          View All
+                        </button>
+                      </header>
+                      <div className="p-3 d-grid gap-2">
+                        {(currentHousehold?.givenFeedback || []).slice(0, 2).length > 0 ? (
+                          (currentHousehold?.givenFeedback || []).slice(0, 2).map((review) => (
+                            <div className="review-item" key={review.id || `${review.targetName}-${review.createdAt}`}>
+                              <div className="d-flex justify-content-between gap-2">
+                                <div>
+                                  <p className="mb-1 fw-semibold">{review.targetName || review.target || "Worker"}</p>
+                                  <p className="mb-1 small text-muted">{review.feedback || review.comment || "No comment provided."}</p>
+                                  <p className="mb-0 small text-muted">{review.createdAt || review.date || "Recently"}</p>
+                                </div>
+                                <strong>{review.rating != null ? `${review.rating}/5` : "Feedback"}</strong>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="review-item">
+                            <p className="mb-0 text-muted">No submitted reviews yet.</p>
+                          </div>
+                        )}
+                      </div>
+                    </article>
+                  </div>
+                </section>
+                </main>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "household-feedback-all" && (
+          <section className="worker-dashboard household-feedback-all-page">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openHouseholdDashboard}>
+                    Dashboard
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdPostJob}>
+                    Post a Job
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdMyJobs}>
+                    My Jobs
+                  </button>
+                  <button className="worker-nav-item active" onClick={openHouseholdProfile}>
+                    My Profile
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdNotifications}>
+                    Notifications
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <main className="household-feedback-all-container">
+                  <p className="household-feedback-eyebrow">View all Feedback Household</p>
+                  <section className="household-feedback-hero">
+                    <div>
+                      <h1>All Feedback by Workers</h1>
+                      <p>Feedback from workers are hidden anonymously.</p>
+                    </div>
+                    <button className="btn btn-outline-secondary btn-sm" type="button" onClick={openHouseholdProfile}>
+                      Back
+                    </button>
+                  </section>
+
+                  <section className="household-feedback-list-panel" aria-label="All worker feedback">
+                    <div className="household-feedback-filter">
+                      <label className="form-label mb-0" htmlFor="household-feedback-date">
+                        Filter Date
+                      </label>
+                      <input
+                        id="household-feedback-date"
+                        type="date"
+                        className="form-control"
+                        value={householdFeedbackDateFilter}
+                        onChange={(event) => setHouseholdFeedbackDateFilter(event.target.value)}
+                      />
+                      {householdFeedbackDateFilter && (
+                        <button
+                          className="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          onClick={() => setHouseholdFeedbackDateFilter("")}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="household-feedback-list">
+                      {filteredHouseholdWorkerFeedback.length > 0 ? (
+                        filteredHouseholdWorkerFeedback.map((review, index) => (
+                          <article className="household-feedback-item" key={review.id || `${review.createdAt}-${index}`}>
+                            <div className="household-feedback-avatar">A</div>
+                            <div className="household-feedback-copy">
+                              <h2>Anonymous Worker</h2>
+                              <p>{review.feedback || review.comment || "No comment provided."}</p>
+                              <small>{review.createdAt || review.date || "Recently"}</small>
+                              <details className="household-feedback-more">
+                                <summary>View more</summary>
+                                <p>
+                                  This feedback was submitted by a worker after a household interaction. Worker identity is
+                                  hidden to keep feedback fair and private.
+                                </p>
+                              </details>
+                            </div>
+                          </article>
+                        ))
+                      ) : (
+                        <article className="household-feedback-empty">
+                          <h2>No feedback found</h2>
+                          <p>
+                            {householdFeedbackDateFilter
+                              ? "No worker feedback matches the selected date."
+                              : "No worker feedback has been submitted for this household yet."}
+                          </p>
+                        </article>
+                      )}
+                    </div>
+                  </section>
+                </main>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "household-reviews-all" && (
+          <section className="worker-dashboard household-feedback-all-page household-reviews-all-page">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openHouseholdDashboard}>
+                    Dashboard
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdPostJob}>
+                    Post a Job
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdMyJobs}>
+                    My Jobs
+                  </button>
+                  <button className="worker-nav-item active" onClick={openHouseholdProfile}>
+                    My Profile
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdNotifications}>
+                    Notifications
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <main className="household-feedback-all-container">
+                  <p className="household-feedback-eyebrow">View all Reviews Household</p>
+                  <section className="household-feedback-hero">
+                    <div>
+                      <h1>All Reviews you Submitted</h1>
+                      <p>Review history for workers you rated through GawaGo.</p>
+                    </div>
+                    <button className="btn btn-outline-secondary btn-sm" type="button" onClick={openHouseholdProfile}>
+                      Back
+                    </button>
+                  </section>
+
+                  <section className="household-feedback-list-panel" aria-label="All submitted reviews">
+                    <div className="household-feedback-filter household-reviews-filter">
+                      <label className="form-label mb-0" htmlFor="household-review-date">
+                        Filter Date
+                      </label>
+                      <input
+                        id="household-review-date"
+                        type="date"
+                        className="form-control"
+                        value={householdReviewDateFilter}
+                        onChange={(event) => setHouseholdReviewDateFilter(event.target.value)}
+                      />
+                      <label className="form-label mb-0" htmlFor="household-review-rating">
+                        Rating
+                      </label>
+                      <select
+                        id="household-review-rating"
+                        className="form-select"
+                        value={householdReviewRatingFilter}
+                        onChange={(event) => setHouseholdReviewRatingFilter(event.target.value)}
+                      >
+                        <option value="">All ratings</option>
+                        <option value="5">5 stars</option>
+                        <option value="4">4 stars</option>
+                        <option value="3">3 stars</option>
+                        <option value="2">2 stars</option>
+                        <option value="1">1 star</option>
+                      </select>
+                      {(householdReviewDateFilter || householdReviewRatingFilter) && (
+                        <button
+                          className="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          onClick={() => {
+                            setHouseholdReviewDateFilter("");
+                            setHouseholdReviewRatingFilter("");
+                          }}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="household-feedback-list">
+                      {filteredHouseholdSubmittedReviews.length > 0 ? (
+                        filteredHouseholdSubmittedReviews.map((review, index) => {
+                          const targetName = review.targetName || review.target || "Worker";
+                          const initial = targetName.slice(0, 1).toUpperCase() || "W";
+                          return (
+                            <article className="household-feedback-item" key={review.id || `${review.createdAt}-${index}`}>
+                              <div className="household-feedback-avatar">{initial}</div>
+                              <div className="household-feedback-copy">
+                                <div className="household-review-title-row">
+                                  <h2>{targetName}</h2>
+                                  <strong>{review.rating != null ? `${review.rating}/5` : "No rating"}</strong>
+                                </div>
+                                <p>{review.feedback || review.comment || "No comment provided."}</p>
+                                <small>{review.createdAt || review.date || "Recently"}</small>
+                                <details className="household-feedback-more">
+                                  <summary>View more</summary>
+                                  <p>
+                                    This is the review you submitted for {targetName}. It remains visible in your review
+                                    history for transparency and follow-up reference.
+                                  </p>
+                                </details>
+                              </div>
+                            </article>
+                          );
+                        })
+                      ) : (
+                        <article className="household-feedback-empty">
+                          <h2>No reviews found</h2>
+                          <p>
+                            {householdReviewDateFilter || householdReviewRatingFilter
+                              ? "No submitted reviews match the selected filters."
+                              : "You have not submitted any worker reviews yet."}
+                          </p>
+                        </article>
+                      )}
+                    </div>
+                  </section>
+                </main>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "household-my-jobs" && (
+          <section className="worker-dashboard household-my-jobs-page">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openHouseholdDashboard}>
+                    {" "}
+                    Dashboard{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdPostJob}>
+                    {" "}
+                    Post a Job{" "}
+                  </button>
+                  <button className="worker-nav-item active">My Jobs</button>
+                  <button className="worker-nav-item" onClick={openHouseholdProfile}>
+                    {" "}
+                    My Profile{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdNotifications}>
+                    {" "}
+                    Notifications{" "}
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <h1 className="household-my-jobs-title">My Jobs</h1>
+                {!activeHouseholdJobs.length && (
+                  <div className="profile-card mt-3">
+                    <div className="p-4 text-center">
+                      <h2 className="h5 mb-2">No active jobs</h2>
+                      <p className="text-muted mb-3">
+                        {" "}
+                        Completed and cancelled jobs are available in your dashboard recent jobs.{" "}
+                      </p>
+                      <button className="btn btn-primary" onClick={openHouseholdPostJob}>
+                        {" "}
+                        Post a New Job{" "}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {activeHouseholdJobs.length > 0 && (
+                  <div className="household-my-jobs-panel mt-3">
+                    <div className="household-my-jobs-filters">
+                      {[
+                        ["All", "All Jobs"],
+                        ["Open", "Open"],
+                        ["Completed", "Completed"],
+                      ].map(([status, label]) => (
+                        <button
+                          type="button"
+                          className={`household-job-filter ${householdJobStatusFilter === status ? "active" : ""}`}
+                          key={status}
+                          onClick={() => setHouseholdJobStatusFilter(status)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="my-jobs-list">
+                      {filteredHouseholdJobs.length > 0 ? (
+                        filteredHouseholdJobs.map((job) => (
+                          <article
+                            key={job.id}
+                            className={`job-summary-card ${selectedJob?.id === job.id ? "active" : ""}`}
+                          >
+                            <span className={`badge ${getJobStatusBadgeClass(job.status)}`}>{job.status}</span>
+                            <h2 className="job-summary-title">{job.jobTitle || job.serviceType}</h2>
+                            <dl className="job-summary-meta">
+                              <div>
+                                <dt>Offer Rate:</dt>
+                                <dd>{formatRate(job.offeredRate, job.rateType)}</dd>
+                              </div>
+                              <div>
+                                <dt>Schedule:</dt>
+                                <dd>{formatDateTime(job.preferredDate, job.preferredTime)}</dd>
+                              </div>
+                              <div>
+                                <dt>Applicants:</dt>
+                                <dd>{(job.applications || []).length}</dd>
+                              </div>
+                            </dl>
+                            <button
+                              type="button"
+                              className="btn btn-primary job-summary-action"
+                              onClick={() => openHouseholdJobDetail(job.id)}
+                            >
+                              View Details
+                            </button>
+                          </article>
+                        ))
+                      ) : (
+                        <article className="household-my-jobs-empty">
+                          <h2>No {householdJobStatusFilter.toLowerCase()} jobs found</h2>
+                          <p className="mb-0">There are no active jobs under this status.</p>
+                        </article>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "household-job-detail" && selectedJob && (
+          <section className="worker-dashboard household-job-detail-page">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openHouseholdDashboard}>
+                    Dashboard
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdPostJob}>
+                    Post a Job
+                  </button>
+                  <button className="worker-nav-item active" onClick={openHouseholdMyJobs}>
+                    My Jobs
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdProfile}>
+                    My Profile
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdNotifications}>
+                    Notifications
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <h1 className="household-detail-page-title mb-3">Job Details</h1>
+                <button className="btn btn-outline-secondary household-detail-back mb-3" type="button" onClick={openHouseholdMyJobs}>
+                  Back to My Jobs
+                </button>
+
+                <section className="household-detail-panel profile-card p-3 p-md-4">
+                  <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <h2 className="household-detail-job-title">{selectedJob.jobTitle || selectedJob.serviceType}</h2>
+                    <span className={`badge ${getJobStatusBadgeClass(selectedJob.status)}`}>{selectedJob.status}</span>
+                  </div>
+                  <div className="household-detail-grid row g-3 mt-1">
+                    <div className="col-md-4">
+                    <div className="household-detail-info-card h-100">
+                      <p>Service Type</p>
+                      <strong>{selectedJob.serviceType}</strong>
+                    </div>
+                    </div>
+                    <div className="col-md-4">
+                    <div className="household-detail-info-card h-100">
+                      <p>Location</p>
+                      <strong>{formatLocation(selectedJob.barangay, selectedJob.streetAddress)}</strong>
+                    </div>
+                    </div>
+                    <div className="col-md-4">
+                    <div className="household-detail-info-card h-100">
+                      <p>Offered Rate</p>
+                      <strong>{formatRate(selectedJob.offeredRate, selectedJob.rateType)}</strong>
+                    </div>
+                    </div>
+                    <div className="col-md-4">
+                    <div className="household-detail-info-card h-100">
+                      <p>Schedule</p>
+                      <strong>{formatDateTime(selectedJob.preferredDate, selectedJob.preferredTime)}</strong>
+                    </div>
+                    </div>
+                    <div className="col-md-4">
+                    <div className="household-detail-info-card h-100">
+                      <p>Workers Needed</p>
+                      <strong>{selectedJob.workersNeeded || selectedJob.workerSlots || 1} worker(s)</strong>
+                    </div>
+                    </div>
+                    <div className="col-md-4">
+                    <div className="household-detail-info-card h-100">
+                      <p>Hiring Status</p>
+                      <strong>
+                        {(selectedJob.applications || []).filter((application) => application.status === "Hired").length}/
+                        {selectedJob.workersNeeded || selectedJob.workerSlots || 1} Hired
+                      </strong>
+                    </div>
+                    </div>
+                  </div>
+                  {selectedJob.status !== "Cancelled" && (
+                    <button
+                      className="btn btn-outline-danger household-detail-cancel"
+                      type="button"
+                      onClick={() => handleCancelJob(selectedJob.id)}
+                    >
+                      Cancel Job
+                    </button>
+                  )}
+                </section>
+
+                <section className="household-detail-panel profile-card p-3 p-md-4 mt-3">
+                  <div className="profile-card-head">Completion & Review</div>
+                  <div className="p-3 d-grid gap-3">
+                    <div className="household-dashboard-job-summary">
+                      <h3>{selectedJob.jobTitle || selectedJob.serviceType}</h3>
+                      <div className="household-dashboard-job-meta">
+                        <span>
+                          <strong>Worker</strong>
+                          {selectedJobAssignedWorker
+                            ? getDisplayName(
+                                selectedJobAssignedWorker.firstName,
+                                selectedJobAssignedWorker.lastName,
+                                selectedJobAssignedWorker.username,
+                              )
+                            : (selectedJob.applications || [])[0]?.workerName || "No worker selected"}
+                        </span>
+                        <span>
+                          <strong>Status</strong>
+                          {selectedJob.status}
+                        </span>
+                        {selectedJobWorkerReview && (
+                          <span>
+                            <strong>Review</strong>
+                            {selectedJobWorkerReview.rating}/5 submitted
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="household-dashboard-completion-notice">
+                      {selectedJobWorkerReview
+                        ? "This completed job has already been reviewed."
+                        : selectedJob.status === "Completed"
+                          ? "Job is completed. Submit your final worker review once."
+                          : selectedJobAssignedWorker
+                            ? "Review the completed work, then confirm completion."
+                            : "No worker is assigned yet, so completion controls are not available."}
+                    </div>
+                    <div className="household-dashboard-completion-actions">
+                      <button
+                        className={`btn ${
+                          selectedJob.status === "Completed" || !selectedJobAssignedWorker ? "btn-secondary" : "btn-success"
+                        }`}
+                        type="button"
+                        disabled={selectedJob.status === "Completed" || !selectedJobAssignedWorker}
+                        onClick={() => handleConfirmJobCompleted(selectedJob.id)}
+                      >
+                        {selectedJob.status === "Completed" ? "Completion Confirmed" : "Confirm Completed"}
+                      </button>
+                      <button
+                        className={`btn ${selectedJobWorkerReview ? "btn-secondary" : "btn-primary"}`}
+                        type="button"
+                        disabled={!selectedJobAssignedWorker || selectedJob.status !== "Completed" || Boolean(selectedJobWorkerReview)}
+                        onClick={() => {
+                          if (selectedJobAssignedWorker) {
+                            setSelectedWorkerId(selectedJobAssignedWorker);
+                          }
+                          setHouseholdDashboardReviewOpen((prev) => !prev);
+                        }}
+                      >
+                        {selectedJobWorkerReview ? "Worker Reviewed" : "Rate Worker"}
+                      </button>
+                    </div>
+                    {selectedJobWorkerReview && (
+                      <div className="alert alert-success mb-0">
+                        Review completed. You rated this worker {selectedJobWorkerReview.rating}/5.
+                      </div>
+                    )}
+                    {householdDashboardReviewOpen && !selectedJobWorkerReview && (
+                      <form className="household-dashboard-review-form" onSubmit={handleHouseholdReviewSubmit}>
+                        <label className="form-label fw-semibold" htmlFor="household-detail-rating-input">
+                          Rate from 1-5
+                        </label>
+                        <input
+                          className="form-control"
+                          id="household-detail-rating-input"
+                          max="5"
+                          min="1"
+                          onChange={(event) => {
+                            const numericRating = Number(event.target.value);
+                            const nextRating =
+                              Number.isFinite(numericRating) && numericRating > 0
+                                ? Math.min(5, Math.max(1, numericRating))
+                                : "";
+                            setHouseholdReviewForm((prev) => ({
+                              ...prev,
+                              rating: nextRating === "" ? "" : String(nextRating),
+                            }));
+                          }}
+                          placeholder="e.g. 3.5"
+                          step="0.5"
+                          type="number"
+                          value={householdReviewForm.rating}
+                        />
+                        <label className="form-label fw-semibold">Feedback for worker</label>
+                        <textarea
+                          className="form-control"
+                          rows="4"
+                          placeholder="Write feedback about the worker..."
+                          value={householdReviewForm.feedback}
+                          onChange={(event) =>
+                            setHouseholdReviewForm((prev) => ({ ...prev, feedback: event.target.value }))
+                          }
+                        />
+                        <button className="btn btn-success" type="submit">
+                          Submit Rating
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </section>
+
+                <section className="household-detail-panel profile-card p-3 p-md-4 mt-3">
+                  <h2 className="household-detail-section-title">Applicants / Smart Matched Workers</h2>
+                  <p className="small text-muted mb-3">Review workers profile before hiring</p>
+                  <div className="household-applicant-list d-grid gap-3">
+                    {selectedMatchedWorkers.length > 0 ? (
+                      selectedMatchedWorkers.map((worker) => {
+                        const workerProfileKey =
+                          [
+                            worker.username ?? worker.workerUsername,
+                            worker.id ?? worker.workerId ?? worker.userId ?? worker.user_id ?? worker.profileId,
+                            getDisplayName(worker.firstName, worker.lastName, worker.username),
+                          ]
+                            .filter((value) => value !== null && value !== undefined && value !== "")
+                            .join(":") || "matched-worker";
+                        return (
+                        <button
+                          type="button"
+                          className="household-applicant-card d-flex align-items-center gap-3"
+                          key={workerProfileKey}
+                          onClick={() => openMatchedWorkerProfile(worker, selectedJob.id)}
+                        >
+                          <div className="profile-avatar match-avatar">
+                            {(worker.avatar || worker.firstName || worker.username || "W").slice(0, 1).toUpperCase()}
+                          </div>
+                          <div className="household-applicant-main">
+                            <p className="fw-semibold mb-1">
+                              {getDisplayName(worker.firstName, worker.lastName, worker.username)}
+                            </p>
+                            <div className="d-flex gap-2 flex-wrap">
+                              {(worker.skills || []).slice(0, 2).map((skill) => (
+                                <span className="badge text-bg-primary" key={`${worker.id}-${skill}`}>
+                                  {skill}
+                                </span>
+                              ))}
+                              <span className={`badge ${worker.verification === "Verified" ? "text-bg-success" : "text-bg-warning"}`}>
+                                {worker.verification || "Not Yet Verified"}
+                              </span>
+                              <span className="badge text-bg-light border text-dark">
+                                {formatCurrency(worker.dailyRate)}/day
+                              </span>
+                            </div>
+                          </div>
+                          <span className="household-applicant-distance ms-auto">
+                            {worker.distanceLabel ||
+                              formatDistance(worker.distanceKm, worker.distanceLabel) ||
+                              "Distance unavailable"}
+                          </span>
+                        </button>
+                      );
+                    })
+                    ) : (
+                      <div className="household-applicant-empty">No matched workers yet.</div>
+                    )}
+                  </div>
+                </section>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "household-worker-profile" && !selectedWorker && (
+          <section className="worker-dashboard">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openHouseholdDashboard}>
+                    Dashboard
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdPostJob}>
+                    Post a Job
+                  </button>
+                  <button className="worker-nav-item active" onClick={openHouseholdMyJobs}>
+                    My Jobs
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdProfile}>
+                    My Profile
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdNotifications}>
+                    Notifications
+                    {householdUnreadCount > 0 && <span className="nav-count-badge">{householdUnreadCount}</span>}
+                  </button>
+                </nav>
+              </aside>
+              <div className="worker-content">
+                <div className="profile-card p-4">
+                  <div className="profile-card-head">Worker Profile</div>
+                  <div className="p-3">
+                    <p className="mb-3 text-muted">
+                      Worker profile is not available yet. Please go back to the job details and try again.
+                    </p>
+                    <button className="btn btn-outline-secondary" type="button" onClick={openHouseholdMyJobs}>
+                      Go Back
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "household-worker-profile" && selectedWorker && (
+          <section className="worker-dashboard household-smart-match-profile">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openHouseholdDashboard}>
+                    {" "}
+                    Dashboard{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdPostJob}>
+                    {" "}
+                    Post a Job{" "}
+                  </button>
+                  <button className="worker-nav-item active" onClick={openHouseholdMyJobs}>
+                    {" "}
+                    My Jobs{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdProfile}>
+                    {" "}
+                    My Profile{" "}
+                  </button>
+                  <button className="worker-nav-item active" onClick={openHouseholdNotifications}>
+                    {" "}
+                    Notifications{" "}
+                    {householdUnreadCount > 0 && <span className="nav-count-badge">{householdUnreadCount}</span>}
+                  </button>
+                </nav>
+              </aside>
+              <div className="worker-content">
+                <div className="row g-3">
+                  <div className="col-lg-4">
+                    <div className="profile-card">
+                      <div className="p-3 text-center">
+                        {selectedWorkerPhoto ? (
+                          <img
+                            className="profile-photo-large mb-2"
+                            src={selectedWorkerPhoto}
+                            alt={`${getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username)} profile`}
+                          />
+                        ) : (
+                          <div className="profile-avatar mb-2">
+                            {(selectedWorker.avatar || selectedWorker.firstName || "W").slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                        <h2 className="h5 mb-1">
+                          {getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username)}
+                        </h2>
+                        <p className="small text-muted mb-2">
+                          {formatLocation(selectedWorker.barangay, selectedWorker.streetAddress)}
+                        </p>
+                        <span
+                          className={`badge ${selectedWorker.verification === "Verified" ? "text-bg-success" : "text-bg-warning"}`}
+                        >
+                          {selectedWorker.verification || "Not Yet Verified"}
+                        </span>
+                      </div>
+                      <div className="px-3 pb-3">
+                        <p className="mb-1 small d-flex justify-content-between">
+                          <span>Rating</span>
+                          <strong>{selectedWorker.rating || "No ratings yet"}</strong>
+                        </p>
+                        <p className="mb-1 small d-flex justify-content-between">
+                          <span>Jobs Done</span>
+                          <strong>{selectedWorker.reviewsDone || 0}</strong>
+                        </p>
+                        <p className="mb-1 small d-flex justify-content-between">
+                          <span>Experience</span>
+                          <strong>{selectedWorker.yearsExperience || 0} yr(s)</strong>
+                        </p>
+                        <p className="mb-1 small d-flex justify-content-between">
+                          <span>Status</span>
+                          <strong>{selectedWorker.status || "Available"}</strong>
+                        </p>
+                        <p className="mb-1 small d-flex justify-content-between">
+                          <span>Distance</span>
+                          <strong>
+                            {selectedWorker.distanceLabel ||
+                              formatDistance(selectedWorker.distanceKm, selectedWorker.distanceLabel) ||
+                              "Distance unavailable"}
+                          </strong>
+                        </p>
+                        <p className="mb-1 small d-flex justify-content-between">
+                          <span>Hourly Rate</span>
+                          <strong>{formatCurrency(selectedWorker.hourlyRate)}</strong>
+                        </p>
+                        <p className="mb-3 small d-flex justify-content-between">
+                          <span>Daily Rate</span>
+                          <strong>{formatCurrency(selectedWorker.dailyRate)}</strong>
+                        </p>
+                        <button className="btn btn-primary w-100 mb-2" type="button" onClick={handleHireWorker}>
+                          {" "}
+                          Hire This Worker{" "}
+                        </button>
+                        <button className="btn btn-outline-secondary w-100" type="button" onClick={openHouseholdMyJobs}>
+                          {" "}
+                          Go Back{" "}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-lg-8">
+                    <div className="profile-card mb-3">
+                      <div className="profile-card-head">About</div>
+                      <div className="p-3">
+                        <p className="mb-0">{selectedWorker.bio || "No description provided yet."}</p>
+                      </div>
+                    </div>
+                    <div className="profile-card mb-3" data-distance-location-map="true">
+                      <div className="profile-card-head d-flex justify-content-between align-items-center gap-3">
+                        <span>Distance & Location</span>
+                        <span className="badge text-bg-light">{formatDistance(selectedWorkerDistanceKm)}</span>
+                      </div>
+                      <div className="p-3">
+                        <LocationDistanceMap
+                          userLatitude={selectedWorkerJobLatitude}
+                          userLongitude={selectedWorkerJobLongitude}
+                          targetLatitude={selectedWorker.latitude ?? null}
+                          targetLongitude={selectedWorker.longitude ?? null}
+                          userLocation={formatLocation(
+                            currentHousehold?.barangay || selectedJob?.barangay,
+                            currentHousehold?.streetAddress || selectedJob?.streetAddress,
+                          )}
+                          targetLocation={formatLocation(selectedWorker.barangay, selectedWorker.streetAddress)}
+                          distanceKm={selectedWorkerDistanceKm}
+                          formatDistanceFn={formatDistance}
+                        />
+                      </div>
+                    </div>
+                    <div className="profile-card mb-3">
+                      <div className="profile-card-head">Skills & Expertise</div>
+                      <div className="p-3 d-flex gap-2 flex-wrap">
+                        {(selectedWorker.skills || []).map((skill) => (
+                          <span className="badge text-bg-primary" key={`${selectedWorker.id}-${skill}`}>
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <section className="smart-match-feedback-section profile-footer" aria-labelledby="smart-match-feedback-title">
+                  <h2 className="household-profile-feedback-title" id="smart-match-feedback-title">
+                    Feedback & Rating
+                  </h2>
+                  <div className="profile-feedback-grid">
+                    <article className="profile-feedback-card">
+                      <header className="profile-card-header feedback-header">
+                        <span>Feedback from Workers</span>
+                        <button
+                          type="button"
+                          className="btn btn-light btn-sm rounded-pill"
+                          onClick={openHouseholdFeedbackAll}
+                        >
+                          View All
+                        </button>
+                      </header>
+                      <div className="p-3 d-grid gap-2">
+                        {householdWorkerFeedback.slice(0, 2).length > 0 ? (
+                          householdWorkerFeedback.slice(0, 2).map((review) => (
+                            <div className="review-item" key={review.id || `${review.authorName}-${review.createdAt}`}>
+                              <p className="mb-1 fw-semibold">{review.authorName || review.author || "Worker"}</p>
+                              <p className="mb-1 small text-muted">
+                                {review.feedback || review.comment || "No comment provided."}
+                              </p>
+                              <p className="mb-0 small text-muted">{review.createdAt || review.date || "Recently"}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="review-item">
+                            <p className="mb-0 text-muted">No worker feedback yet.</p>
+                          </div>
+                        )}
+                      </div>
+                    </article>
+                    <article className="profile-feedback-card">
+                      <header className="profile-card-header feedback-header">
+                        <span>Reviews You Submitted</span>
+                        <button
+                          type="button"
+                          className="btn btn-light btn-sm rounded-pill"
+                          onClick={openHouseholdReviewsAll}
+                        >
+                          View All
+                        </button>
+                      </header>
+                      <div className="p-3 d-grid gap-2">
+                        {householdSubmittedReviews.slice(0, 2).length > 0 ? (
+                          householdSubmittedReviews.slice(0, 2).map((review) => (
+                            <div className="review-item" key={review.id || `${review.targetName}-${review.createdAt}`}>
+                              <div className="d-flex justify-content-between gap-2">
+                                <div>
+                                  <p className="mb-1 fw-semibold">{review.targetName || review.target || "Worker"}</p>
+                                  <p className="mb-1 small text-muted">
+                                    {review.feedback || review.comment || "No comment provided."}
+                                  </p>
+                                  <p className="mb-0 small text-muted">{review.createdAt || review.date || "Recently"}</p>
+                                </div>
+                                <strong>{review.rating != null ? `${review.rating}/5` : "Feedback"}</strong>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="review-item">
+                            <p className="mb-0 text-muted">No submitted reviews yet.</p>
+                          </div>
+                        )}
+                      </div>
+                    </article>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "household-notifications" && (
+          <section className="worker-dashboard household-notifications-page">
+            <div className="worker-layout">
+              <aside className="worker-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item" onClick={openHouseholdDashboard}>
+                    {" "}
+                    Dashboard{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdPostJob}>
+                    {" "}
+                    Post a Job{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdMyJobs}>
+                    {" "}
+                    My Jobs{" "}
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdProfile}>
+                    {" "}
+                    My Profile{" "}
+                  </button>
+                  <button className="worker-nav-item active" onClick={openHouseholdNotifications}>
+                    {" "}
+                    Notifications{" "}
+                    {householdUnreadCount > 0 && <span className="nav-count-badge">{householdUnreadCount}</span>}
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="worker-content">
+                <main className="household-notifications-container">
+                  <h1 className="household-notifications-title">
+                    Notifications
+                    {householdUnreadCount > 0 && <span className="nav-count-badge">{householdUnreadCount}</span>}
+                  </h1>
+
+                  <section className="household-notifications-panel">
+                    <div className="household-notifications-toolbar">
+                      <div className="household-notifications-filter">
+                        <label className="form-label mb-0" htmlFor="household-notification-date">
+                          Filter Date
+                        </label>
+                        <input
+                          id="household-notification-date"
+                          type="date"
+                          className="form-control"
+                          value={householdNotificationDateFilter}
+                          onChange={(event) => setHouseholdNotificationDateFilter(event.target.value)}
+                        />
+                        {householdNotificationDateFilter && (
+                          <button
+                            className="btn btn-outline-secondary btn-sm"
+                            type="button"
+                            onClick={() => setHouseholdNotificationDateFilter("")}
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        className="btn btn-outline-secondary household-notifications-read-button"
+                        type="button"
+                        onClick={() => markAllNotificationsRead(householdNotificationsWithReadState)}
+                      >
+                        Mark all as Read
+                      </button>
+                    </div>
+
+                    <div className="household-notifications-list">
+                      {filteredHouseholdNotifications.length > 0 ? (
+                        filteredHouseholdNotifications.map((item) => (
+                          <article
+                            className={`notification-card household-notification-item ${item.unread ? "unread" : ""}`}
+                            key={item.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              markNotificationRead(item.id);
+                              openHouseholdNotificationWorker(item);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                markNotificationRead(item.id);
+                                openHouseholdNotificationWorker(item);
+                              }
+                            }}
+                          >
+                            <div>
+                              <p className="small text-muted mb-1">{item.date}</p>
+                              <h2 className="h6 mb-1">{item.title}</h2>
+                              <p className="mb-0">{item.message}</p>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-outline-secondary btn-sm"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                markNotificationRead(item.id);
+                                openHouseholdNotificationWorker(item);
+                              }}
+                            >
+                              View Details
+                            </button>
+                          </article>
+                        ))
+                      ) : (
+                        <article className="notification-card household-notification-item household-notification-empty">
+                          <div>
+                            <h2 className="h6 mb-1">No notifications found</h2>
+                            <p className="mb-0">
+                              {householdNotificationDateFilter
+                                ? "No household notifications match the selected date."
+                                : "There are no applications or updates for this household account yet."}
+                            </p>
+                          </div>
+                        </article>
+                      )}
+                    </div>
+                  </section>
+                </main>
+              </div>
+            </div>
+          </section>
+        )}
+        {view === "household-dashboard" && (
+          <section className="worker-dashboard household-dashboard-wireframe">
+            <div className="household-dashboard-brandbar">GawaGo</div>
+            <div className="household-dashboard-shell">
+              <aside className="worker-sidebar household-dashboard-sidebar">
+                <div className="worker-sidebar-head">
+                  <div className="worker-logo">GG</div>
+                  <p className="worker-brand mb-0">GawaGo Community Platform</p>
+                </div>
+                <nav className="worker-nav">
+                  <button className="worker-nav-item active" onClick={openHouseholdDashboard}>
+                    Dashboard
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdPostJob}>
+                    Post a Job
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdMyJobs}>
+                    My Jobs
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdProfile}>
+                    My Profile
+                  </button>
+                  <button className="worker-nav-item" onClick={openHouseholdNotifications}>
+                    Notifications
+                    {householdUnreadCount > 0 && <span className="nav-count-badge">{householdUnreadCount}</span>}
+                  </button>
+                </nav>
+                <div className="worker-sidebar-footer">
+                  <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
+                    Log Out
+                  </button>
+                </div>
+              </aside>
+              <div className="household-dashboard-main">
+                <div className="household-dashboard-welcome">
+                  Welcome, {currentUser?.displayName || "Household"}
+                </div>
+
+                <div className="household-dashboard-stats">
+                  <div className="household-dashboard-stat">
+                    <p>In Progress</p>
+                    <strong>
+                      {
+                        householdJobs.filter((job) =>
+                          ["Already found a worker", "In Progress", "Waiting for Household Confirmation"].includes(
+                            job.status,
+                          ),
+                        ).length
+                      }
+                    </strong>
+                  </div>
+                  <div className="household-dashboard-stat">
+                    <p>Cancelled Jobs</p>
+                    <strong>{householdJobs.filter((job) => job.status === "Cancelled").length}</strong>
+                  </div>
+                  <div className="household-dashboard-stat">
+                    <p>Completed</p>
+                    <strong>{householdJobs.filter((job) => job.status === "Completed").length}</strong>
+                  </div>
+                </div>
+
+                <section className="household-dashboard-table-card">
+                    <div className="household-dashboard-table-head">
+                      <h2>Recent Post Jobs</h2>
+                    </div>
+                    <div className="household-dashboard-table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Type</th>
+                            <th>Barangay</th>
+                            <th>Rate</th>
+                            <th>Status</th>
+                            <th>Applications</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {householdJobs.length > 0 ? (
+                            householdJobs.map((job) => (
+                              <tr
+                                key={job.id}
+                                className="household-dashboard-job-row"
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => openHouseholdDashboardJobPanel(job)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    openHouseholdDashboardJobPanel(job);
+                                  }
+                                }}
+                              >
+                                <td>{job.serviceType}</td>
+                                <td>{job.barangay || "Not set"}</td>
+                                <td>{formatRate(job.offeredRate, job.rateType)}</td>
+                                <td>
+                                  <span className={`badge ${getJobStatusBadgeClass(job.status)}`}>{job.status}</span>
+                                </td>
+                                <td>{buildMatchedWorkersForJob(job, registeredWorkers).length}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="5" className="text-center text-muted py-4">
+                                No posted jobs yet.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                </section>
+                {householdDashboardDetailJob && (
+                  <section
+                    className={`household-dashboard-detail-tab ${
+                      householdDashboardDetailJob.status === "Cancelled"
+                        ? "cancelled"
+                        : householdDashboardDetailJob.status === "Completed"
+                          ? "completed"
+                      : ""
+                    }`}
+                  >
+                    <div className="household-dashboard-completion-box">
+                      <aside className="household-dashboard-worker-panel">
+                        <div className="household-dashboard-worker-avatar">
+                          {String(
+                            householdDashboardDetailWorker
+                              ? getDisplayName(
+                                  householdDashboardDetailWorker.firstName,
+                                  householdDashboardDetailWorker.lastName,
+                                  householdDashboardDetailWorker.username,
+                                )
+                              : (householdDashboardDetailJob.applications || [])[0]?.workerName || "W",
+                          )
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </div>
+                        <div>
+                          <h3>
+                            {householdDashboardDetailWorker
+                              ? getDisplayName(
+                                  householdDashboardDetailWorker.firstName,
+                                  householdDashboardDetailWorker.lastName,
+                                  householdDashboardDetailWorker.username,
+                                )
+                              : (householdDashboardDetailJob.applications || [])[0]?.workerName || "No worker selected"}
+                          </h3>
+                          <p>
+                            {householdDashboardDetailWorker?.bio ||
+                              "Worker profile summary for this selected household job."}
+                          </p>
+                        </div>
+                        <div className="household-dashboard-worker-facts">
+                          <div>
+                            <strong>Verification</strong>
+                            <span>{householdDashboardDetailWorker?.verification || "Not available"}</span>
+                          </div>
+                          <div>
+                            <strong>Rating</strong>
+                            <span>{householdDashboardDetailWorker?.rating || "No ratings yet"}</span>
+                          </div>
+                          <div>
+                            <strong>Skills</strong>
+                            <span>{(householdDashboardDetailWorker?.skills || [householdDashboardDetailJob.serviceType]).join(", ")}</span>
+                          </div>
+                          <div>
+                            <strong>Location</strong>
+                            <span>
+                              {formatLocation(
+                                householdDashboardDetailWorker?.barangay || householdDashboardDetailJob.barangay,
+                                householdDashboardDetailWorker?.streetAddress || "",
+                              )}
+                            </span>
+                          </div>
+                          <div>
+                            <strong>Rate</strong>
+                            <span>
+                              {householdDashboardDetailWorker
+                                ? formatRate(
+                                    householdDashboardDetailWorker.dailyRate || householdDashboardDetailJob.offeredRate,
+                                    householdDashboardDetailJob.rateType,
+                                  )
+                                : formatRate(householdDashboardDetailJob.offeredRate, householdDashboardDetailJob.rateType)}
+                            </span>
+                          </div>
+                        </div>
+                      </aside>
+                      <div className="household-dashboard-completion-panel">
+                        <div className="profile-card">
+                          <div className="profile-card-head">Household View</div>
+                          <div className="p-3 d-grid gap-3">
+                            <div className="household-dashboard-job-summary">
+                              <h3>{householdDashboardDetailJob.jobTitle || householdDashboardDetailJob.serviceType}</h3>
+                              <div className="household-dashboard-job-meta">
+                                <span>
+                                  <strong>Worker</strong>
+                                  {householdDashboardDetailWorker
+                                    ? getDisplayName(
+                                        householdDashboardDetailWorker.firstName,
+                                        householdDashboardDetailWorker.lastName,
+                                        householdDashboardDetailWorker.username,
+                                      )
+                                    : (householdDashboardDetailJob.applications || [])[0]?.workerName || "No worker selected"}
+                                </span>
+                                <span>
+                                  <strong>Rate</strong>
+                                  {formatRate(householdDashboardDetailJob.offeredRate, householdDashboardDetailJob.rateType)}
+                                </span>
+                                <span>
+                                  <strong>Schedule</strong>
+                                  {formatDateTime(householdDashboardDetailJob.preferredDate, householdDashboardDetailJob.preferredTime)}
+                                </span>
+                                <span>
+                                  <strong>Status</strong>
+                                  {householdDashboardDetailJob.status}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="household-dashboard-completion-notice">
+                              {householdDashboardDetailJob.status === "Cancelled"
+                                ? "This is the previous job post you cancelled. Worker profile details are hidden because no completed service happened."
+                                : householdDashboardDetailJob.status === "Completed"
+                                  ? "Job is completed. You can review the worker profile and your submitted rating here."
+                                  : householdDashboardDetailWorker
+                                    ? "Review the completed work, then confirm completion."
+                                    : "No worker is assigned yet, so completion controls are not available."}
+                            </div>
+                            <ol className="household-dashboard-completion-steps">
+                              <li className="done">
+                                <span>1</span>
+                                <p>
+                                  <strong>Worker hired</strong>
+                                  Job started after household accepted the worker.
+                                </p>
+                              </li>
+                              <li className={householdDashboardDetailWorker ? "done" : ""}>
+                                <span>2</span>
+                                <p>
+                                  <strong>Worker requests completion</strong>
+                                  Worker marks service as done.
+                                </p>
+                              </li>
+                              <li className={householdDashboardDetailJob.status === "Completed" ? "done" : "active"}>
+                                <span>3</span>
+                                <p>
+                                  <strong>Confirm completed</strong>
+                                  Household confirms completion.
+                                </p>
+                              </li>
+                              <li className={householdDashboardDetailJob.status === "Completed" ? "active" : ""}>
+                                <span>4</span>
+                                <p>
+                                  <strong>Rate worker</strong>
+                                  Household submits rating and feedback.
+                                </p>
+                              </li>
+                            </ol>
+                            <div className="household-dashboard-completion-actions">
+                              <button
+                                className={`btn ${
+                                  householdDashboardDetailJob.status === "Completed" || !householdDashboardDetailWorker
+                                    ? "btn-secondary"
+                                    : "btn-success"
+                                }`}
+                                type="button"
+                                disabled={householdDashboardDetailJob.status === "Completed" || !householdDashboardDetailWorker}
+                                onClick={() => handleConfirmJobCompleted(householdDashboardDetailJob.id)}
+                              >
+                                {householdDashboardDetailJob.status === "Completed"
+                                  ? "Completion Confirmed"
+                                  : "Confirm Completed"}
+                              </button>
+                              <button
+                                className="btn btn-primary"
+                                type="button"
+                                disabled={!householdDashboardDetailWorker}
+                                onClick={() => setHouseholdDashboardReviewOpen((prev) => !prev)}
+                              >
+                                Rate Worker
+                              </button>
+                            </div>
+                            {householdDashboardReviewOpen && (
+                              <form className="household-dashboard-review-form" onSubmit={handleHouseholdReviewSubmit}>
+                                <label className="form-label fw-semibold" htmlFor="household-dashboard-rating-input">
+                                  Rate from 1-5
+                                </label>
+                                <input
+                                  className="form-control"
+                                  id="household-dashboard-rating-input"
+                                  max="5"
+                                  min="1"
+                                  onChange={(event) => {
+                                    const numericRating = Number(event.target.value);
+                                    const nextRating =
+                                      Number.isFinite(numericRating) && numericRating > 0
+                                        ? Math.min(5, Math.max(1, numericRating))
+                                        : "";
+                                    setHouseholdReviewForm((prev) => ({
+                                      ...prev,
+                                      rating: nextRating === "" ? "" : String(nextRating),
+                                    }));
+                                  }}
+                                  placeholder="e.g. 3.5"
+                                  step="0.5"
+                                  type="number"
+                                  value={householdReviewForm.rating}
+                                />
+                                <div className="household-dashboard-star-rating" aria-label="Rating preview">
+                                  {[1, 2, 3, 4, 5].map((ratingValue) => {
+                                    const selectedRating = Number(householdReviewForm.rating || 0);
+                                    const isFull = selectedRating >= ratingValue;
+                                    const isHalf = selectedRating >= ratingValue - 0.5 && selectedRating < ratingValue;
+                                    return (
+                                      <span
+                                        className={`household-dashboard-star-shell ${
+                                          isFull ? "selected" : isHalf ? "half-selected" : ""
+                                        }`}
+                                        key={ratingValue}
+                                      >
+                                        <span className="household-dashboard-star-base">★</span>
+                                        <span className="household-dashboard-star-fill">★</span>
+                                      </span>
+                                    );
+                                  })}
+                                  <span>{Number(householdReviewForm.rating || 0).toFixed(1)} / 5</span>
+                                </div>
+                                <label className="form-label fw-semibold">Feedback for worker</label>
+                                <textarea
+                                  className="form-control"
+                                  rows="4"
+                                  placeholder="Write feedback about the worker..."
+                                  value={householdReviewForm.feedback}
+                                  onChange={(event) =>
+                                    setHouseholdReviewForm((prev) => ({ ...prev, feedback: event.target.value }))
+                                  }
+                                />
+                                <button className="btn btn-success" type="submit">
+                                  Submit Rating
+                                </button>
+                              </form>
+                            )}
+                            <div className="household-dashboard-modal-actions">
+                              <button
+                                className="btn btn-outline-secondary"
+                                type="button"
+                                onClick={closeHouseholdDashboardJobPanel}
+                              >
+                                Close
+                              </button>
+                              {householdDashboardDetailJob.status === "Completed" && (
+                                <button
+                                  className="btn btn-primary"
+                                  type="button"
+                                  onClick={openHouseholdDashboardReviewsFromJob}
+                                >
+                                  View all Reviews
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}

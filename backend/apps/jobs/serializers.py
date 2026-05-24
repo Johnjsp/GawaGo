@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.jobs.models import JobApplication, JobPosting
+from apps.jobs.models import JobApplication, JobImage, JobPosting
 
 
 class JobApplicationSerializer(serializers.ModelSerializer):
@@ -16,10 +16,18 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         return obj.worker.get_full_name().strip() or obj.worker.username
 
 
+class JobImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = JobImage
+        fields = ["id", "image", "uploaded_at", "order"]
+        read_only_fields = ["id", "uploaded_at"]
+
+
 class JobPostingSerializer(serializers.ModelSerializer):
     household_username = serializers.CharField(source="household.username", read_only=True)
     household_name = serializers.SerializerMethodField()
     applications = JobApplicationSerializer(many=True, read_only=True)
+    images = JobImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = JobPosting
@@ -40,8 +48,16 @@ class JobPostingSerializer(serializers.ModelSerializer):
             "status",
             "created_at",
             "applications",
+            "images",
         ]
-        read_only_fields = ["id", "household_username", "household_name", "created_at", "applications"]
+        read_only_fields = [
+            "id",
+            "household_username",
+            "household_name",
+            "created_at",
+            "applications",
+            "images",
+        ]
 
     def get_household_name(self, obj):
         return obj.household.get_full_name().strip() or obj.household.username

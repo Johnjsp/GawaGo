@@ -62,10 +62,15 @@ class ReviewListCreateView(APIView):
             rating=serializer.validated_data.get("rating") if author_role == "household" else None,
             feedback=serializer.validated_data.get("feedback", ""),
         )
+        notification_message = (
+            "You received anonymous feedback from a worker."
+            if author_role == "worker"
+            else f"You received a new review from {author_user.username}."
+        )
         Notification.objects.create(
             recipient=target_user,
             notification_type=Notification.TYPE_ANALYTICS,
-            title="New review received",
-            message=f"You received a new review from {author_user.username}.",
+            title="New feedback received" if author_role == "worker" else "New review received",
+            message=notification_message,
         )
         return Response(ReviewSerializer(review).data, status=status.HTTP_201_CREATED)

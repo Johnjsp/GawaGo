@@ -40,7 +40,14 @@ class ReviewCreateSerializer(serializers.Serializer):
     author_username = serializers.CharField(max_length=150, required=False, allow_blank=True)
     target_username = serializers.CharField(max_length=150)
     job_title = serializers.CharField(max_length=255, required=False, allow_blank=True)
-    rating = serializers.IntegerField(required=False, min_value=1, max_value=5, allow_null=True)
+    rating = serializers.DecimalField(
+        max_digits=2,
+        decimal_places=1,
+        required=False,
+        min_value=1,
+        max_value=5,
+        allow_null=True,
+    )
     feedback = serializers.CharField(required=False, allow_blank=True)
 
     def validate_author_username(self, value):

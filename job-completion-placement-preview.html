@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GawaGo Completion Placement Preview</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #071b4d;
+      background: #eef3ff;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 255px 1fr;
+    }
+
+    .sidebar {
+      min-height: 100vh;
+      padding: 32px 14px 18px;
+      background: linear-gradient(180deg, #071b4d, #1e42c9, #315df7);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 2px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+      font-weight: 800;
+      line-height: 1.25;
+    }
+
+    .logo {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: #fff;
+      color: #2451e8;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .nav {
+      display: grid;
+      gap: 10px;
+    }
+
+    .nav button {
+      width: 100%;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 7px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.11);
+      color: #fff;
+      font-weight: 800;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .nav button.active {
+      background: rgba(255, 255, 255, 0.22);
+      border-color: rgba(255, 255, 255, 0.45);
+    }
+
+    .logout {
+      margin-top: auto;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 8px;
+      padding: 13px 14px;
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+      font-weight: 800;
+      text-align: left;
+    }
+
+    .content {
+      padding: 28px;
+      overflow: auto;
+    }
+
+    .screen {
+      display: none;
+      max-width: 1180px;
+    }
+
+    .screen.active {
+      display: block;
+    }
+
+    .page-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 30px;
+    }
+
+    p {
+      margin: 0;
+      color: #667085;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .stat-card,
+    .job-card,
+    .placement-note {
+      background: #fff;
+      border: 1px solid #cfe0ff;
+      border-radius: 8px;
+      box-shadow: 0 12px 28px rgba(31, 72, 221, 0.07);
+    }
+
+    .stat-card {
+      padding: 16px;
+    }
+
+    .stat-card strong {
+      display: block;
+      font-size: 30px;
+      margin-bottom: 4px;
+    }
+
+    .jobs {
+      display: grid;
+      gap: 14px;
+    }
+
+    .job-card {
+      overflow: hidden;
+    }
+
+    .job-head {
+      background: linear-gradient(90deg, #2451e8, #2f6df6);
+      color: #fff;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: center;
+      font-weight: 800;
+    }
+
+    .job-body {
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .meta span {
+      padding: 10px;
+      border: 1px solid #d8e4ff;
+      border-radius: 7px;
+      background: #f8fbff;
+      color: #667085;
+      font-size: 13px;
+    }
+
+    .meta b {
+      display: block;
+      color: #071b4d;
+      margin-bottom: 3px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: #0d6efd;
+      color: #fff;
+    }
+
+    .btn-success {
+      background: #198754;
+      color: #fff;
+    }
+
+    .btn-outline {
+      background: #fff;
+      color: #0d6efd;
+      border: 1px solid #9fc0ff;
+    }
+
+    .btn-muted {
+      background: #e9eef8;
+      color: #7a869a;
+      cursor: not-allowed;
+    }
+
+    .badge {
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 12px;
+      background: #fff8dd;
+      color: #856404;
+      border: 1px solid #ffe7a3;
+      white-space: nowrap;
+    }
+
+    .badge.green {
+      background: #d1f2df;
+      color: #0f5132;
+      border-color: #badbcc;
+    }
+
+    .review-box {
+      display: none;
+      border-top: 1px solid #d8e4ff;
+      padding-top: 12px;
+      gap: 10px;
+    }
+
+    .review-box.show {
+      display: grid;
+    }
+
+    label {
+      font-weight: 800;
+      font-size: 14px;
+    }
+
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid #cfe0ff;
+      border-radius: 6px;
+      padding: 10px;
+      font: inherit;
+    }
+
+    textarea {
+      min-height: 74px;
+      resize: vertical;
+    }
+
+    .placement-note {
+      padding: 14px;
+      margin-bottom: 16px;
+      color: #334155;
+      background: #fff;
+    }
+
+    .placement-note strong {
+      color: #071b4d;
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        min-height: auto;
+      }
+
+      .dashboard-grid,
+      .meta {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="logo">GG</span>
+        <span>GawaGo Community<br>Platform</span>
+      </div>
+      <nav class="nav">
+        <button type="button" data-screen="dashboard" class="active">Dashboard</button>
+        <button type="button" data-screen="post">Post a Job</button>
+        <button type="button" data-screen="jobs">My Jobs</button>
+        <button type="button" data-screen="profile">My Profile</button>
+        <button type="button" data-screen="notifications">Notifications</button>
+      </nav>
+      <button type="button" class="logout">Log Out</button>
+    </aside>
+
+    <main class="content">
+      <section class="screen active" id="dashboard">
+        <div class="page-head">
+          <div>
+            <h1>Household Dashboard</h1>
+            <p>Completion belongs in existing job areas, not as a new sidebar item.</p>
+          </div>
+        </div>
+        <div class="dashboard-grid">
+          <article class="stat-card"><strong>4</strong><p>Total Jobs</p></article>
+          <article class="stat-card"><strong>1</strong><p>Waiting Confirmation</p></article>
+          <article class="stat-card"><strong>2</strong><p>Completed Jobs</p></article>
+        </div>
+        <div class="placement-note">
+          <strong>Best placement:</strong> keep sidebar unchanged. Add completion action cards inside `Dashboard` and `My Jobs`, because completion is part of managing a job.
+        </div>
+        <article class="job-card">
+          <div class="job-head">
+            <span>Needs Your Confirmation</span>
+            <span class="badge">Waiting for Household Confirmation</span>
+          </div>
+          <div class="job-body">
+            <p><strong>House Cleaning Help</strong> - Worker One marked this service as done.</p>
+            <div class="actions">
+              <button class="btn btn-success">Confirm Completed</button>
+              <button class="btn btn-outline" data-screen-jump="jobs">View in My Jobs</button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="screen" id="post">
+        <div class="page-head">
+          <div>
+            <h1>Post a Job</h1>
+            <p>No completion controls here. This screen is only for creating a new job.</p>
+          </div>
+        </div>
+        <div class="placement-note">
+          Completion should not be placed here because a job is not active/completable yet.
+        </div>
+      </section>
+
+      <section class="screen" id="jobs">
+        <div class="page-head">
+          <div>
+            <h1>My Jobs</h1>
+            <p>Main place for completion controls.</p>
+          </div>
+        </div>
+
+        <div class="jobs">
+          <article class="job-card">
+            <div class="job-head">
+              <span>House Cleaning Help</span>
+              <span class="badge">Waiting for Household Confirmation</span>
+            </div>
+            <div class="job-body">
+              <div class="meta">
+                <span><b>Worker</b>Worker One</span>
+                <span><b>Schedule</b>Today, 9:00 AM</span>
+                <span><b>Rate</b>PHP 700 / day</span>
+                <span><b>Status</b>Worker marked service done</span>
+              </div>
+              <div class="actions">
+                <button class="btn btn-success" id="confirmCompleted">Confirm Completed</button>
+                <button class="btn btn-outline">Message Worker</button>
+              </div>
+              <div class="review-box" id="householdReview">
+                <label for="rating">Rate Worker</label>
+                <select id="rating">
+                  <option>5 stars</option>
+                  <option>4 stars</option>
+                  <option>3 stars</option>
+                  <option>2 stars</option>
+                  <option>1 star</option>
+                </select>
+                <label for="feedback">Feedback</label>
+                <textarea id="feedback" placeholder="Write a short review for the worker..."></textarea>
+                <button class="btn btn-primary">Submit Rating</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="job-card">
+            <div class="job-head">
+              <span>Kitchen Plumbing Repair</span>
+              <span class="badge green">Completed</span>
+            </div>
+            <div class="job-body">
+              <div class="meta">
+                <span><b>Worker</b>Worker Two</span>
+                <span><b>Completed</b>May 20, 2026</span>
+                <span><b>Rate</b>PHP 950 fixed</span>
+                <span><b>Status</b>Ready for review</span>
+              </div>
+              <div class="actions">
+                <button class="btn btn-primary" id="rateExisting">Rate Worker</button>
+                <button class="btn btn-outline">View Details</button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen" id="profile">
+        <div class="page-head">
+          <div>
+            <h1>My Profile</h1>
+            <p>No job completion controls here. Reviews submitted/received can be summarized here.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="notifications">
+        <div class="page-head">
+          <div>
+            <h1>Notifications</h1>
+            <p>Completion notifications can appear here, but confirmation should still happen in My Jobs.</p>
+          </div>
+        </div>
+        <article class="job-card">
+          <div class="job-body">
+            <p><strong>Worker One marked House Cleaning Help as done.</strong></p>
+            <div class="actions">
+              <button class="btn btn-primary" data-screen-jump="jobs">Go to My Jobs</button>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const screens = document.querySelectorAll(".screen");
+    const navButtons = document.querySelectorAll(".nav button");
+
+    function showScreen(id) {
+      screens.forEach((screen) => screen.classList.toggle("active", screen.id === id));
+      navButtons.forEach((button) => button.classList.toggle("active", button.dataset.screen === id));
+    }
+
+    navButtons.forEach((button) => {
+      button.addEventListener("click", () => showScreen(button.dataset.screen));
+    });
+
+    document.querySelectorAll("[data-screen-jump]").forEach((button) => {
+      button.addEventListener("click", () => showScreen(button.dataset.screenJump));
+    });
+
+    const confirmCompleted = document.getElementById("confirmCompleted");
+    const householdReview = document.getElementById("householdReview");
+    const rateExisting = document.getElementById("rateExisting");
+    const firstJobBadge = document.querySelector("#jobs .badge");
+
+    if (confirmCompleted && householdReview && firstJobBadge) {
+      confirmCompleted.addEventListener("click", () => {
+        confirmCompleted.textContent = "Completion Confirmed";
+        confirmCompleted.className = "btn btn-muted";
+        confirmCompleted.disabled = true;
+        householdReview.classList.add("show");
+        firstJobBadge.textContent = "Completed";
+        firstJobBadge.classList.add("green");
+      });
+    }
+
+    if (rateExisting && householdReview) {
+      rateExisting.addEventListener("click", () => {
+        householdReview.classList.add("show");
+      });
+    }
+  </script>
+</body>
+</html>

@@ -52,7 +52,6 @@ class RegisterView(APIView):
         if User.objects.filter(email__iexact=email).exists():
             return Response({"detail": "Email already exists."}, status=status.HTTP_400_BAD_REQUEST)
 
-        token = generate_token()
         with transaction.atomic():
             user = User.objects.create_user(
                 username=username,
@@ -61,7 +60,7 @@ class RegisterView(APIView):
                 first_name=data.get("first_name", ""),
                 last_name=data.get("last_name", ""),
             )
-            user.is_active = False
+            user.is_active = True
             user.save(update_fields=["is_active"])
             profile = UserProfile.objects.create(
                 user=user,
@@ -76,11 +75,9 @@ class RegisterView(APIView):
                 latitude=data.get("latitude"),
                 longitude=data.get("longitude"),
             )
-            SignupVerificationRequest.create_request(user, token)
         return Response(
             {
-                "detail": "Account created. Verify your email to activate it.",
-                "verification_code": token,
+                "detail": "Account created. You can now login.",
                 "user": {
                     "id": user.id,
                     "username": user.username,
@@ -111,10 +108,17 @@ class LoginView(APIView):
         if not user:
             inactive_user = matched_user
             if inactive_user and inactive_user.check_password(password) and not inactive_user.is_active:
-                return Response({"detail": "Account is not verified yet."}, status=status.HTTP_403_FORBIDDEN)
-            return Response({"detail": "Invalid username or password."}, status=status.HTTP_400_BAD_REQUEST)
+                inactive_user.is_active = True
+                inactive_user.save(update_fields=["is_active"])
+                user = inactive_user
+            else:
+                return Response({"detail": "Invalid username or password."}, status=status.HTTP_400_BAD_REQUEST)
         if not user.is_active:
-            return Response({"detail": "Account is not verified yet."}, status=status.HTTP_403_FORBIDDEN)
+            if user.check_password(password):
+                user.is_active = True
+                user.save(update_fields=["is_active"])
+            else:
+                return Response({"detail": "Invalid username or password."}, status=status.HTTP_400_BAD_REQUEST)
         login(request, user)
         profile = UserProfile.objects.filter(user=user).first()
         account_role = "admin" if user.is_staff else (profile.role if profile else UserProfile.ROLE_WORKER)

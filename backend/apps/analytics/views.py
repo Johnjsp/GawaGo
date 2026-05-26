@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User
-from django.db.models import Avg
+from django.db.models import Avg, Sum
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,8 +13,10 @@ class DashboardMetricsView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        open_job_slots = JobPosting.objects.filter(status=JobPosting.STATUS_OPEN).aggregate(total=Sum("worker_slots"))["total"] or 0
+
         data = {
-            "open_jobs": JobPosting.objects.filter(status=JobPosting.STATUS_OPEN).count(),
+            "open_jobs": open_job_slots,
             "verified_workers": UserProfile.objects.filter(role=UserProfile.ROLE_WORKER, verification_status="verified").count(),
             "completed_jobs": JobPosting.objects.filter(status=JobPosting.STATUS_COMPLETED).count(),
             "cancelled_jobs": JobPosting.objects.filter(status=JobPosting.STATUS_CANCELLED).count(),

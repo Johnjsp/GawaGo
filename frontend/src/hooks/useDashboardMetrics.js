@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getAuthToken } from "../api/apiClient";
 import { fetchDashboardMetrics } from "../services/backendDataService";
+import { getWorkersNeeded } from "../utils/jobUtils";
 
 export function useDashboardMetrics({ currentUser, postedJobs, registeredHouseholds, registeredWorkers }) {
   const [dashboardMetrics, setDashboardMetrics] = useState({
@@ -15,8 +16,12 @@ export function useDashboardMetrics({ currentUser, postedJobs, registeredHouseho
     let cancelled = false;
 
     function buildLocalMetrics() {
+      const openJobSlots = postedJobs
+        .filter((job) => job.status === "Open")
+        .reduce((total, job) => total + getWorkersNeeded(job), 0);
+
       return {
-        openJobs: postedJobs.filter((job) => job.status === "Open").length,
+        openJobs: openJobSlots,
         verifiedWorkers: registeredWorkers.filter((worker) => worker.verification === "Verified").length,
         completedJobs: postedJobs.filter((job) => job.status === "Completed").length,
         totalAccounts: registeredWorkers.length + registeredHouseholds.length,

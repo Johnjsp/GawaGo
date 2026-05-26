@@ -21,7 +21,7 @@ export default function ForgotPasswordView({
               <span className="badge rounded-pill text-bg-light text-primary me-2">GG</span>
               <span className="small fw-semibold">Password Reset</span>
             </div>
-            <div className="login-card mx-auto">
+            <div className="login-card password-reset-card mx-auto">
               <div className="login-card-head text-center">
                 <div className="login-avatar">GG</div>
                 <h2 className="h6 fw-bold mb-1">Reset your password</h2>

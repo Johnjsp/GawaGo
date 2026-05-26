@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { DashboardSidebar, DashboardTopbar } from "./DashboardLayout";
 import JobImageGallery from "./JobImageGallery";
 import LocationDistanceMap from "./LocationDistanceMap";
@@ -41,14 +41,51 @@ export default function WorkerJobDetailView({
   const workerLatitude = currentWorker?.latitude ?? null;
   const workerLongitude = currentWorker?.longitude ?? null;
   const jobDistanceKm = haversineDistanceKm(workerLatitude, workerLongitude, jobLatitude, jobLongitude);
-  const distanceLabel = formatDistance(jobDistanceKm);
+  const [routeDistanceKm, setRouteDistanceKm] = useState(null);
+  const distanceLabel = formatDistance(routeDistanceKm ?? jobDistanceKm);
   const canApply = currentWorker?.verification === "Verified";
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useEffect(() => {
+    setRouteDistanceKm(null);
+  }, [job?.id, currentWorker?.id, currentWorker?.username]);
+  useEffect(() => {
+    document.body.classList.toggle("gawago-mobile-menu-open", mobileMenuOpen);
+    return () => document.body.classList.remove("gawago-mobile-menu-open");
+  }, [mobileMenuOpen]);
+  useEffect(() => {
+    const handleMobileSidebarClick = (event) => {
+      const sidebarHead = event.target.closest(".worker-sidebar-head");
+      const sidebarAction = event.target.closest(".worker-nav-item, .worker-sidebar-logout");
+      if (!window.matchMedia("(max-width: 767px)").matches) {
+        return;
+      }
+      if (sidebarHead) {
+        sidebarHead.closest(".worker-sidebar")?.classList.toggle("mobile-menu-open");
+        return;
+      }
+      if (sidebarAction) {
+        sidebarAction.closest(".worker-sidebar")?.classList.remove("mobile-menu-open");
+      }
+    };
+    document.addEventListener("click", handleMobileSidebarClick);
+    return () => document.removeEventListener("click", handleMobileSidebarClick);
+  }, []);
   return (
     <div className="app-shell">
-      <header className="gawago-header sticky-top">
-        <nav className="container navbar navbar-expand-lg py-3 gawago-header-inner">
-          <span className="navbar-brand fw-bold text-decoration-none p-0 gawago-brand">GawaGo</span>
-        </nav>
+      <div className="mobile-sidebar-overlay" onClick={() => setMobileMenuOpen(false)} />
+      <header className="mobile-dashboard-topbar">
+        <button
+          type="button"
+          className={`mobile-burger-button ${mobileMenuOpen ? "open" : ""}`}
+          aria-label="Toggle navigation"
+          aria-expanded={mobileMenuOpen}
+          onClick={() => setMobileMenuOpen((open) => !open)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+        <span className="mobile-dashboard-title">GawaGo</span>
       </header>
       <main>
         <section className="worker-dashboard worker-job-detail-page">
@@ -80,6 +117,7 @@ export default function WorkerJobDetailView({
                 {
                   id: "verified",
                   label: "Get Verified",
+                  section: "Account",
                   onClick: openWorkerGetVerified,
                 },
                 {
@@ -212,6 +250,7 @@ export default function WorkerJobDetailView({
                         )}
                         distanceKm={jobDistanceKm}
                         formatDistanceFn={formatDistance}
+                        onRouteDistanceChange={setRouteDistanceKm}
                       />
                     </div>
                   </div>

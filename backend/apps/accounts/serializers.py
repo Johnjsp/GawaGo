@@ -1,8 +1,22 @@
 from django.contrib.auth.models import User
+import json
 from rest_framework import serializers
 
 from apps.accounts.models import PasswordResetRequest, SignupVerificationRequest, UserProfile
 from apps.common.serializers import VerificationRequestSerializer
+
+
+class FlexibleStringListField(serializers.ListField):
+    child = serializers.CharField()
+
+    def to_internal_value(self, data):
+        if isinstance(data, str):
+            try:
+                parsed = json.loads(data)
+            except json.JSONDecodeError:
+                parsed = [item.strip() for item in data.split(",") if item.strip()]
+            data = parsed
+        return super().to_internal_value(data)
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -12,6 +26,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     user_type = serializers.CharField(source="role", read_only=True)
     verification_request = serializers.SerializerMethodField()
+    profile_photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = UserProfile
@@ -33,6 +48,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "location_label",
             "latitude",
             "longitude",
+            "profile_photo",
+            "profile_photo_url",
             "average_rating",
             "rating_count",
             "display_rating",
@@ -49,6 +66,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return None
         return VerificationRequestSerializer(request_obj).data
 
+    def get_profile_photo_url(self, obj):
+        if not obj.profile_photo:
+            return ""
+        request = self.context.get("request")
+        url = obj.profile_photo.url
+        return request.build_absolute_uri(url) if request else url
+
 
 class RegisterSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
@@ -60,7 +84,7 @@ class RegisterSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
     bio = serializers.CharField(required=False, allow_blank=True)
     years_experience = serializers.IntegerField(required=False, min_value=0)
-    skills = serializers.ListField(child=serializers.CharField(), required=False)
+    skills = FlexibleStringListField(required=False)
     hourly_rate = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     daily_rate = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     location_label = serializers.CharField(required=False, allow_blank=True)
@@ -81,12 +105,13 @@ class ProfileUpdateSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
     bio = serializers.CharField(required=False, allow_blank=True)
     years_experience = serializers.IntegerField(required=False, min_value=0)
-    skills = serializers.ListField(child=serializers.CharField(), required=False)
+    skills = FlexibleStringListField(required=False)
     hourly_rate = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     daily_rate = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     location_label = serializers.CharField(required=False, allow_blank=True)
     latitude = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
     longitude = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
+    profile_photo = serializers.ImageField(required=False, allow_null=True)
 
 
 class ForgotPasswordRequestSerializer(serializers.Serializer):

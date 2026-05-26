@@ -97,6 +97,9 @@ export const OPENROUTESERVICE_SEARCH_URL =
   import.meta.env.VITE_OPENROUTESERVICE_SEARCH_URL || "https://api.openrouteservice.org/geocode/search";
 export const OPENROUTESERVICE_REVERSE_URL =
   import.meta.env.VITE_OPENROUTESERVICE_REVERSE_URL || "https://api.openrouteservice.org/geocode/reverse";
+export const OPENROUTESERVICE_DIRECTIONS_URL =
+  import.meta.env.VITE_OPENROUTESERVICE_DIRECTIONS_URL ||
+  "https://api.openrouteservice.org/v2/directions/driving-car/geojson";
 export const PHILIPPINES_MAP_CENTER = { latitude: 12.8797, longitude: 121.774 };
 export const PHILIPPINES_MAP_BOUNDS = {
   south: 4.5,

@@ -1,5 +1,6 @@
 import { sanitizePhilippinesPhone } from "../utils/formatters";
 import { readFileAsDataUrl } from "../utils/mediaUtils";
+import { normalizeBarangayName } from "../utils/locationUtils";
 
 export function useGawaGoFormHandlers({
   setHouseholdForm,
@@ -37,6 +38,15 @@ export function useGawaGoFormHandlers({
       }));
       return;
     }
+    if (name === "barangay") {
+      const barangay = normalizeBarangayName(value);
+      setWorkerForm((prev) => ({
+        ...prev,
+        barangay,
+        streetAddress: barangay && !prev.streetAddress ? `Barangay ${barangay}, Tayabas City` : prev.streetAddress,
+      }));
+      return;
+    }
     setWorkerForm((prev) => ({
       ...prev,
       [name]: value,
@@ -65,6 +75,7 @@ export function useGawaGoFormHandlers({
       if (!file) {
         setHouseholdProfileForm((prev) => ({
           ...prev,
+          profilePhotoFile: null,
           profilePhotoName: "",
           profilePhotoPreview: "",
         }));
@@ -72,12 +83,15 @@ export function useGawaGoFormHandlers({
       }
       setHouseholdProfileForm((prev) => ({
         ...prev,
+        profilePhotoFile: file,
         profilePhotoName: file.name,
+        profilePhotoPreview: "",
       }));
       readFileAsDataUrl(file)
         .then((preview) =>
           setHouseholdProfileForm((prev) => ({
             ...prev,
+            profilePhotoFile: file,
             profilePhotoName: file.name,
             profilePhotoPreview: preview,
           })),
@@ -129,14 +143,21 @@ export function useGawaGoFormHandlers({
       if (!file) {
         setWorkerProfileForm((prev) => ({
           ...prev,
+          profilePhotoFile: null,
           profilePhotoPreview: "",
         }));
         return;
       }
+      setWorkerProfileForm((prev) => ({
+        ...prev,
+        profilePhotoFile: file,
+        profilePhotoPreview: "",
+      }));
       readFileAsDataUrl(file)
         .then((preview) =>
           setWorkerProfileForm((prev) => ({
             ...prev,
+            profilePhotoFile: file,
             profilePhotoPreview: preview,
           })),
         )
@@ -146,10 +167,6 @@ export function useGawaGoFormHandlers({
             profilePhotoPreview: "",
           })),
         );
-      setWorkerProfileForm((prev) => ({
-        ...prev,
-        profilePhotoPreview: "",
-      }));
       return;
     }
     setWorkerProfileForm((prev) => ({

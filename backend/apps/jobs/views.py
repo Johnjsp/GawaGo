@@ -38,6 +38,11 @@ class JobViewSet(viewsets.ModelViewSet):
     ).order_by("-created_at")
     serializer_class = JobPostingSerializer
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
     def get_queryset(self):
         queryset = super().get_queryset()
         params = self.request.query_params
@@ -93,7 +98,7 @@ class JobViewSet(viewsets.ModelViewSet):
         )
         for index, image_file in enumerate(image_files):
             JobImage.objects.create(job=job, image=image_file, order=index)
-        return Response(JobPostingSerializer(job).data, status=status.HTTP_201_CREATED)
+        return Response(JobPostingSerializer(job, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
     def perform_update(self, serializer):
         actor_username = self.request.user.username if self.request.user.is_authenticated else self.request.data.get("household_username") or self.request.query_params.get("household_username")

@@ -113,6 +113,7 @@ export function normalizeBackendWorker(currentUser) {
     distanceKm: "0.00",
     latitude: profile.latitude ?? currentUser.latitude ?? null,
     longitude: profile.longitude ?? currentUser.longitude ?? null,
+    profilePhotoPreview: profile.profile_photo_url || profile.profile_photo || currentUser.profilePhotoPreview || "",
     avatar: (currentUser.displayName || currentUser.username || "W").slice(0, 1).toUpperCase(),
     receivedReviews: [],
     givenFeedback: [],
@@ -160,6 +161,8 @@ export function normalizeProfileRecord(profile) {
     barangay: locationParts.barangay,
     streetAddress: locationParts.streetAddress,
     bio: profile.bio || "",
+    profilePhotoName: profile.profile_photo ? String(profile.profile_photo).split("/").pop() : "",
+    profilePhotoPreview: profile.profile_photo_url || profile.profile_photo || "",
     skills: profile.skills || [],
     hourlyRate: profile.hourly_rate || "0.00",
     dailyRate: profile.daily_rate || "0.00",
@@ -169,6 +172,7 @@ export function normalizeProfileRecord(profile) {
     reviewsDone: profile.rating_count || 0,
     latitude: profile.latitude,
     longitude: profile.longitude,
+    profilePhotoPreview: profile.profile_photo_url || profile.profile_photo || "",
     role: profile.role || profile.user_type || "worker",
   };
 }
@@ -252,7 +256,7 @@ export function normalizeBackendJob(job) {
   const parsedLocation = parseLocationLabel(job.location_label || job.locationLabel || job.barangay || "");
   const images = (job.images || []).map((image) => ({
     id: image.id,
-    image: image.image,
+    image: image.image_url || image.image,
     uploadedAt: image.uploaded_at || image.uploadedAt || "",
     order: image.order ?? 0,
   }));

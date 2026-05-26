@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.core.mail import BadHeaderError
 from django.db import transaction
 from rest_framework import generics, status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -35,6 +36,11 @@ def generate_token() -> str:
 class UserProfileListView(generics.ListAPIView):
     queryset = UserProfile.objects.select_related("user").all()
     serializer_class = UserProfileSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
 
 
 class RegisterView(APIView):
@@ -85,7 +91,7 @@ class RegisterView(APIView):
                     "first_name": user.first_name,
                     "last_name": user.last_name,
                 },
-                "profile": UserProfileSerializer(profile).data,
+                "profile": UserProfileSerializer(profile, context={"request": request}).data,
             },
             status=status.HTTP_201_CREATED,
         )
@@ -131,7 +137,7 @@ class LoginView(APIView):
                 "display_name": user.get_full_name() or user.username,
                 "role": account_role,
                 "is_staff": user.is_staff,
-                "profile": UserProfileSerializer(profile).data if profile else None,
+                "profile": UserProfileSerializer(profile, context={"request": request}).data if profile else None,
             }
         )
 
@@ -223,6 +229,7 @@ class LogoutView(APIView):
 
 class MeProfileView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get(self, request):
         profile, _ = UserProfile.objects.get_or_create(user=request.user, defaults={"role": UserProfile.ROLE_WORKER})
@@ -235,7 +242,7 @@ class MeProfileView(APIView):
                     "first_name": request.user.first_name,
                     "last_name": request.user.last_name,
                 },
-                "profile": UserProfileSerializer(profile).data,
+                "profile": UserProfileSerializer(profile, context={"request": request}).data,
             }
         )
 
@@ -253,7 +260,7 @@ class MeProfileView(APIView):
             user.email = serializer.validated_data["email"].strip().lower()
         user.save()
 
-        for field in ["role", "phone", "bio", "years_experience", "skills", "hourly_rate", "daily_rate", "location_label", "latitude", "longitude"]:
+        for field in ["role", "phone", "bio", "years_experience", "skills", "hourly_rate", "daily_rate", "location_label", "latitude", "longitude", "profile_photo"]:
             if field in serializer.validated_data:
                 setattr(profile, field, serializer.validated_data[field])
         profile.save()
@@ -266,5 +273,5 @@ class MeProfileView(APIView):
                 "first_name": user.first_name,
                 "last_name": user.last_name,
             },
-            "profile": UserProfileSerializer(profile).data,
+            "profile": UserProfileSerializer(profile, context={"request": request}).data,
         })

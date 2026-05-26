@@ -1,3 +1,15 @@
+import { BARANGAY_CENTERS } from "../constants/appConstants";
+import { getBarangayCenter, normalizeBarangayName } from "../utils/locationUtils";
+
+function getBarangayCenterCoordinates(barangay) {
+  const normalizedBarangay = normalizeBarangayName(barangay);
+  const center = BARANGAY_CENTERS[normalizedBarangay] || getBarangayCenter(normalizedBarangay);
+  return {
+    latitude: center?.latitude ?? null,
+    longitude: center?.longitude ?? null,
+  };
+}
+
 export function useGawaGoActions({
   EMPTY_HOUSEHOLD_FORM,
   EMPTY_HOUSEHOLD_REVIEW_FORM,
@@ -577,7 +589,16 @@ export function useGawaGoActions({
     }
     (async () => {
       try {
-        const resolvedLocation = await resolveLocationCoordinates(workerForm.barangay, workerForm.streetAddress, false);
+        let resolvedLocation = null;
+        try {
+          resolvedLocation = await resolveLocationCoordinates(workerForm.barangay, workerForm.streetAddress, false);
+        } catch {
+          resolvedLocation = null;
+        }
+        const normalizedBarangay = normalizeBarangayName(workerForm.barangay);
+        const barangayCoordinates = getBarangayCenterCoordinates(normalizedBarangay);
+        const workerLatitude = resolvedLocation?.latitude ?? barangayCoordinates.latitude;
+        const workerLongitude = resolvedLocation?.longitude ?? barangayCoordinates.longitude;
         const response = await apiRequest("accounts/register/", {
           method: "POST",
           auth: false,
@@ -601,8 +622,8 @@ export function useGawaGoActions({
             daily_rate: workerForm.dailyRate,
             location_label:
               resolvedLocation?.locationLabel || formatLocation(workerForm.barangay, workerForm.streetAddress),
-            latitude: resolvedLocation?.latitude ?? null,
-            longitude: resolvedLocation?.longitude ?? null,
+            latitude: workerLatitude,
+            longitude: workerLongitude,
           },
         });
         const data = await readResponseData(response);
@@ -628,8 +649,9 @@ export function useGawaGoActions({
           reviewsDone: 0,
           status: "Available",
           distanceKm: "0.00",
-          latitude: resolvedLocation?.latitude ?? null,
-          longitude: resolvedLocation?.longitude ?? null,
+          barangay: normalizedBarangay,
+          latitude: workerLatitude,
+          longitude: workerLongitude,
           avatar: (workerForm.firstName || workerForm.username || "W").slice(0, 1).toUpperCase(),
           receivedReviews: [],
           givenFeedback: [],
@@ -637,7 +659,15 @@ export function useGawaGoActions({
           applicationNotifications: [],
         };
         setRegisteredWorkers((prev) => [
-          backendWorker || workerAccount,
+          backendWorker
+            ? {
+                ...backendWorker,
+                barangay: normalizedBarangay,
+                streetAddress: workerForm.streetAddress,
+                latitude: workerLatitude,
+                longitude: workerLongitude,
+              }
+            : workerAccount,
           ...prev.filter((item) => item.username?.toLowerCase() !== workerAccount.username.toLowerCase()),
         ]);
         setWorkerForm(EMPTY_WORKER_FORM);
@@ -745,48 +775,65 @@ export function useGawaGoActions({
       return;
     }
     (async () => {
-      const resolvedLocation = await resolveLocationCoordinates(
-        workerProfileForm.barangay,
-        workerProfileForm.streetAddress,
-        false,
-      );
+      let resolvedLocation = null;
+      try {
+        resolvedLocation = await resolveLocationCoordinates(
+          workerProfileForm.barangay,
+          workerProfileForm.streetAddress,
+          false,
+        );
+      } catch {
+        resolvedLocation = null;
+      }
+      const normalizedBarangay = normalizeBarangayName(workerProfileForm.barangay);
+      const barangayCoordinates = getBarangayCenterCoordinates(normalizedBarangay);
+      const workerLatitude = resolvedLocation?.latitude ?? barangayCoordinates.latitude;
+      const workerLongitude = resolvedLocation?.longitude ?? barangayCoordinates.longitude;
       const nextWorkerPatch = {
         firstName: workerProfileForm.firstName,
         lastName: workerProfileForm.lastName,
         email: workerProfileForm.email,
         phone: workerProfileForm.phone,
-        barangay: workerProfileForm.barangay,
+        barangay: normalizedBarangay,
         streetAddress: workerProfileForm.streetAddress,
         bio: workerProfileForm.bio,
         hourlyRate: workerProfileForm.hourlyRate,
         dailyRate: workerProfileForm.dailyRate,
         yearsExperience: workerProfileForm.yearsExperience,
         skills: workerProfileForm.skills,
-        latitude: resolvedLocation?.latitude ?? currentWorker?.latitude ?? null,
-        longitude: resolvedLocation?.longitude ?? currentWorker?.longitude ?? null,
+        latitude: workerLatitude,
+        longitude: workerLongitude,
       };
       try {
         if (getAuthToken()) {
+          const profilePayload = {
+            first_name: workerProfileForm.firstName,
+            last_name: workerProfileForm.lastName,
+            email: workerProfileForm.email,
+            phone: workerProfileForm.phone,
+            bio: workerProfileForm.bio,
+            years_experience: Number(workerProfileForm.yearsExperience || 0),
+            role: "worker",
+            skills: workerProfileForm.skills,
+            hourly_rate: workerProfileForm.hourlyRate,
+            daily_rate: workerProfileForm.dailyRate,
+            location_label:
+              resolvedLocation?.locationLabel ||
+              formatLocation(workerProfileForm.barangay, workerProfileForm.streetAddress),
+            latitude: nextWorkerPatch.latitude,
+            longitude: nextWorkerPatch.longitude,
+          };
+          const requestBody = workerProfileForm.profilePhotoFile ? new FormData() : profilePayload;
+          if (requestBody instanceof FormData) {
+            Object.entries(profilePayload).forEach(([key, value]) => {
+              requestBody.append(key, key === "skills" ? JSON.stringify(value || []) : value ?? "");
+            });
+            requestBody.append("profile_photo", workerProfileForm.profilePhotoFile);
+          }
           const response = await apiRequest("accounts/me/", {
             method: "PATCH",
             auth: true,
-            body: {
-              first_name: workerProfileForm.firstName,
-              last_name: workerProfileForm.lastName,
-              email: workerProfileForm.email,
-              phone: workerProfileForm.phone,
-              bio: workerProfileForm.bio,
-              years_experience: Number(workerProfileForm.yearsExperience || 0),
-              role: "worker",
-              skills: workerProfileForm.skills,
-              hourly_rate: workerProfileForm.hourlyRate,
-              daily_rate: workerProfileForm.dailyRate,
-              location_label:
-                resolvedLocation?.locationLabel ||
-                formatLocation(workerProfileForm.barangay, workerProfileForm.streetAddress),
-              latitude: nextWorkerPatch.latitude,
-              longitude: nextWorkerPatch.longitude,
-            },
+            body: requestBody,
           });
           const data = await readResponseData(response);
           if (!response.ok) {
@@ -802,10 +849,15 @@ export function useGawaGoActions({
             profile: data?.profile,
           });
           if (backendWorker) {
+            const savedProfilePhoto = backendWorker.profilePhotoPreview || workerProfileForm.profilePhotoPreview || "";
             mergeBackendWorkerIntoState({
               ...backendWorker,
-              profilePhotoPreview: workerProfileForm.profilePhotoPreview || backendWorker.profilePhotoPreview || "",
+              barangay: workerProfileForm.barangay,
+              latitude: nextWorkerPatch.latitude,
+              longitude: nextWorkerPatch.longitude,
+              profilePhotoPreview: savedProfilePhoto,
             });
+            nextWorkerPatch.profilePhotoPreview = savedProfilePhoto;
           }
         }
         setRegisteredWorkers((prev) =>
@@ -816,7 +868,7 @@ export function useGawaGoActions({
             return {
               ...item,
               ...nextWorkerPatch,
-              profilePhotoPreview: workerProfileForm.profilePhotoPreview || item.profilePhotoPreview || "",
+              profilePhotoPreview: nextWorkerPatch.profilePhotoPreview || workerProfileForm.profilePhotoPreview || item.profilePhotoPreview || "",
               receivedReviews: item.receivedReviews || [],
               givenFeedback: item.givenFeedback || [],
             };
@@ -845,6 +897,7 @@ export function useGawaGoActions({
                     formatLocation(workerProfileForm.barangay, workerProfileForm.streetAddress),
                   latitude: nextWorkerPatch.latitude,
                   longitude: nextWorkerPatch.longitude,
+                  profile_photo_url: nextWorkerPatch.profilePhotoPreview || prev.profile.profile_photo_url || "",
                 }
               : prev.profile,
           };
@@ -964,6 +1017,42 @@ export function useGawaGoActions({
       window.alert("No household account is currently logged in.");
       return;
     }
+    (async () => {
+      let savedProfilePhoto = householdProfileForm.profilePhotoPreview || "";
+      try {
+        if (getAuthToken()) {
+          const profilePayload = {
+            first_name: householdProfileForm.firstName,
+            last_name: householdProfileForm.lastName,
+            email: householdProfileForm.email,
+            phone: householdProfileForm.phone,
+            role: "household",
+            location_label: formatLocation(householdProfileForm.barangay, householdProfileForm.streetAddress),
+          };
+          const requestBody = householdProfileForm.profilePhotoFile ? new FormData() : profilePayload;
+          if (requestBody instanceof FormData) {
+            Object.entries(profilePayload).forEach(([key, value]) => requestBody.append(key, value ?? ""));
+            requestBody.append("profile_photo", householdProfileForm.profilePhotoFile);
+          }
+          const response = await apiRequest("accounts/me/", {
+            method: "PATCH",
+            auth: true,
+            body: requestBody,
+          });
+          const data = await readResponseData(response);
+          if (!response.ok) {
+            throw new Error(getApiErrorMessage(data, "Unable to update household profile."));
+          }
+          savedProfilePhoto =
+            data?.profile?.profile_photo_url ||
+            data?.profile?.profile_photo ||
+            householdProfileForm.profilePhotoPreview ||
+            "";
+        }
+      } catch (error) {
+        window.alert(error.message || "Unable to save household profile photo.");
+        return;
+      }
     setRegisteredHouseholds((prev) =>
       prev.map((item) => {
         if (item.username !== currentUser.username) {
@@ -978,7 +1067,7 @@ export function useGawaGoActions({
           barangay: householdProfileForm.barangay,
           streetAddress: householdProfileForm.streetAddress,
           profilePhotoName: householdProfileForm.profilePhotoName || item.profilePhotoName || "",
-          profilePhotoPreview: householdProfileForm.profilePhotoPreview || item.profilePhotoPreview || "",
+          profilePhotoPreview: savedProfilePhoto || item.profilePhotoPreview || "",
           receivedFeedback: item.receivedFeedback || [],
         };
       }),
@@ -998,6 +1087,7 @@ export function useGawaGoActions({
           ? {
               ...prev.profile,
               location_label: formatLocation(householdProfileForm.barangay, householdProfileForm.streetAddress),
+              profile_photo_url: savedProfilePhoto || prev.profile.profile_photo_url || "",
             }
           : prev.profile,
       };
@@ -1018,6 +1108,7 @@ export function useGawaGoActions({
       }),
     );
     window.alert("Household profile updated.");
+    })();
   }
   function handleCancelJob(jobId) {
     const job = postedJobs.find((item) => item.id === jobId);
@@ -1112,13 +1203,48 @@ export function useGawaGoActions({
     const review = normalizeReview({
       id: `review-${Date.now()}`,
       authorRole: "household",
+      authorUsername: currentHousehold.username,
       authorName: getDisplayName(currentHousehold.firstName, currentHousehold.lastName, currentHousehold.username),
+      targetUsername: selectedWorker.username || selectedWorker.workerUsername || "",
       targetName: getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username),
       rating: Number(householdReviewForm.rating),
       feedback: householdReviewForm.feedback.trim(),
       jobTitle: selectedJob?.jobTitle || selectedJob?.serviceType || "",
       createdAt: new Date().toLocaleString("en-PH"),
     });
+    if (!review.rating) {
+      window.alert("Please select a star rating first.");
+      return;
+    }
+    let householdReviewAppliedLocally = false;
+    const applyHouseholdReviewLocally = () => {
+      if (householdReviewAppliedLocally) {
+        return;
+      }
+      householdReviewAppliedLocally = true;
+      setRegisteredWorkers((prev) =>
+        prev.map((worker) =>
+          String(worker.id) === String(selectedWorker.id) || worker.username === review.targetUsername
+            ? {
+                ...worker,
+                receivedReviews: [...(worker.receivedReviews || []), review],
+                rating: review.rating || worker.rating,
+                reviewsDone: (worker.reviewsDone || 0) + 1,
+              }
+            : worker,
+        ),
+      );
+      setRegisteredHouseholds((prev) =>
+        prev.map((household) =>
+          household.username === (currentHousehold.username || currentUser.username)
+            ? {
+                ...household,
+                givenFeedback: [...(household.givenFeedback || []), review],
+              }
+            : household,
+        ),
+      );
+    };
     (async () => {
       try {
         const response = await apiRequest("reviews/", {
@@ -1136,33 +1262,13 @@ export function useGawaGoActions({
         if (!response.ok) {
           throw new Error(getApiErrorMessage(data, "Unable to submit review."));
         }
+        applyHouseholdReviewLocally();
         setHouseholdReviewForm(EMPTY_HOUSEHOLD_REVIEW_FORM);
         await refreshReviewsFromBackend();
         await refreshNotificationsFromBackend();
         window.alert("Review submitted for the worker.");
       } catch (error) {
-        setRegisteredWorkers((prev) =>
-          prev.map((worker) =>
-            worker.id === selectedWorker.id
-              ? {
-                  ...worker,
-                  receivedReviews: [...(worker.receivedReviews || []), review],
-                  rating: review.rating || worker.rating,
-                  reviewsDone: (worker.reviewsDone || 0) + 1,
-                }
-              : worker,
-          ),
-        );
-        setRegisteredHouseholds((prev) =>
-          prev.map((household) =>
-            household.username === currentUser.username
-              ? {
-                  ...household,
-                  givenFeedback: [...(household.givenFeedback || []), review],
-                }
-              : household,
-          ),
-        );
+        applyHouseholdReviewLocally();
         setHouseholdReviewForm(EMPTY_HOUSEHOLD_REVIEW_FORM);
         window.alert(error.message || "Review submitted locally.");
       }

@@ -1,16 +1,37 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap");
+
 :root {
-  --gg-primary: #2e5bff;
-  --gg-primary-strong: #1439d6;
-  --gg-bg: #07152f;
-  --gg-soft: #0e214a;
-  --gg-dark: #f7f9ff;
-  --gg-dark-2: #dbe5ff;
-  --gg-dark-3: #9bb0e8;
-  --gg-accent: #88c6ff;
-  --gg-accent-2: #c7d3ff;
-  --gg-text: #f5f7ff;
-  --gg-brand-start: #1f48dd;
-  --gg-brand-end: #2f6bff;
+  --gg-primary: #4caf74;
+  --gg-primary-strong: #2d7a4f;
+  --gg-bg: #f5f0e8;
+  --gg-soft: #ffffff;
+  --gg-dark: #1a2a1e;
+  --gg-dark-2: #4a5e4f;
+  --gg-dark-3: #8a9e8f;
+  --gg-accent: #4caf74;
+  --gg-accent-2: #e8f5e9;
+  --gg-text: #1a2a1e;
+  --gg-brand-start: #0f2d1f;
+  --gg-brand-end: #1a4a2e;
+  --gg-tayabas-navy: #0f2d1f;
+  --gg-tayabas-blue: #1a4a2e;
+  --gg-tayabas-red: #ff8a80;
+  --gg-tayabas-gold: #f0c040;
+  --gg-tayabas-green: #4caf74;
+  --gg-tayabas-green-strong: #2d7a4f;
+  --gg-tayabas-bg: #f5f0e8;
+  --gg-tayabas-surface: #ffffff;
+  --gg-tayabas-header: #e8f5e9;
+  --gg-tayabas-border: #e0d8cc;
+  --gg-tayabas-input: #f5f0e8;
+  --gg-sidebar-bg: #0f2d1f;
+  --gg-sidebar-active: #1a4a2e;
+  --gg-sidebar-border: #1f4030;
+  --gg-sidebar-text: #a5c9b0;
+  --gg-gold-bg: #fff8e1;
+  --gg-gold-text: #7a5200;
+  --gg-logout-bg: #1f0a0a;
+  --gg-logout-border: #4a1515;
 }
 
 body {
@@ -308,6 +329,921 @@ body {
   padding: 0 0.15rem;
 }
 
+/* Homepage sample.html refresh */
+.home-landing-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 100;
+  min-height: 64px;
+  height: 64px;
+  padding: 0 48px;
+  background: rgba(11, 36, 24, 0.85);
+  border-bottom: 1px solid rgba(76, 175, 116, 0.15);
+  backdrop-filter: blur(12px);
+}
+
+.home-landing-brand {
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.home-landing-brand span {
+  color: #4caf74;
+}
+
+.home-landing-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-landing-signin,
+.home-landing-signup {
+  min-width: 0;
+  padding: 9px 22px;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  color: #ffffff;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.home-landing-signin:hover,
+.home-landing-signin:focus-visible,
+.home-landing-signup:hover,
+.home-landing-signup:focus-visible {
+  border-color: #4caf74;
+  background: rgba(76, 175, 116, 0.08);
+  color: #ffffff;
+}
+
+.home-landing-signup {
+  border-color: #4caf74;
+  background: #4caf74;
+}
+
+.home-landing-signup:hover,
+.home-landing-signup:focus-visible {
+  background: #3d9e63;
+}
+
+.hero-section.hero-dark {
+  min-height: 100vh;
+  padding: 100px 48px 64px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  background: #0f2d1f;
+}
+
+.hero-section.hero-dark::before {
+  content: "";
+  position: absolute;
+  top: -120px;
+  left: -80px;
+  width: 700px;
+  height: 700px;
+  background: radial-gradient(circle, rgba(26, 74, 46, 0.7) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-section.hero-dark::after {
+  content: "";
+  position: absolute;
+  right: 200px;
+  bottom: -100px;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(76, 175, 116, 0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-fullscreen {
+  min-height: 100vh;
+}
+
+.hero-inner {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.home-landing-grid,
+.home-landing-grid.with-login {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 60px;
+}
+
+.home-landing-grid.with-login {
+  grid-template-columns: minmax(420px, 0.95fr) minmax(600px, 690px);
+  gap: 96px;
+}
+
+.hero-copy {
+  max-width: 600px;
+}
+
+.home-landing-grid.with-login .hero-copy {
+  max-width: 600px;
+}
+
+.hero-kicker {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 24px !important;
+  padding: 5px 14px;
+  border: 1px solid rgba(76, 175, 116, 0.3);
+  border-radius: 20px;
+  background: rgba(76, 175, 116, 0.12);
+  color: #4caf74;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.eyebrow-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4caf74;
+  animation: homePulse 2s ease-in-out infinite;
+}
+
+@keyframes homePulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.7);
+  }
+}
+
+.worker-nav-section,
+.household-dashboard-wireframe .worker-nav-section,
+.superadmin-dashboard .worker-nav-section {
+  display: block !important;
+  padding: 14px 18px 6px !important;
+  color: rgba(255, 255, 255, 0.28) !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 1px !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+}
+
+.worker-sidebar-logout,
+.household-dashboard-wireframe .worker-sidebar-logout,
+.superadmin-dashboard .worker-sidebar-logout {
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  min-height: 44px !important;
+  border: 1px solid rgba(220, 80, 80, 0.24) !important;
+  border-radius: 8px !important;
+  background: rgba(180, 50, 50, 0.15) !important;
+  color: #ff9a9a !important;
+  text-align: left !important;
+  font-weight: 800 !important;
+}
+
+.worker-sidebar-logout:hover,
+.worker-sidebar-logout:focus-visible,
+.household-dashboard-wireframe .worker-sidebar-logout:hover,
+.household-dashboard-wireframe .worker-sidebar-logout:focus-visible,
+.superadmin-dashboard .worker-sidebar-logout:hover,
+.superadmin-dashboard .worker-sidebar-logout:focus-visible {
+  border-color: rgba(255, 120, 120, 0.34) !important;
+  background: rgba(180, 50, 50, 0.25) !important;
+  color: #ffffff !important;
+}
+
+.worker-nav-section,
+.household-dashboard-wireframe .worker-nav-section,
+.superadmin-dashboard .worker-nav-section {
+  display: block !important;
+  padding: 14px 18px 6px !important;
+  color: rgba(255, 255, 255, 0.28) !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 1px !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+}
+
+.worker-sidebar-logout,
+.household-dashboard-wireframe .worker-sidebar-logout,
+.superadmin-dashboard .worker-sidebar-logout {
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  min-height: 44px !important;
+  border: 1px solid rgba(220, 80, 80, 0.24) !important;
+  border-radius: 8px !important;
+  background: rgba(180, 50, 50, 0.15) !important;
+  color: #ff9a9a !important;
+  text-align: left !important;
+  font-weight: 800 !important;
+}
+
+.worker-sidebar-logout:hover,
+.worker-sidebar-logout:focus-visible,
+.household-dashboard-wireframe .worker-sidebar-logout:hover,
+.household-dashboard-wireframe .worker-sidebar-logout:focus-visible,
+.superadmin-dashboard .worker-sidebar-logout:hover,
+.superadmin-dashboard .worker-sidebar-logout:focus-visible {
+  border-color: rgba(255, 120, 120, 0.34) !important;
+  background: rgba(180, 50, 50, 0.25) !important;
+  color: #ffffff !important;
+}
+
+.hero-title,
+.home-landing-grid.with-login .hero-title {
+  max-width: 12ch;
+  margin-bottom: 20px !important;
+  color: #ffffff;
+  font-size: clamp(42px, 5.5vw, 72px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  text-shadow: none;
+}
+
+.hero-title span {
+  color: #4caf74;
+}
+
+.hero-subtitle {
+  max-width: 480px;
+  margin-bottom: 36px !important;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.hero-primary-btn {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  padding: 14px 30px;
+  border: 0;
+  border-radius: 10px;
+  background: #4caf74;
+  color: #ffffff;
+  box-shadow: none;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: default;
+  pointer-events: none;
+}
+
+.hero-primary-btn::after,
+.hero-secondary-btn::after {
+  content: "";
+  position: absolute;
+  inset: -40% auto -40% -80%;
+  width: 65%;
+  background: linear-gradient(100deg, transparent, rgba(255, 248, 225, 0.45), transparent);
+  transform: skewX(-18deg);
+  animation: homeButtonSweep 3.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.hero-primary-btn:hover,
+.hero-primary-btn:focus-visible {
+  background: #4caf74;
+  transform: none;
+}
+
+.hero-secondary-btn {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  padding: 13px 28px;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  border-radius: 10px;
+  background: transparent;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: default;
+  pointer-events: none;
+}
+
+.hero-secondary-btn::after {
+  background: linear-gradient(100deg, transparent, rgba(76, 175, 116, 0.36), transparent);
+  animation-delay: 0.45s;
+}
+
+@keyframes homeButtonSweep {
+  0%,
+  42% {
+    left: -80%;
+  }
+  68%,
+  100% {
+    left: 125%;
+  }
+}
+
+.hero-secondary-btn:hover,
+.hero-secondary-btn:focus-visible {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: transparent;
+  color: #ffffff;
+}
+
+.hero-snapshot {
+  max-width: none;
+}
+
+.hero-snapshot-card {
+  width: min(100%, 560px);
+  min-width: 500px;
+  min-height: 290px;
+  padding: 34px 44px 30px;
+  overflow: hidden;
+  border: 1px solid rgba(76, 175, 116, 0.25);
+  border-radius: 20px;
+  background: rgba(11, 36, 24, 0.85);
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+}
+
+.hero-snapshot-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #4caf74, transparent);
+}
+
+.hero-snapshot-badge {
+  gap: 6px;
+  margin-bottom: 22px;
+  padding: 8px 16px;
+  border: 1px solid rgba(76, 175, 116, 0.3);
+  border-radius: 20px;
+  background: rgba(76, 175, 116, 0.15);
+  color: #4caf74;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hero-snapshot-badge::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4caf74;
+  animation: homePulse 1.5s ease-in-out infinite;
+}
+
+.hero-snapshot-label {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 15px;
+}
+
+.hero-snapshot-value {
+  margin-bottom: 8px !important;
+  color: #ffffff;
+  font-size: 76px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.hero-snapshot-note {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 15px;
+}
+
+.hero-snapshot-divider {
+  border: 0;
+  border-top: 1px solid rgba(76, 175, 116, 0.15);
+  margin: 22px 0;
+}
+
+.hero-snapshot-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.hero-snapshot-mini-grid strong {
+  display: block;
+  color: #ffffff;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.hero-snapshot-mini-grid span {
+  display: block;
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+}
+
+.home-login-card {
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+  color: #ffffff;
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+  padding: 36px;
+  width: min(100%, 690px);
+  justify-self: end;
+  transform: translateX(90px);
+}
+
+.home-login-card h2 {
+  color: #ffffff;
+}
+
+.home-role-heading {
+  text-align: center;
+}
+
+.home-role-heading h2 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 32px;
+}
+
+.home-auth-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 5px;
+  margin-bottom: 22px;
+  border: 1px solid rgba(76, 175, 116, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.home-auth-switch button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 800;
+}
+
+.home-auth-switch button.active {
+  background: #4caf74;
+  color: #ffffff;
+}
+
+.home-login-card p,
+.home-login-register {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.home-role-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 22px;
+  width: 100%;
+}
+
+.home-role-card {
+  min-height: 112px;
+  padding: 16px;
+  border: 1px solid rgba(76, 175, 116, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+  text-align: left;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.home-role-choice-grid {
+  gap: 14px;
+  margin-bottom: 0;
+  margin-top: 0;
+  transform: translateX(160px);
+}
+
+.home-role-choice-card {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "art"
+    "title"
+    "copy"
+    "action";
+  align-items: center;
+  justify-items: center;
+  overflow: hidden;
+  min-height: 340px;
+  padding: 30px 26px 28px;
+  border-color: rgba(76, 175, 116, 0.28);
+  border-radius: 14px;
+  background: #f3efe5;
+  color: #123a28;
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
+}
+
+.home-role-choice-card strong,
+.home-role-choice-card small,
+.home-role-choice-card .home-role-action {
+  align-self: center;
+}
+
+.home-role-choice-card:hover,
+.home-role-choice-card:focus-visible {
+  border-color: #4caf74;
+  background: #f8f4ea;
+  transform: translateY(-2px);
+}
+
+.home-role-choice-card strong {
+  display: block;
+  grid-area: title;
+  margin-top: 0;
+  color: #10251a;
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.home-role-choice-card small {
+  display: block;
+  grid-area: copy;
+  min-height: 0;
+  margin: 6px 0 12px;
+  color: #385042;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.home-role-action {
+  grid-area: action;
+  width: min(100%, 190px);
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: 8px;
+  background: #4caf74;
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.home-role-illustration {
+  grid-area: art;
+  position: relative;
+  display: block;
+  width: 170px;
+  height: 138px;
+  margin: 0 auto 10px;
+}
+
+.home-role-illustration::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  width: 150px;
+  height: 88px;
+  border-radius: 55% 45% 48% 52%;
+  background: #dfe9f1;
+  transform: translateX(-50%);
+}
+
+.home-role-illustration i,
+.home-role-illustration b,
+.home-role-illustration em {
+  position: absolute;
+  display: block;
+  font-style: normal;
+}
+
+.household-illustration i {
+  left: calc(50% - 48px);
+  bottom: 35px;
+  width: 66px;
+  height: 48px;
+  border-radius: 24px 24px 16px 16px;
+  background: #ff9858;
+  transform: rotate(-8deg);
+}
+
+.household-illustration b {
+  left: calc(50% - 6px);
+  bottom: 50px;
+  width: 34px;
+  height: 42px;
+  border-radius: 45% 45% 50% 50%;
+  background: #08365b;
+}
+
+.household-illustration em {
+  left: calc(50% - 70px);
+  bottom: 18px;
+  width: 140px;
+  height: 34px;
+  border-radius: 100px 100px 22px 22px;
+  background: #31bea1;
+}
+
+.worker-illustration i {
+  left: calc(50% - 42px);
+  bottom: 28px;
+  width: 84px;
+  height: 56px;
+  border-radius: 22px 22px 10px 10px;
+  background: #ff9858;
+}
+
+.worker-illustration b {
+  left: calc(50% - 28px);
+  bottom: 78px;
+  width: 56px;
+  height: 62px;
+  border-radius: 50% 50% 44% 44%;
+  background: #08365b;
+}
+
+.worker-illustration em {
+  left: calc(50% - 64px);
+  bottom: 18px;
+  width: 128px;
+  height: 42px;
+  border-radius: 8px 8px 42px 42px;
+  background: #f2f5f7;
+  border-bottom: 10px solid #b97562;
+}
+
+.home-login-form-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: start;
+  margin-bottom: 20px;
+}
+
+.home-login-card form {
+  width: min(100%, 460px);
+  margin-inline: auto;
+  padding: 42px 34px 46px;
+  border: 1px solid rgba(76, 175, 116, 0.25);
+  border-radius: 20px;
+  background: rgba(11, 36, 24, 0.92);
+  backdrop-filter: blur(8px);
+  transform: translateX(160px);
+}
+
+.home-login-form-head button {
+  border: 1px solid rgba(76, 175, 116, 0.35);
+  border-radius: 999px;
+  background: rgba(76, 175, 116, 0.12);
+  color: #4caf74;
+  font-weight: 800;
+  padding: 6px 12px;
+}
+
+.home-login-form-head h2 {
+  margin: 0 0 4px;
+  font-size: 24px;
+}
+
+.home-login-form-head p {
+  margin: 0;
+}
+
+.home-role-card:hover,
+.home-role-card.selected {
+  border-color: rgba(76, 175, 116, 0.85);
+  background: rgba(76, 175, 116, 0.18);
+}
+
+.home-role-card.selected {
+  box-shadow: inset 0 0 0 1px rgba(76, 175, 116, 0.45);
+}
+
+.home-role-card span {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 900;
+}
+
+.home-role-card small {
+  display: block;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.home-role-choice-card:hover,
+.home-role-choice-card:focus-visible {
+  border-color: #4caf74;
+  background: #f8f4ea;
+  transform: translateY(-2px);
+}
+
+.home-role-choice-card small {
+  min-height: 0;
+  margin: 6px 0 12px;
+  color: #385042;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.home-role-choice-card .home-role-action {
+  grid-area: action;
+  width: min(100%, 190px);
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-bottom: 0;
+  border-radius: 8px;
+  background: #4caf74;
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.home-login-card .form-label {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.home-login-card .form-control,
+.home-login-card .form-select {
+  min-height: 46px;
+  border-color: rgba(76, 175, 116, 0.25);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.home-login-card .form-control::placeholder {
+  color: rgba(17, 48, 33, 0.58);
+  opacity: 1;
+}
+
+.home-login-card .form-select option {
+  color: #1a2a1e;
+}
+
+.home-login-register button,
+.home-login-card .btn-link {
+  color: #4caf74 !important;
+}
+
+.home-trust-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+  flex-wrap: wrap;
+  padding: 20px 48px;
+  border-top: 1px solid rgba(76, 175, 116, 0.12);
+  border-bottom: 1px solid rgba(76, 175, 116, 0.12);
+  background: rgba(11, 36, 24, 0.6);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.home-trust-bar div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.home-trust-bar span,
+.home-feature-icon {
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(76, 175, 116, 0.25);
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(76, 175, 116, 0.15);
+  color: #4caf74;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.home-features {
+  max-width: none;
+  margin: 0;
+  padding: 80px 48px;
+  background: #0f2d1f;
+}
+
+.home-features > * {
+  max-width: 1200px;
+  margin-inline: auto;
+}
+
+.home-feature-grid {
+  max-width: 1200px;
+}
+
+.home-section-eyebrow {
+  margin-bottom: 12px;
+  color: #4caf74;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.home-features h2 {
+  max-width: 480px;
+  margin-bottom: 48px;
+  color: #ffffff;
+  font-size: clamp(28px, 3vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.home-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.home-feature-card {
+  padding: 24px;
+  border: 1px solid rgba(76, 175, 116, 0.18);
+  border-radius: 16px;
+  background: rgba(26, 74, 46, 0.25);
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.home-feature-card:hover {
+  border-color: rgba(76, 175, 116, 0.5);
+  transform: translateY(-3px);
+}
+
+.home-feature-icon {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.home-feature-card h3 {
+  margin-bottom: 8px;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.home-feature-card p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.home-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 32px 48px;
+  border-top: 1px solid rgba(76, 175, 116, 0.12);
+  background: #0f2d1f;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+}
+
+.home-footer-logo {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.home-footer-logo span {
+  color: #4caf74;
+}
+
 @keyframes homeLoginReveal {
   from {
     opacity: 0;
@@ -322,9 +1258,9 @@ body {
 .login-section {
   min-height: 100vh;
   background:
-    radial-gradient(circle at 18% 20%, rgba(94, 142, 255, 0.3), transparent 18%),
-    radial-gradient(circle at 78% 24%, rgba(27, 63, 158, 0.42), transparent 16%),
-    linear-gradient(180deg, #091733 0%, #0e2b68 55%, #0a1d46 100%);
+    radial-gradient(circle at 18% 22%, rgba(76, 175, 116, 0.22), transparent 20%),
+    radial-gradient(circle at 78% 26%, rgba(201, 173, 126, 0.12), transparent 18%),
+    linear-gradient(180deg, #0f2d1f 0%, #123a28 52%, #0b2418 100%);
 }
 
 .login-page-wrap {
@@ -342,8 +1278,8 @@ body {
 .login-shell {
   width: 100%;
   max-width: 960px;
-  background: rgba(8, 19, 45, 0.5);
-  border: 1px solid rgba(180, 201, 255, 0.2);
+  background: rgba(11, 36, 24, 0.78);
+  border: 1px solid rgba(76, 175, 116, 0.24);
   border-radius: 1rem;
   overflow: hidden;
   backdrop-filter: blur(14px);
@@ -353,9 +1289,9 @@ body {
 
 .login-topbar {
   height: 44px;
-  background: rgba(15, 31, 74, 0.88);
+  background: rgba(11, 36, 24, 0.9);
   color: #f5f8ff;
-  border-bottom: 1px solid rgba(177, 199, 255, 0.16);
+  border-bottom: 1px solid rgba(76, 175, 116, 0.2);
 }
 
 .login-card {
@@ -435,34 +1371,40 @@ body {
 .login-card .form-select,
 .register-card .form-control,
 .register-card .form-select {
-  background: rgba(255, 255, 255, 0.96);
-  border-color: rgba(191, 207, 245, 0.95);
-  color: #10224d;
+  background: #f5f0e8;
+  border-color: #d8cdbb;
+  color: #123a28;
 }
 
 .login-card .form-control:focus,
 .login-card .form-select:focus,
 .register-card .form-control:focus,
 .register-card .form-select:focus {
-  border-color: #5d87ff;
-  box-shadow: 0 0 0 0.2rem rgba(65, 108, 255, 0.18);
+  border-color: #4caf74;
+  box-shadow: 0 0 0 0.2rem rgba(76, 175, 116, 0.2);
 }
 
 .register-card {
   max-width: 860px;
-  background: rgba(11, 22, 55, 0.84);
-  border: 1px solid rgba(177, 199, 255, 0.16);
+  background: rgba(11, 36, 24, 0.9);
+  border: 1px solid rgba(76, 175, 116, 0.24);
   border-radius: 1rem;
   overflow: hidden;
   box-shadow: 0 22px 70px rgba(3, 10, 28, 0.3);
 }
 
 .register-card .form-label {
-  color: #f5f8ff;
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em;
 }
 
 .register-card .form-text {
-  color: #dbe5ff !important;
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.45) !important;
+  font-size: 11px;
 }
 
 .register-card-sm {
@@ -470,21 +1412,322 @@ body {
 }
 
 .register-card-head {
-  background: linear-gradient(180deg, rgba(25, 45, 98, 0.94), rgba(15, 28, 70, 0.96));
+  background: linear-gradient(180deg, rgba(28, 78, 48, 0.96), rgba(15, 45, 31, 0.98));
   color: #f7fbff;
   padding: 0.9rem 1.25rem;
-  border-bottom: 1px solid rgba(177, 199, 255, 0.16);
+  border-bottom: 1px solid rgba(76, 175, 116, 0.22);
+}
+
+.register-card .input-group-text {
+  background: #f5f0e8;
+  border-color: #d8cdbb;
+  color: #123a28;
+}
+
+.register-card .btn-primary,
+.login-card .btn-primary {
+  min-height: 48px;
+  border-color: transparent;
+  border-radius: 0.75rem;
+  background: #4caf74;
+  color: #ffffff;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.register-card .btn-primary:hover,
+.login-card .btn-primary:hover {
+  background: #3f9f65;
+  transform: none;
+}
+
+.login-card-foot {
+  border-top-color: rgba(76, 175, 116, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.login-card-foot .btn-link {
+  color: #4caf74;
+}
+
+.register-toggle-tabs {
+  display: none;
+  width: min(100%, 680px);
+  padding: 4px;
+  margin-bottom: 28px;
+  border: 1px solid rgba(76, 175, 116, 0.25);
+  border-radius: 12px;
+  background: rgba(11, 36, 24, 0.7);
+}
+
+.register-toggle-tabs button {
+  flex: 1;
+  min-height: 42px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 800;
+}
+
+.register-toggle-tabs button.active {
+  background: #4caf74;
+  color: #ffffff;
+}
+
+.login-section .login-shell {
+  max-width: 680px;
+  border-radius: 20px;
+  background: rgba(15, 45, 31, 0.75);
+  border-color: rgba(76, 175, 116, 0.18);
+  overflow: hidden;
+  box-shadow: none !important;
+}
+
+.login-section .register-card,
+.login-section .register-card-sm {
+  max-width: none;
+  margin: 0 !important;
+  border: 0;
+  border-radius: 0 0 20px 20px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.login-section {
+  padding: 28px 24px 60px !important;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at -120px -120px, rgba(26, 74, 46, 0.55) 0%, transparent 42%),
+    radial-gradient(circle at calc(100% + 80px) calc(100% + 80px), rgba(76, 175, 116, 0.1) 0%, transparent 36%),
+    #0b2418;
+}
+
+.login-section .login-page-wrap {
+  max-width: 680px;
+  width: 100%;
+  padding: 0;
+}
+
+.login-section .login-topbar {
+  height: auto;
+  padding: 22px 28px !important;
+  background: rgba(26, 74, 46, 0.4);
+}
+
+.login-section .login-topbar .badge {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px !important;
+  background: #4caf74 !important;
+  color: #ffffff !important;
+  font-size: 12px;
+}
+
+.login-section .register-card-head {
+  display: none;
+}
+
+.login-section .register-card form {
+  padding: 28px !important;
+}
+
+.login-section .register-card form > .row {
+  --bs-gutter-x: 0;
+  --bs-gutter-y: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+}
+
+.login-section .register-card form > .row > * {
+  width: auto;
+  max-width: none;
+  padding: 0;
+}
+
+.login-section .register-card form > .row > .col-md-6 {
+  grid-column: span 3;
+}
+
+.login-section .register-card form > .row > .col-md-4 {
+  grid-column: span 2;
+}
+
+.login-section .register-card form > .row > .col-12 {
+  grid-column: 1 / -1;
+}
+
+.register-form-intro {
+  margin-bottom: 28px;
+}
+
+.register-form-intro h3 {
+  margin: 0 0 6px;
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.register-form-intro p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
+}
+
+.register-section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  margin-bottom: 0;
+  color: #4caf74;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.register-section-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(76, 175, 116, 0.25);
+}
+
+.register-section-label span {
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.login-section .register-card form > .row > .col-12:first-of-type .register-section-label {
+  margin-top: 0;
+}
+
+.register-card .form-control,
+.register-card .form-select {
+  min-height: 40px;
+  padding: 11px 14px;
+  border-color: rgba(76, 175, 116, 0.2);
+  border-radius: 10px;
+  background: rgba(11, 36, 24, 0.6);
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.register-card textarea.form-control {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.register-card .form-control::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.register-card .input-group-text {
+  border-color: rgba(76, 175, 116, 0.2);
+  background: rgba(76, 175, 116, 0.12);
+  color: #4caf74;
+  font-weight: 800;
+  border-radius: 10px 0 0 10px;
+  font-size: 13px;
+  padding: 11px 13px;
+}
+
+.register-card .input-group .form-control {
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+}
+
+.register-card .skills-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid rgba(76, 175, 116, 0.2);
+  border-radius: 12px;
+  background: rgba(11, 36, 24, 0.5);
+}
+
+.register-card .skills-grid .form-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.register-card .skills-grid .form-check:hover {
+  border-color: rgba(76, 175, 116, 0.25);
+  background: rgba(76, 175, 116, 0.08);
+}
+
+.register-card .skills-grid .form-check-input {
+  position: static;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  opacity: 1;
+  cursor: pointer;
+  accent-color: #4caf74;
+  border-radius: 5px;
+}
+
+.register-card .skills-grid .form-check-label {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.register-card .skills-grid .form-check-input:checked + .form-check-label {
+  background: transparent;
+  color: #4caf74;
+}
+
+.login-section .register-card .btn-primary {
+  min-height: 46px;
+  margin-top: 16px;
+  border-radius: 12px;
+}
+
+.login-section .login-card-foot {
+  padding: 18px 28px !important;
+  border-top: 1px solid rgba(76, 175, 116, 0.18);
+  background: rgba(11, 36, 24, 0.4);
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
 }
 
 .skills-grid {
-  border: 1px solid rgba(177, 199, 255, 0.18);
+  border: 1px solid rgba(76, 175, 116, 0.24);
   border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(245, 240, 232, 0.08);
   padding: 0.85rem;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.35rem 1rem;
   color: #f5f8ff;
+}
+
+.login-topbar .badge {
+  background: #f5f0e8 !important;
+  color: #123a28 !important;
 }
 
 .skills-grid .form-check {
@@ -525,8 +1768,18 @@ body {
     margin-inline: 0;
   }
 
+  .hero-snapshot-card {
+    min-width: 0;
+    min-height: 300px;
+    padding: 30px 28px;
+  }
+
   .hero-snapshot-value {
-    font-size: 3.2rem;
+    font-size: 4rem;
+  }
+
+  .hero-snapshot-mini-grid {
+    gap: 18px;
   }
 
   .home-landing-grid,
@@ -535,7 +1788,36 @@ body {
   }
 
   .home-login-card {
-    padding: 1.4rem;
+    width: 100%;
+    padding: 1.5rem;
+    transform: none;
+  }
+
+  .home-login-card form {
+    transform: none;
+  }
+
+  .home-role-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-role-choice-grid {
+    transform: none;
+  }
+
+  .home-role-choice-card {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "art"
+      "title"
+      "copy"
+      "action";
+    min-height: 300px;
+    text-align: center;
+  }
+
+  .home-role-illustration {
+    margin-inline: auto;
   }
 
   .login-card {
@@ -1192,12 +2474,6 @@ body {
   display: none;
 }
 
-.household-dashboard-detail-tab.completed .household-dashboard-completion-steps,
-.household-dashboard-detail-tab.completed .household-dashboard-completion-actions,
-.household-dashboard-detail-tab.completed .household-dashboard-review-form {
-  display: none;
-}
-
 .household-dashboard-worker-panel {
   display: grid;
   align-content: start;
@@ -1262,13 +2538,15 @@ body {
 
 .household-dashboard-completion-panel {
   min-width: 0;
-  padding: 2rem 1.35rem 1.35rem 0;
+  padding: 2rem 1.35rem 4.5rem 0;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .household-dashboard-completion-panel .profile-card {
-  height: 100%;
+  min-height: 100%;
   margin-top: 0.9rem;
+  overflow: visible;
 }
 
 .household-dashboard-job-summary {
@@ -1374,13 +2652,52 @@ body {
   padding-top: 0.9rem;
 }
 
+.household-dashboard-review-form textarea {
+  min-height: 5.5rem;
+  resize: vertical;
+}
+
 .household-dashboard-star-rating {
   display: flex;
   align-items: center;
-  gap: 0.15rem;
+  gap: 0.35rem;
   padding: 0.2rem 0;
   border: 0;
   background: transparent;
+}
+
+.household-dashboard-rating-preview-hidden {
+  display: none;
+}
+
+.household-dashboard-star-button {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #c8d2ea;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.household-dashboard-star-button::before {
+  content: "\2605";
+  font-size: 2rem;
+}
+
+.household-dashboard-star-button:hover,
+.household-dashboard-star-button:focus-visible,
+.household-dashboard-star-button.selected {
+  color: #f5b301;
+}
+
+.household-dashboard-star-button:focus-visible {
+  outline: 3px solid rgba(42, 95, 255, 0.28);
+  outline-offset: 2px;
+  border-radius: 0.35rem;
 }
 
 .household-dashboard-star-shell {
@@ -1423,6 +2740,29 @@ body {
   margin-left: 0.45rem;
   color: #40547e;
   font-weight: 800;
+}
+
+.household-dashboard-form-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  padding: 0.75rem 0 0.2rem;
+  background: linear-gradient(180deg, rgba(245, 248, 255, 0.88), #f5f8ff 42%);
+  border-top: 1px solid rgba(173, 197, 255, 0.72);
+  z-index: 2;
+}
+
+.household-dashboard-form-actions .btn {
+  min-width: 9rem;
+}
+
+.household-dashboard-review-complete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .superadmin-dashboard .worker-sidebar {
@@ -3946,6 +5286,393 @@ body {
   }
 }
 
+/* Tayabas soft-green application palette
+   Applies the final dashboard theme across worker, household, and superadmin areas. */
+.worker-dashboard,
+.household-dashboard-wireframe,
+.profile-page,
+.household-profile-page,
+.household-notifications-page,
+.worker-get-verified-page,
+.worker-job-detail-page,
+.superadmin-dashboard {
+  background:
+    linear-gradient(135deg, rgba(242, 182, 50, 0.12), transparent 34%),
+    var(--gg-tayabas-bg) !important;
+  color: var(--gg-text);
+  font-family: "DM Sans", Arial, Helvetica, sans-serif;
+}
+
+.worker-dashboard .worker-content,
+.household-dashboard-main,
+.profile-page .worker-content,
+.household-profile-page .worker-content,
+.household-notifications-page .worker-content,
+.worker-get-verified-page .worker-content,
+.worker-job-detail-page .worker-content,
+.superadmin-dashboard .worker-content {
+  background: transparent !important;
+  color: var(--gg-text);
+}
+
+.worker-sidebar,
+.household-dashboard-sidebar,
+.superadmin-dashboard .worker-sidebar {
+  background: var(--gg-sidebar-bg) !important;
+  color: #ffffff;
+}
+
+.worker-logo,
+.household-dashboard-wireframe .worker-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--gg-tayabas-green) !important;
+  color: #ffffff !important;
+}
+
+.worker-nav-item,
+.household-dashboard-wireframe .worker-nav-item {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: var(--gg-sidebar-text) !important;
+  border-radius: 8px !important;
+}
+
+.worker-nav-item.active,
+.worker-nav-item:hover,
+.worker-nav-item:focus-visible,
+.household-dashboard-wireframe .worker-nav-item.active,
+.household-dashboard-wireframe .worker-nav-item:hover,
+.household-dashboard-wireframe .worker-nav-item:focus-visible {
+  border-color: #2d6040 !important;
+  background: var(--gg-sidebar-active) !important;
+  color: #ffffff !important;
+}
+
+.worker-sidebar-logout,
+.household-dashboard-wireframe .worker-sidebar-logout {
+  border-color: var(--gg-logout-border) !important;
+  background: var(--gg-logout-bg) !important;
+  color: var(--gg-tayabas-red) !important;
+  border-radius: 8px !important;
+  text-align: center !important;
+  justify-content: center !important;
+  font-weight: 700 !important;
+}
+
+.worker-sidebar-logout:hover,
+.worker-sidebar-logout:focus-visible,
+.household-dashboard-wireframe .worker-sidebar-logout:hover,
+.household-dashboard-wireframe .worker-sidebar-logout:focus-visible {
+  border-color: #6b1b1b !important;
+  background: #321010 !important;
+  color: #ffffff !important;
+}
+
+.worker-dashboard-welcome-strip,
+.household-dashboard-welcome,
+.worker-topbar,
+.metric-card,
+.worker-market-panel,
+.worker-market-card,
+.job-card,
+.profile-card,
+.profile-page .profile-card,
+.profile-page .profile-edit-card,
+.profile-page .profile-feedback-card,
+.profile-page .feedback-card,
+.household-profile-page .profile-card,
+.household-profile-page .profile-edit-card,
+.household-profile-page .profile-feedback-card,
+.household-smart-match-profile .profile-feedback-card,
+.household-notifications-panel,
+.household-notification-item,
+.notification-card,
+.verification-card,
+.verification-document-card,
+.verification-approved-card,
+.verification-admin-card,
+.my-jobs-card,
+.job-summary-card,
+.household-dashboard-stat,
+.household-dashboard-table-wrap,
+.household-dashboard-worker-panel,
+.household-dashboard-completion-box,
+.household-dashboard-completion-panel .profile-card,
+.household-dashboard-job-summary,
+.household-detail-info-card,
+.household-applicant-card,
+.worker-job-map-card,
+.worker-job-photos-card,
+.worker-dashboard .card,
+.superadmin-dashboard .metric-card,
+.superadmin-verification-worker-profile,
+.superadmin-dashboard .card {
+  border-color: var(--gg-tayabas-border) !important;
+  background: var(--gg-tayabas-surface) !important;
+  color: var(--gg-text) !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
+}
+
+.metric-card,
+.household-dashboard-stat {
+  border-top: 0 !important;
+}
+
+.metric-card:first-child,
+.worker-dashboard-stats .metric-card:first-child,
+.household-dashboard-stats .household-dashboard-stat:first-child,
+.superadmin-dashboard .metric-card:first-child {
+  background: var(--gg-tayabas-green) !important;
+  border-color: var(--gg-tayabas-green) !important;
+  color: #ffffff !important;
+}
+
+.metric-card:first-child .metric-label,
+.metric-card:first-child .metric-value,
+.household-dashboard-stats .household-dashboard-stat:first-child p,
+.household-dashboard-stats .household-dashboard-stat:first-child strong,
+.superadmin-dashboard .metric-card:first-child .metric-label,
+.superadmin-dashboard .metric-card:first-child .metric-value {
+  color: #ffffff !important;
+}
+
+.metric-card:hover,
+.worker-market-card:hover,
+.job-card:hover,
+.household-dashboard-stat:hover,
+.job-summary-card:hover,
+.household-notification-item:hover,
+.notification-card:hover,
+.verification-admin-card:hover,
+.household-applicant-card:hover {
+  border-color: var(--gg-tayabas-border) !important;
+  box-shadow: 0 8px 18px rgba(31, 64, 48, 0.08) !important;
+}
+
+.worker-market-head,
+.profile-card-head,
+.profile-page .profile-card-header,
+.profile-page .feedback-header,
+.household-profile-page .profile-card-header,
+.household-smart-match-profile .feedback-header,
+.verification-card-head,
+.my-jobs-card-head,
+.household-dashboard-table-wrap thead,
+.worker-dashboard .card-header,
+.worker-dashboard .table thead th,
+.household-dashboard-table-card .card-header,
+.household-notifications-filter .form-label,
+.household-notifications-read-button {
+  border-color: var(--gg-tayabas-border) !important;
+  background: var(--gg-tayabas-input) !important;
+  color: var(--gg-text) !important;
+  border-radius: 14px !important;
+}
+
+.worker-dashboard h1,
+.worker-dashboard h2,
+.worker-dashboard h3,
+.household-dashboard-wireframe h1,
+.household-dashboard-wireframe h2,
+.household-dashboard-wireframe h3,
+.profile-page h1,
+.profile-page h2,
+.profile-page h3,
+.household-profile-page h1,
+.household-profile-page h2,
+.household-profile-page h3,
+.superadmin-dashboard h1,
+.superadmin-dashboard h2,
+.superadmin-dashboard h3,
+.household-notifications-title {
+  color: var(--gg-tayabas-navy) !important;
+}
+
+.metric-label,
+.worker-market-card p,
+.job-card p,
+.profile-page .text-muted,
+.household-profile-page .text-muted,
+.worker-dashboard .text-muted,
+.household-dashboard-wireframe .text-muted,
+.superadmin-dashboard .text-muted,
+.household-notification-item .small,
+.notification-card .small {
+  color: var(--gg-dark-2) !important;
+}
+
+.btn-primary,
+.worker-dashboard .btn-primary,
+.household-dashboard-wireframe .btn-primary,
+.profile-page .profile-save-button,
+.household-profile-page .profile-save-button,
+.superadmin-dashboard .btn-primary,
+.verification-admin-card .btn-primary,
+.household-notifications-filter .form-label,
+.household-notifications-read-button {
+  border-color: var(--gg-tayabas-green) !important;
+  background: var(--gg-tayabas-green) !important;
+  color: #ffffff !important;
+}
+
+.btn-primary:hover,
+.btn-primary:focus-visible,
+.worker-dashboard .btn-primary:hover,
+.worker-dashboard .btn-primary:focus-visible,
+.household-dashboard-wireframe .btn-primary:hover,
+.household-dashboard-wireframe .btn-primary:focus-visible,
+.profile-page .profile-save-button:hover,
+.profile-page .profile-save-button:focus-visible,
+.superadmin-dashboard .btn-primary:hover,
+.superadmin-dashboard .btn-primary:focus-visible,
+.verification-admin-card .btn-primary:hover,
+.verification-admin-card .btn-primary:focus-visible {
+  border-color: var(--gg-tayabas-green-strong) !important;
+  background: var(--gg-tayabas-green-strong) !important;
+  color: #ffffff !important;
+}
+
+.worker-dashboard .btn-outline-primary,
+.worker-dashboard .btn-outline-secondary,
+.worker-dashboard .btn-outline-success,
+.household-dashboard-wireframe .btn-outline-primary,
+.household-dashboard-wireframe .btn-outline-secondary,
+.household-dashboard-wireframe .btn-outline-success,
+.profile-page .feedback-header .btn,
+.household-profile-page .feedback-header .btn,
+.household-smart-match-profile .feedback-header .btn,
+.household-notification-item .btn,
+.superadmin-dashboard .btn-outline-primary,
+.superadmin-dashboard .btn-outline-secondary {
+  border-color: var(--gg-tayabas-green) !important;
+  background: var(--gg-tayabas-surface) !important;
+  color: var(--gg-dark-2) !important;
+  border-radius: 8px !important;
+}
+
+.worker-dashboard .btn-outline-primary:hover,
+.worker-dashboard .btn-outline-secondary:hover,
+.worker-dashboard .btn-outline-success:hover,
+.household-dashboard-wireframe .btn-outline-primary:hover,
+.household-dashboard-wireframe .btn-outline-secondary:hover,
+.household-dashboard-wireframe .btn-outline-success:hover,
+.profile-page .feedback-header .btn:hover,
+.household-profile-page .feedback-header .btn:hover,
+.household-smart-match-profile .feedback-header .btn:hover,
+.household-notification-item .btn:hover,
+.superadmin-dashboard .btn-outline-primary:hover,
+.superadmin-dashboard .btn-outline-secondary:hover {
+  background: var(--gg-tayabas-green) !important;
+  color: #ffffff !important;
+}
+
+.badge.text-bg-primary,
+.worker-dashboard .badge.text-bg-primary,
+.household-dashboard-wireframe .badge.text-bg-primary,
+.profile-page .badge.text-bg-primary,
+.household-profile-page .badge.text-bg-primary,
+.superadmin-dashboard .badge.text-bg-primary {
+  border: 1px solid #9ed8b5 !important;
+  background: var(--gg-accent-2) !important;
+  color: #2e7d32 !important;
+}
+
+.badge.text-bg-success,
+.worker-dashboard .badge.text-bg-success,
+.household-dashboard-wireframe .badge.text-bg-success,
+.superadmin-dashboard .badge.text-bg-success {
+  border: 1px solid #9ed8b5 !important;
+  background: var(--gg-accent-2) !important;
+  color: #2e7d32 !important;
+}
+
+.badge.text-bg-warning,
+.worker-dashboard .badge.text-bg-warning,
+.household-dashboard-wireframe .badge.text-bg-warning,
+.superadmin-dashboard .badge.text-bg-warning {
+  border: 1px solid #edd47c !important;
+  background: var(--gg-gold-bg) !important;
+  color: var(--gg-gold-text) !important;
+}
+
+.worker-dashboard .form-control,
+.worker-dashboard .form-select,
+.profile-page .form-control,
+.profile-page .form-select,
+.household-profile-page .form-control,
+.household-profile-page .form-select,
+.household-dashboard-wireframe .form-control,
+.household-dashboard-wireframe .form-select,
+.household-notifications-filter .form-control,
+.superadmin-dashboard .form-control,
+.superadmin-dashboard .form-select {
+  border-color: #cfd9e8 !important;
+  background: var(--gg-tayabas-input) !important;
+  color: var(--gg-dark-2) !important;
+  border-radius: 8px !important;
+}
+
+.worker-dashboard .form-control:focus,
+.worker-dashboard .form-select:focus,
+.profile-page .form-control:focus,
+.profile-page .form-select:focus,
+.household-profile-page .form-control:focus,
+.household-profile-page .form-select:focus,
+.household-dashboard-wireframe .form-control:focus,
+.household-dashboard-wireframe .form-select:focus,
+.household-notifications-filter .form-control:focus,
+.superadmin-dashboard .form-control:focus,
+.superadmin-dashboard .form-select:focus {
+  border-color: var(--gg-tayabas-green) !important;
+  box-shadow: 0 0 0 0.2rem rgba(21, 130, 76, 0.18) !important;
+}
+
+.worker-dashboard .table,
+.household-dashboard-table-wrap table,
+.superadmin-dashboard .table {
+  color: var(--gg-text) !important;
+}
+
+.worker-dashboard .table thead th,
+.household-dashboard-table-wrap th,
+.superadmin-dashboard .table thead th {
+  color: var(--gg-tayabas-navy) !important;
+}
+
+.worker-dashboard .table td,
+.worker-dashboard .table th,
+.household-dashboard-table-wrap td,
+.household-dashboard-table-wrap th,
+.superadmin-dashboard .table td,
+.superadmin-dashboard .table th {
+  border-color: #e2dcb9 !important;
+}
+
+.worker-dashboard .table tbody tr:hover,
+.household-dashboard-table-wrap tbody tr:hover,
+.superadmin-dashboard .table tbody tr:hover {
+  background: rgba(238, 247, 232, 0.72) !important;
+}
+
+.nav-count-badge {
+  background: var(--gg-tayabas-gold) !important;
+  color: var(--gg-tayabas-navy) !important;
+}
+
+.profile-avatar,
+.profile-photo-large,
+.household-profile-photo,
+.household-profile-fallback,
+.household-dashboard-worker-avatar,
+.superadmin-verification-worker-avatar {
+  border-color: var(--gg-tayabas-gold) !important;
+  background: var(--gg-tayabas-surface) !important;
+  color: var(--gg-tayabas-blue) !important;
+}
+
 @media (max-width: 767px) {
   .worker-dashboard-stats,
   .worker-market-grid {
@@ -4137,4 +5864,1887 @@ body {
     width: 100%;
     max-width: none;
   }
+
+  .home-landing-header {
+    padding: 0 20px;
+  }
+
+  .hero-section.hero-dark {
+    padding: 96px 20px 48px;
+  }
+
+  .home-landing-grid,
+  .home-landing-grid.with-login {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+
+  .hero-title,
+  .home-landing-grid.with-login .hero-title {
+    max-width: 11ch;
+    font-size: clamp(40px, 13vw, 56px);
+  }
+
+  .hero-snapshot-card {
+    min-width: 0;
+  }
+
+  .hero-snapshot-mini-grid {
+    flex-wrap: wrap;
+  }
+
+  .home-trust-bar {
+    justify-content: flex-start;
+    gap: 18px;
+    padding: 20px;
+  }
+
+  .home-features {
+    padding: 56px 20px;
+  }
+
+  .home-feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-footer {
+    padding: 28px 20px;
+  }
+}
+
+/* Final palette guard after responsive rules. */
+.worker-dashboard,
+.household-dashboard-wireframe,
+.profile-page,
+.household-profile-page,
+.household-notifications-page,
+.worker-get-verified-page,
+.worker-job-detail-page,
+.superadmin-dashboard {
+  background:
+    linear-gradient(135deg, rgba(242, 182, 50, 0.12), transparent 34%),
+    var(--gg-tayabas-bg) !important;
+}
+
+.metric-card,
+.worker-market-panel,
+.worker-market-card,
+.job-card,
+.profile-card,
+.profile-page .profile-card,
+.profile-page .profile-edit-card,
+.profile-page .profile-feedback-card,
+.household-profile-page .profile-card,
+.household-profile-page .profile-edit-card,
+.household-profile-page .profile-feedback-card,
+.household-notifications-panel,
+.household-notification-item,
+.notification-card,
+.verification-card,
+.verification-document-card,
+.verification-approved-card,
+.verification-admin-card,
+.my-jobs-card,
+.job-summary-card,
+.household-dashboard-stat,
+.household-dashboard-table-wrap,
+.household-dashboard-worker-panel,
+.household-dashboard-completion-box,
+.household-detail-info-card,
+.household-applicant-card,
+.worker-dashboard .card,
+.superadmin-dashboard .card {
+  background: var(--gg-tayabas-surface) !important;
+  border-color: var(--gg-tayabas-border) !important;
+}
+
+.worker-market-head,
+.profile-card-head,
+.profile-page .profile-card-header,
+.profile-page .feedback-header,
+.household-profile-page .profile-card-header,
+.verification-card-head,
+.my-jobs-card-head,
+.worker-dashboard .card-header,
+.worker-dashboard .table thead th,
+.household-dashboard-table-wrap thead,
+.superadmin-dashboard .table thead th {
+  background: var(--gg-tayabas-input) !important;
+  color: var(--gg-text) !important;
+}
+
+/* Sample.html color-flow override: forest sidebar, beige workspace, white cards, green accents. */
+body {
+  background: var(--gg-tayabas-bg) !important;
+  color: var(--gg-text) !important;
+  font-family: "DM Sans", Arial, Helvetica, sans-serif !important;
+}
+
+.worker-dashboard,
+.worker-dashboard-home,
+.household-dashboard-wireframe,
+.household-profile-page,
+.profile-page,
+.household-smart-match-profile,
+.household-notifications-page,
+.household-feedback-all-page,
+.household-review-history-page,
+.worker-get-verified-page,
+.worker-job-detail-page,
+.superadmin-dashboard {
+  background: var(--gg-tayabas-bg) !important;
+  color: var(--gg-text) !important;
+}
+
+.worker-content,
+.household-dashboard-main,
+.profile-container,
+.household-notifications-container,
+.household-feedback-all-container,
+.household-review-history-container,
+.superadmin-dashboard .worker-content {
+  background: transparent !important;
+  color: var(--gg-text) !important;
+}
+
+.worker-topbar,
+.worker-dashboard-welcome-strip,
+.household-dashboard-welcome,
+.household-dashboard-brandbar,
+.household-dashboard-table-head,
+.page-header,
+.notif-header {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--gg-text) !important;
+}
+
+.worker-dashboard-welcome-strip,
+.household-dashboard-welcome {
+  background: linear-gradient(135deg, var(--gg-sidebar-bg) 0%, var(--gg-sidebar-active) 100%) !important;
+  color: #ffffff !important;
+  border-radius: 16px !important;
+  border: 0 !important;
+  padding: 28px 32px !important;
+  box-shadow: none !important;
+}
+
+.worker-dashboard-welcome-strip *,
+.household-dashboard-welcome * {
+  color: #ffffff !important;
+}
+
+.metric-card,
+.household-dashboard-stat,
+.worker-market-panel,
+.worker-market-card,
+.job-card,
+.profile-card,
+.profile-page .profile-card,
+.profile-page .profile-edit-card,
+.profile-page .profile-feedback-card,
+.profile-page .feedback-card,
+.household-profile-page .profile-card,
+.household-profile-page .profile-edit-card,
+.household-profile-page .profile-feedback-card,
+.household-smart-match-profile .profile-feedback-card,
+.household-notifications-panel,
+.household-notification-item,
+.notification-card,
+.verification-card,
+.verification-document-card,
+.verification-approved-card,
+.verification-admin-card,
+.my-jobs-card,
+.job-summary-card,
+.household-dashboard-table-wrap,
+.household-dashboard-worker-panel,
+.household-dashboard-completion-box,
+.household-dashboard-completion-panel .profile-card,
+.household-dashboard-job-summary,
+.household-dashboard-review-form,
+.household-detail-info-card,
+.household-applicant-card,
+.worker-job-map-card,
+.worker-job-photos-card,
+.worker-job-household-body,
+.worker-dashboard .card,
+.worker-dashboard .profile-card,
+.superadmin-dashboard .metric-card,
+.superadmin-dashboard .card,
+.superadmin-verification-worker-profile,
+.superadmin-verification-detail,
+.superadmin-heatmap-panel,
+.feedback-section,
+.review-item,
+.household-feedback-list-panel,
+.household-feedback-item {
+  background: var(--gg-tayabas-surface) !important;
+  border: 1px solid var(--gg-tayabas-border) !important;
+  border-radius: 16px !important;
+  color: var(--gg-text) !important;
+  box-shadow: none !important;
+}
+
+.worker-market-grid .worker-market-card,
+.jobs-filter-panel,
+.applications-filter,
+.filter-bar,
+.household-notifications-filter,
+.household-review-history-filters,
+.household-feedback-filter {
+  background: var(--gg-tayabas-surface) !important;
+  border: 1px solid var(--gg-tayabas-border) !important;
+  border-radius: 14px !important;
+  color: var(--gg-text) !important;
+}
+
+.metric-card:first-child,
+.worker-dashboard-stats .metric-card:first-child,
+.household-dashboard-stats .household-dashboard-stat:first-child,
+.superadmin-dashboard .metric-card:first-child {
+  background: var(--gg-tayabas-green) !important;
+  border-color: var(--gg-tayabas-green) !important;
+  color: #ffffff !important;
+}
+
+.metric-card:first-child *,
+.worker-dashboard-stats .metric-card:first-child *,
+.household-dashboard-stats .household-dashboard-stat:first-child *,
+.superadmin-dashboard .metric-card:first-child * {
+  color: #ffffff !important;
+}
+
+.worker-market-head,
+.card-header,
+.worker-dashboard .card-header,
+.worker-dashboard .table thead th,
+.household-dashboard-table-wrap thead,
+.household-dashboard-table-wrap th,
+.superadmin-dashboard .table thead th,
+.apps-table th,
+.table thead th {
+  background: var(--gg-tayabas-bg) !important;
+  border-color: var(--gg-tayabas-border) !important;
+  color: var(--gg-dark-3) !important;
+  font-weight: 600 !important;
+}
+
+.profile-card-head,
+.profile-page .profile-card-header,
+.household-profile-page .profile-card-header,
+.verification-card-head,
+.my-jobs-card-head,
+.profile-page .feedback-header,
+.household-profile-page .feedback-header,
+.household-smart-match-profile .feedback-header {
+  background: var(--gg-tayabas-green) !important;
+  border-color: var(--gg-tayabas-green) !important;
+  color: #ffffff !important;
+}
+
+.profile-card-head *,
+.profile-page .profile-card-header *,
+.household-profile-page .profile-card-header *,
+.verification-card-head *,
+.my-jobs-card-head *,
+.profile-page .feedback-header *,
+.household-profile-page .feedback-header *,
+.household-smart-match-profile .feedback-header * {
+  color: #ffffff !important;
+}
+
+.worker-market-card-actions .badge,
+.skill-tag,
+.cat-item.match,
+.verified-banner,
+.verification-approved-card,
+.household-dashboard-review-complete,
+.household-dashboard-review-form,
+.notification-card.unread {
+  background: var(--gg-accent-2) !important;
+  border-color: #a5d6b0 !important;
+  color: var(--gg-tayabas-green-strong) !important;
+}
+
+.badge,
+.badge.text-bg-primary,
+.badge.text-bg-success,
+.worker-dashboard .badge,
+.household-dashboard-wireframe .badge,
+.profile-page .badge,
+.household-profile-page .badge,
+.superadmin-dashboard .badge {
+  border: 1px solid #a5d6b0 !important;
+  background: var(--gg-accent-2) !important;
+  color: #2e7d32 !important;
+  border-radius: 20px !important;
+  font-weight: 600 !important;
+}
+
+.badge.text-bg-warning,
+.badge.text-bg-light,
+.badge.text-bg-secondary,
+.distance-pill {
+  border-color: var(--gg-tayabas-gold) !important;
+  background: var(--gg-gold-bg) !important;
+  color: var(--gg-gold-text) !important;
+}
+
+.btn-primary,
+.btn-success,
+.worker-dashboard .btn-primary,
+.household-dashboard-wireframe .btn-primary,
+.profile-page .profile-save-button,
+.household-profile-page .profile-save-button,
+.superadmin-dashboard .btn-primary,
+.verification-admin-card .btn-primary,
+.household-notifications-filter .form-label,
+.household-notifications-read-button,
+.household-dashboard-form-actions .btn-success,
+.household-dashboard-modal-actions .btn-success {
+  background: var(--gg-tayabas-green) !important;
+  border-color: var(--gg-tayabas-green) !important;
+  color: #ffffff !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.btn-primary:hover,
+.btn-primary:focus-visible,
+.btn-success:hover,
+.btn-success:focus-visible,
+.worker-dashboard .btn-primary:hover,
+.worker-dashboard .btn-primary:focus-visible,
+.household-dashboard-wireframe .btn-primary:hover,
+.household-dashboard-wireframe .btn-primary:focus-visible,
+.profile-page .profile-save-button:hover,
+.profile-page .profile-save-button:focus-visible,
+.superadmin-dashboard .btn-primary:hover,
+.superadmin-dashboard .btn-primary:focus-visible {
+  background: var(--gg-tayabas-green-strong) !important;
+  border-color: var(--gg-tayabas-green-strong) !important;
+  color: #ffffff !important;
+}
+
+.btn-outline-primary,
+.btn-outline-secondary,
+.btn-outline-success,
+.worker-dashboard .btn-outline-primary,
+.worker-dashboard .btn-outline-secondary,
+.worker-dashboard .btn-outline-success,
+.household-dashboard-wireframe .btn-outline-primary,
+.household-dashboard-wireframe .btn-outline-secondary,
+.household-dashboard-wireframe .btn-outline-success,
+.profile-page .feedback-header .btn,
+.household-profile-page .feedback-header .btn,
+.household-smart-match-profile .feedback-header .btn,
+.household-notification-item .btn,
+.superadmin-dashboard .btn-outline-primary,
+.superadmin-dashboard .btn-outline-secondary {
+  background: transparent !important;
+  border-color: var(--gg-tayabas-border) !important;
+  color: var(--gg-dark-2) !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-secondary:hover,
+.btn-outline-success:hover,
+.worker-dashboard .btn-outline-primary:hover,
+.worker-dashboard .btn-outline-secondary:hover,
+.worker-dashboard .btn-outline-success:hover,
+.household-dashboard-wireframe .btn-outline-primary:hover,
+.household-dashboard-wireframe .btn-outline-secondary:hover,
+.household-dashboard-wireframe .btn-outline-success:hover,
+.household-notification-item .btn:hover,
+.superadmin-dashboard .btn-outline-primary:hover,
+.superadmin-dashboard .btn-outline-secondary:hover {
+  background: var(--gg-accent-2) !important;
+  border-color: #a5d6b0 !important;
+  color: var(--gg-tayabas-green-strong) !important;
+}
+
+.form-control,
+.form-select,
+.worker-dashboard .form-control,
+.worker-dashboard .form-select,
+.profile-page .form-control,
+.profile-page .form-select,
+.household-profile-page .form-control,
+.household-profile-page .form-select,
+.household-dashboard-wireframe .form-control,
+.household-dashboard-wireframe .form-select,
+.household-notifications-filter .form-control,
+.superadmin-dashboard .form-control,
+.superadmin-dashboard .form-select,
+.input-group-text {
+  background: var(--gg-tayabas-input) !important;
+  border-color: var(--gg-tayabas-border) !important;
+  border-radius: 8px !important;
+  color: var(--gg-dark-2) !important;
+  box-shadow: none !important;
+}
+
+.form-control:focus,
+.form-select:focus,
+.worker-dashboard .form-control:focus,
+.worker-dashboard .form-select:focus,
+.profile-page .form-control:focus,
+.profile-page .form-select:focus,
+.household-profile-page .form-control:focus,
+.household-profile-page .form-select:focus,
+.household-dashboard-wireframe .form-control:focus,
+.household-dashboard-wireframe .form-select:focus,
+.superadmin-dashboard .form-control:focus,
+.superadmin-dashboard .form-select:focus {
+  border-color: var(--gg-tayabas-green) !important;
+  box-shadow: 0 0 0 0.18rem rgba(76, 175, 116, 0.16) !important;
+}
+
+.table,
+.worker-dashboard .table,
+.household-dashboard-table-wrap table,
+.superadmin-dashboard .table {
+  background: var(--gg-tayabas-surface) !important;
+  color: var(--gg-text) !important;
+}
+
+.table td,
+.table th,
+.worker-dashboard .table td,
+.worker-dashboard .table th,
+.household-dashboard-table-wrap td,
+.household-dashboard-table-wrap th,
+.superadmin-dashboard .table td,
+.superadmin-dashboard .table th {
+  border-color: var(--gg-tayabas-border) !important;
+}
+
+.table tbody tr:hover,
+.worker-dashboard .table tbody tr:hover,
+.household-dashboard-table-wrap tbody tr:hover,
+.superadmin-dashboard .table tbody tr:hover {
+  background: rgba(232, 245, 233, 0.75) !important;
+}
+
+.worker-market-card p,
+.job-card p,
+.metric-label,
+.text-muted,
+.small.text-muted,
+.form-text,
+.profile-info-row,
+.job-detail,
+.job-company,
+.job-poster,
+.notif-time,
+.notif-body {
+  color: var(--gg-dark-2) !important;
+}
+
+.worker-dashboard h1,
+.worker-dashboard h2,
+.worker-dashboard h3,
+.household-dashboard-wireframe h1,
+.household-dashboard-wireframe h2,
+.household-dashboard-wireframe h3,
+.profile-page h1,
+.profile-page h2,
+.profile-page h3,
+.household-profile-page h1,
+.household-profile-page h2,
+.household-profile-page h3,
+.superadmin-dashboard h1,
+.superadmin-dashboard h2,
+.superadmin-dashboard h3,
+.page-title,
+.card-title,
+.job-title,
+.cat-name,
+.notif-title {
+  color: var(--gg-text) !important;
+}
+
+.profile-avatar,
+.profile-photo-large,
+.household-profile-photo,
+.household-profile-fallback,
+.household-dashboard-worker-avatar,
+.superadmin-verification-worker-avatar {
+  background: var(--gg-tayabas-input) !important;
+  border-color: var(--gg-tayabas-border) !important;
+  color: var(--gg-dark-2) !important;
+}
+
+.notification-card,
+.household-notification-item,
+.notif-item {
+  border-left: 4px solid var(--gg-tayabas-green) !important;
+}
+
+.nav-count-badge {
+  background: var(--gg-tayabas-green) !important;
+  color: #ffffff !important;
+}
+
+.worker-sidebar-head,
+.household-dashboard-wireframe .worker-sidebar-head {
+  border-color: var(--gg-sidebar-border) !important;
+}
+
+.worker-brand,
+.household-dashboard-wireframe .worker-brand {
+  color: #ffffff !important;
+}
+
+.worker-sidebar,
+.household-dashboard-sidebar,
+.superadmin-dashboard .worker-sidebar {
+  background: #0f2d1f !important;
+}
+
+.worker-sidebar-head,
+.household-dashboard-wireframe .worker-sidebar-head {
+  padding-bottom: 18px !important;
+  border-bottom: 1px solid #1f4030 !important;
+}
+
+.worker-nav {
+  gap: 6px !important;
+  padding-top: 12px !important;
+}
+
+.worker-nav-item,
+.household-dashboard-wireframe .worker-nav-item,
+.superadmin-dashboard .worker-nav-item {
+  padding: 10px 12px !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: #a5c9b0 !important;
+  font-weight: 700 !important;
+}
+
+.worker-nav-item.active,
+.worker-nav-item:hover,
+.worker-nav-item:focus-visible,
+.household-dashboard-wireframe .worker-nav-item.active,
+.household-dashboard-wireframe .worker-nav-item:hover,
+.household-dashboard-wireframe .worker-nav-item:focus-visible,
+.superadmin-dashboard .worker-nav-item.active,
+.superadmin-dashboard .worker-nav-item:hover,
+.superadmin-dashboard .worker-nav-item:focus-visible {
+  border-color: #2d6040 !important;
+  background: #1a4a2e !important;
+  color: #ffffff !important;
+}
+
+.worker-sidebar-footer,
+.household-dashboard-wireframe .worker-sidebar-footer {
+  padding-top: 14px !important;
+}
+
+.worker-sidebar-logout,
+.household-dashboard-wireframe .worker-sidebar-logout,
+.superadmin-dashboard .worker-sidebar-logout {
+  width: 100% !important;
+  min-height: 46px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 10px 12px !important;
+  border: 1px solid #4a1515 !important;
+  border-radius: 8px !important;
+  background: #1f0a0a !important;
+  color: #ff8a80 !important;
+  text-align: center !important;
+  font-weight: 800 !important;
+}
+
+.worker-sidebar-logout:hover,
+.worker-sidebar-logout:focus-visible,
+.household-dashboard-wireframe .worker-sidebar-logout:hover,
+.household-dashboard-wireframe .worker-sidebar-logout:focus-visible,
+.superadmin-dashboard .worker-sidebar-logout:hover,
+.superadmin-dashboard .worker-sidebar-logout:focus-visible {
+  border-color: #6b1b1b !important;
+  background: #321010 !important;
+  color: #ffffff !important;
+}
+
+.worker-dashboard .worker-content > .worker-topbar {
+  background: var(--gg-tayabas-surface) !important;
+  border: 1px solid var(--gg-tayabas-border) !important;
+  border-radius: 16px !important;
+  padding: 1.15rem 1.35rem !important;
+  margin-bottom: 1rem !important;
+  box-shadow: none !important;
+}
+
+.worker-dashboard .worker-content > .worker-topbar h1 {
+  margin: 0 !important;
+}
+
+.worker-profile-edit-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.worker-profile-edit-fieldset:disabled {
+  opacity: 1;
+}
+
+.worker-profile-edit-fieldset:disabled .form-control,
+.worker-profile-edit-fieldset:disabled .form-select,
+.worker-profile-edit-fieldset:disabled textarea {
+  color: var(--gg-dark-2) !important;
+  background: var(--gg-tayabas-input) !important;
+  cursor: default;
+}
+
+.form-check-input {
+  accent-color: var(--gg-tayabas-green);
+}
+
+.worker-profile-edit-fieldset:disabled .form-check-input {
+  opacity: 0.65;
+}
+
+.worker-dashboard .skills-grid,
+.profile-page .skills-grid {
+  background: var(--gg-tayabas-surface) !important;
+  border: 1px solid var(--gg-tayabas-border) !important;
+  border-radius: 12px !important;
+  padding: 0.85rem !important;
+  gap: 0.45rem 1rem !important;
+}
+
+.worker-dashboard .skills-grid .form-check,
+.profile-page .skills-grid .form-check {
+  min-height: 1.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 !important;
+  padding: 0.25rem 0.35rem !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  background: var(--gg-tayabas-input) !important;
+  color: var(--gg-text) !important;
+}
+
+.worker-dashboard .skills-grid .form-check-input,
+.profile-page .skills-grid .form-check-input {
+  float: none !important;
+  flex: 0 0 auto;
+  margin: 0 !important;
+}
+
+.worker-dashboard .skills-grid .form-check:has(.form-check-input:checked),
+.profile-page .skills-grid .form-check:has(.form-check-input:checked) {
+  background: var(--gg-tayabas-input) !important;
+  border-color: var(--gg-tayabas-border) !important;
+}
+
+.worker-dashboard .skills-grid .form-check-label,
+.profile-page .skills-grid .form-check-label {
+  color: var(--gg-text) !important;
+}
+
+/* Readability fixes for review filters and light action buttons. */
+.household-feedback-filter {
+  background: var(--gg-tayabas-surface) !important;
+  border: 1px solid var(--gg-tayabas-border) !important;
+  border-radius: 14px !important;
+  padding: 1rem !important;
+}
+
+.household-feedback-filter .form-label,
+.household-reviews-filter .form-label,
+.household-notifications-filter .form-label {
+  min-width: 150px;
+  border: 1px solid #a5d6b0 !important;
+  border-radius: 999px !important;
+  background: var(--gg-accent-2) !important;
+  color: var(--gg-tayabas-green-strong) !important;
+  font-weight: 700 !important;
+  text-align: center;
+}
+
+.household-feedback-filter .form-control,
+.household-feedback-filter .form-select,
+.household-reviews-filter .form-control,
+.household-reviews-filter .form-select {
+  background: var(--gg-tayabas-input) !important;
+  border-color: var(--gg-tayabas-border) !important;
+  color: var(--gg-text) !important;
+}
+
+.btn-light,
+.btn.btn-light,
+.btn-light.btn-sm,
+.profile-page .feedback-header .btn-light,
+.household-profile-page .feedback-header .btn-light,
+.household-smart-match-profile .feedback-header .btn-light {
+  border: 1px solid var(--gg-tayabas-surface) !important;
+  background: var(--gg-tayabas-surface) !important;
+  color: var(--gg-tayabas-green-strong) !important;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+}
+
+.btn-light:hover,
+.btn-light:focus-visible,
+.btn.btn-light:hover,
+.btn.btn-light:focus-visible {
+  background: var(--gg-gold-bg) !important;
+  border-color: var(--gg-tayabas-gold) !important;
+  color: var(--gg-gold-text) !important;
+  box-shadow: 0 0 0 0.18rem rgba(240, 192, 64, 0.22) !important;
+}
+
+details summary,
+.household-feedback-item summary,
+.household-review-history-item summary {
+  width: fit-content;
+  border: 1px solid #a5d6b0 !important;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  background: var(--gg-accent-2) !important;
+  color: var(--gg-tayabas-green-strong) !important;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+details summary:hover,
+.household-feedback-item summary:hover,
+.household-review-history-item summary:hover {
+  background: var(--gg-tayabas-green) !important;
+  color: #ffffff !important;
+}
+
+a,
+.view-all,
+.doc-link,
+.text-primary {
+  color: var(--gg-tayabas-green-strong) !important;
+}
+
+/* Exact register form input flow from mobile/src/app/test.html. */
+.login-section .register-card .form-control,
+.login-section .register-card .form-select {
+  width: 100% !important;
+  min-height: 40px !important;
+  padding: 11px 14px !important;
+  background: rgba(11, 36, 24, 0.6) !important;
+  border: 1px solid rgba(76, 175, 116, 0.2) !important;
+  border-radius: 10px !important;
+  color: #ffffff !important;
+  font-size: 14px !important;
+  font-family: "DM Sans", sans-serif !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.login-section .register-card textarea.form-control {
+  min-height: 100px !important;
+  resize: vertical;
+}
+
+.login-section .register-card .form-control::placeholder,
+.login-section .register-card textarea.form-control::placeholder {
+  color: rgba(255, 255, 255, 0.35) !important;
+  opacity: 1;
+}
+
+.login-section .register-card .form-control:focus,
+.login-section .register-card .form-select:focus {
+  border-color: #4caf74 !important;
+  box-shadow: 0 0 0 3px rgba(76, 175, 116, 0.15) !important;
+}
+
+.login-section .register-card .form-select option {
+  background: #0f2d1f;
+  color: #ffffff;
+}
+
+.login-section .register-card .input-group-text {
+  padding: 11px 13px !important;
+  background: rgba(76, 175, 116, 0.12) !important;
+  border: 1px solid rgba(76, 175, 116, 0.2) !important;
+  border-right: 0 !important;
+  border-radius: 10px 0 0 10px !important;
+  color: #4caf74 !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  flex: 0 0 auto;
+}
+
+.login-section .register-card .input-group .form-control {
+  border-left: 0 !important;
+  border-radius: 0 10px 10px 0 !important;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.login-section .register-card .input-group {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  width: 100%;
+}
+
+.password-reset-card {
+  max-width: 540px;
+  border: 1px solid rgba(76, 175, 116, 0.18) !important;
+  border-radius: 20px !important;
+  background: rgba(15, 45, 31, 0.75) !important;
+  box-shadow: none !important;
+}
+
+.password-reset-card .login-card-head {
+  background: rgba(26, 74, 46, 0.4) !important;
+  border-bottom: 1px solid rgba(76, 175, 116, 0.18) !important;
+  color: #ffffff !important;
+}
+
+.password-reset-card .login-avatar {
+  background: #4caf74 !important;
+  color: #ffffff !important;
+}
+
+.password-reset-card .p-3.p-md-4 {
+  background: rgba(11, 36, 24, 0.35);
+}
+
+.password-reset-card .form-label {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.password-reset-card .form-control {
+  background: rgba(11, 36, 24, 0.6) !important;
+  border: 1px solid rgba(76, 175, 116, 0.2) !important;
+  border-radius: 10px !important;
+  color: #ffffff !important;
+}
+
+.password-reset-card .form-control::placeholder {
+  color: rgba(255, 255, 255, 0.35) !important;
+  opacity: 1;
+}
+
+.password-reset-card .form-control:focus {
+  border-color: #4caf74 !important;
+  box-shadow: 0 0 0 3px rgba(76, 175, 116, 0.15) !important;
+}
+
+.password-reset-card .btn-primary,
+.password-reset-card .btn-success {
+  min-height: 46px;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: #4caf74 !important;
+  color: #ffffff !important;
+  font-weight: 800;
+}
+
+.password-reset-card .btn-primary:hover,
+.password-reset-card .btn-success:hover {
+  background: #3d9e63 !important;
+}
+
+.password-reset-card .btn-link {
+  color: #4caf74 !important;
+}
+
+.password-reset-card .alert-info {
+  border-color: rgba(76, 175, 116, 0.25);
+  background: rgba(76, 175, 116, 0.12);
+  color: #dff3e5;
+}
+
+/* Worker dashboard market cards: match sample card colors only. */
+.worker-dashboard .worker-market-panel {
+  border: 1px solid #d8cdbb !important;
+  background: #fffdf8 !important;
+}
+
+.worker-dashboard .worker-market-card {
+  border: 1px solid #d8cdbb !important;
+  background: #f5f0e8 !important;
+  box-shadow: none !important;
+}
+
+.worker-dashboard .worker-market-card.worker-market-card-match {
+  border-color: #9bd4aa !important;
+  background: #e8f5e9 !important;
+}
+
+.profile-photo-preview-trigger {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: zoom-in;
+}
+
+.profile-photo-preview-trigger .profile-photo-large {
+  display: block;
+}
+
+.profile-photo-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(11, 36, 24, 0.55);
+  backdrop-filter: blur(10px);
+}
+
+.profile-photo-modal-image {
+  max-width: min(420px, 86vw);
+  max-height: 82vh;
+  border: 4px solid rgba(255, 255, 255, 0.78);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+  object-fit: contain;
+}
+
+.profile-photo-modal-close {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 999px;
+  background: rgba(11, 36, 24, 0.78);
+  color: #ffffff;
+  font-weight: 800;
+  padding: 8px 16px;
+}
+
+.profile-photo-modal-close:hover,
+.profile-photo-modal-close:focus-visible {
+  background: #4caf74;
+}
+
+.worker-notifications-page .worker-content {
+  padding: 28px 32px;
+}
+
+.worker-notifications-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border: 1px solid #d8cdbb;
+  border-radius: 14px;
+  background: #fffdf8;
+}
+
+.worker-notifications-header h1 {
+  margin: 0;
+  color: #10251a;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.worker-notifications-page .worker-mark-read-button {
+  min-width: 160px;
+  border-color: #d8cdbb !important;
+  border-radius: 10px !important;
+  background: #f5f0e8 !important;
+  color: #123a28 !important;
+  font-weight: 800;
+}
+
+.worker-notifications-list {
+  display: grid;
+  gap: 10px;
+}
+
+.worker-notifications-page .notification-card {
+  min-height: 0;
+  padding: 16px 18px;
+  border-color: #d8cdbb !important;
+  border-left: 4px solid #4caf74 !important;
+  border-radius: 14px !important;
+  background: #fffdf8 !important;
+}
+
+.worker-notifications-page .notification-card h2 {
+  margin-bottom: 4px !important;
+}
+
+.worker-notifications-page .notification-card p {
+  line-height: 1.45;
+}
+
+.worker-profile-page .worker-rating-summary,
+.household-smart-match-profile .worker-rating-summary {
+  margin-top: 34px;
+  padding: 0;
+  border: 1px solid #d8cdbb;
+  border-radius: 16px;
+  background: #fffdf8;
+  box-shadow: 0 14px 34px rgba(18, 58, 40, 0.08);
+  overflow: hidden;
+}
+
+.worker-rating-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 22px;
+  background: #1f9b73;
+  color: #ffffff;
+}
+
+.worker-rating-header h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.worker-rating-header span {
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.worker-rating-body {
+  display: grid;
+  gap: 24px;
+  padding: 24px;
+}
+
+.worker-rating-overview {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 28px;
+  align-items: center;
+  padding: 24px;
+  border-radius: 10px;
+  background: #f5f2eb;
+}
+
+.worker-rating-score {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: #10251a;
+  text-align: center;
+}
+
+.worker-rating-score strong {
+  font-size: 54px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.worker-rating-stars,
+.worker-review-rating {
+  color: #f4a01f;
+  letter-spacing: 1px;
+}
+
+.worker-rating-score small {
+  color: #988f83;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.worker-rating-bars {
+  display: grid;
+  gap: 8px;
+}
+
+.worker-rating-bar-row {
+  display: grid;
+  grid-template-columns: 32px 1fr 24px;
+  gap: 10px;
+  align-items: center;
+  color: #6f6a61;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.worker-rating-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #e3e0da;
+  overflow: hidden;
+}
+
+.worker-rating-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #f4a01f;
+}
+
+.worker-rating-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.worker-rating-stats div {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 9px;
+  background: #f5f2eb;
+}
+
+.worker-rating-stats strong {
+  color: #222018;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.worker-rating-stats span {
+  color: #9a9287;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.worker-recent-reviews-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.worker-recent-reviews-head h3 {
+  margin: 0;
+  color: #222018;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.worker-recent-reviews-head button {
+  border: 0;
+  background: transparent;
+  color: #1f9b73;
+  font-weight: 900;
+}
+
+.worker-recent-reviews {
+  display: grid;
+  gap: 12px;
+}
+
+.worker-recent-review {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid #ddd6ca;
+  border-radius: 10px;
+  background: #fffdf8;
+}
+
+.worker-review-avatar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: #d9f2e8;
+  color: #157052;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.worker-review-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.worker-review-title-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.worker-review-title-row strong {
+  display: block;
+  color: #2a2924;
+  font-weight: 900;
+}
+
+.worker-review-title-row small {
+  display: block;
+  color: #9a9287;
+  font-size: 13px;
+}
+
+.worker-review-rating {
+  white-space: nowrap;
+  font-weight: 900;
+}
+
+.worker-review-copy p {
+  margin: 0;
+  color: #615d55;
+  line-height: 1.5;
+}
+
+.worker-recent-review-empty {
+  grid-template-columns: 1fr;
+  text-align: center;
+}
+
+.worker-layout,
+.household-post-job-page .worker-layout,
+.household-my-jobs-page .worker-layout,
+.household-job-detail-page .worker-layout,
+.household-profile-page .worker-layout,
+.household-notifications-page .worker-layout,
+.profile-page .worker-layout,
+.worker-get-verified-page .worker-layout,
+.worker-job-detail-page .worker-layout,
+.superadmin-dashboard .worker-layout {
+  grid-template-columns: 260px minmax(0, 1fr) !important;
+}
+
+.worker-sidebar,
+.household-dashboard-sidebar,
+.superadmin-dashboard .worker-sidebar {
+  width: 260px !important;
+  min-width: 260px !important;
+  max-width: 260px !important;
+  box-sizing: border-box !important;
+}
+
+.worker-nav-item,
+.household-dashboard-wireframe .worker-nav-item,
+.superadmin-dashboard .worker-nav-item {
+  width: 100% !important;
+  min-height: 44px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  box-sizing: border-box !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  transform: none !important;
+}
+
+.sidebar-mobile-icon {
+  flex: 0 0 auto;
+  opacity: 0.78;
+}
+
+.worker-nav-item.active .sidebar-mobile-icon,
+.worker-nav-item:hover .sidebar-mobile-icon,
+.worker-nav-item:focus-visible .sidebar-mobile-icon {
+  opacity: 1;
+}
+
+.worker-nav-item.active,
+.worker-nav-item:hover,
+.worker-nav-item:focus-visible,
+.household-dashboard-wireframe .worker-nav-item.active,
+.household-dashboard-wireframe .worker-nav-item:hover,
+.household-dashboard-wireframe .worker-nav-item:focus-visible,
+.superadmin-dashboard .worker-nav-item.active,
+.superadmin-dashboard .worker-nav-item:hover,
+.superadmin-dashboard .worker-nav-item:focus-visible {
+  transform: none !important;
+}
+
+.household-my-jobs-page .household-my-jobs-panel {
+  box-shadow: none !important;
+}
+
+.household-my-jobs-page .job-summary-card {
+  transition: border-color 0.16s ease, background-color 0.16s ease !important;
+}
+
+.household-my-jobs-page .job-summary-card:hover,
+.household-my-jobs-page .job-summary-card.active {
+  border-color: #4caf74 !important;
+  background: #fffdf8 !important;
+  box-shadow: 0 10px 24px rgba(76, 175, 116, 0.16) !important;
+  transform: none !important;
+}
+
+.household-notifications-page .household-notifications-toolbar {
+  align-items: center !important;
+  margin-bottom: 20px !important;
+}
+
+.household-notifications-page .household-notifications-filter {
+  width: fit-content !important;
+  min-width: 0 !important;
+  display: inline-flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 8px !important;
+  border-radius: 12px !important;
+}
+
+.household-notifications-page .household-notifications-filter .form-label {
+  min-width: 128px !important;
+  margin: 0 !important;
+  padding: 10px 14px !important;
+  border-radius: 999px !important;
+}
+
+.household-notifications-page .household-notifications-filter .form-control {
+  width: 190px !important;
+  max-width: 190px !important;
+  min-height: 42px !important;
+}
+
+.household-notifications-page .household-notification-item {
+  cursor: default !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+}
+
+.household-notifications-page .household-notification-item:hover {
+  background: var(--gg-tayabas-surface) !important;
+  border-color: var(--gg-tayabas-border) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.household-dashboard-brandbar {
+  display: none !important;
+}
+
+::selection {
+  background: rgba(76, 175, 116, 0.32);
+  color: #10251a;
+}
+
+.worker-dashboard .table thead th,
+.worker-dashboard .table thead th::selection,
+.table thead th,
+.table thead th::selection {
+  background: var(--gg-tayabas-bg) !important;
+  color: var(--gg-dark-3) !important;
+  border-color: var(--gg-tayabas-border) !important;
+}
+
+.worker-dashboard .table thead th {
+  box-shadow: none !important;
+}
+
+@media (max-width: 768px) {
+  .worker-rating-header,
+  .worker-recent-reviews-head,
+  .worker-review-title-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .worker-rating-overview,
+  .worker-rating-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  .worker-layout,
+  .household-post-job-page .worker-layout,
+  .household-my-jobs-page .worker-layout,
+  .household-job-detail-page .worker-layout,
+  .household-profile-page .worker-layout,
+  .household-notifications-page .worker-layout,
+  .profile-page .worker-layout,
+  .worker-get-verified-page .worker-layout,
+  .worker-job-detail-page .worker-layout,
+  .superadmin-dashboard .worker-layout,
+  .household-dashboard-shell {
+    grid-template-columns: 1fr !important;
+  }
+
+  .worker-sidebar,
+  .household-dashboard-sidebar,
+  .superadmin-dashboard .worker-sidebar {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 50 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    padding: 10px 14px !important;
+    border-radius: 0 !important;
+    box-shadow: 0 10px 22px rgba(15, 45, 31, 0.16) !important;
+  }
+
+  .worker-sidebar-head,
+  .household-dashboard-wireframe .worker-sidebar-head {
+    padding: 0 0 10px !important;
+    border-bottom: 1px solid #1f4030 !important;
+    cursor: pointer !important;
+    display: grid !important;
+    grid-template-columns: auto 1fr auto !important;
+    align-items: center !important;
+  }
+
+  .worker-sidebar-head::after,
+  .household-dashboard-wireframe .worker-sidebar-head::after {
+    content: "";
+    width: 34px;
+    height: 26px;
+    border-top: 4px solid #4caf74;
+    border-bottom: 4px solid #4caf74;
+    background: linear-gradient(#4caf74, #4caf74) center / 100% 4px no-repeat;
+    border-radius: 4px;
+  }
+
+  .worker-brand,
+  .household-dashboard-wireframe .worker-brand {
+    max-width: 220px;
+    line-height: 1.25;
+  }
+
+  .worker-nav {
+    display: none !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    padding: 10px 0 2px !important;
+    overflow: visible !important;
+  }
+
+  .worker-nav-item,
+  .household-dashboard-wireframe .worker-nav-item,
+  .superadmin-dashboard .worker-nav-item {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 40px !important;
+    padding: 9px 14px !important;
+    flex: none !important;
+  }
+
+  .worker-sidebar-footer,
+  .household-dashboard-wireframe .worker-sidebar-footer {
+    display: none !important;
+    margin-top: 8px !important;
+    padding-top: 8px !important;
+  }
+
+  .worker-sidebar.mobile-menu-open .worker-nav,
+  .worker-sidebar.mobile-menu-open .worker-sidebar-footer {
+    display: flex !important;
+  }
+
+  .worker-sidebar.mobile-menu-open .worker-sidebar-head::after {
+    border-color: #ffffff;
+    background: linear-gradient(#ffffff, #ffffff) center / 100% 4px no-repeat;
+  }
+
+  .worker-sidebar-logout,
+  .household-dashboard-wireframe .worker-sidebar-logout,
+  .superadmin-dashboard .worker-sidebar-logout {
+    min-height: 40px !important;
+  }
+
+  .worker-content,
+  .household-dashboard-main,
+  .profile-page .worker-content,
+  .household-profile-page .worker-content,
+  .household-notifications-page .worker-content,
+  .worker-get-verified-page .worker-content,
+  .worker-job-detail-page .worker-content,
+  .superadmin-dashboard .worker-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 16px !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .worker-market-grid,
+  .household-my-jobs-page .my-jobs-list,
+  .household-job-form-shell,
+  .household-post-job-page .household-job-form-shell,
+  .worker-job-detail-shell,
+  .household-detail-grid,
+  .household-dashboard-stats,
+  .worker-dashboard-stats,
+  .worker-profile-layout,
+  .household-profile-layout,
+  .profile-feedback-grid,
+  .superadmin-dashboard .row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .worker-market-grid,
+  .household-my-jobs-page .my-jobs-list,
+  .household-job-form-shell,
+  .household-post-job-page .household-job-form-shell,
+  .worker-job-detail-shell,
+  .household-detail-grid,
+  .household-dashboard-stats,
+  .worker-dashboard-stats,
+  .worker-profile-layout,
+  .household-profile-layout,
+  .profile-feedback-grid,
+  .superadmin-dashboard .row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .table-responsive,
+  .household-dashboard-table-wrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .worker-dashboard .table,
+  .household-dashboard-table-wrap table,
+  .superadmin-dashboard .table {
+    min-width: 720px;
+  }
+}
+
+@media (max-width: 767px) {
+  .worker-content,
+  .household-dashboard-main,
+  .profile-page .worker-content,
+  .household-profile-page .worker-content,
+  .household-notifications-page .worker-content,
+  .worker-get-verified-page .worker-content,
+  .worker-job-detail-page .worker-content,
+  .superadmin-dashboard .worker-content {
+    padding: 12px !important;
+  }
+
+  .worker-sidebar {
+    padding: 10px !important;
+  }
+
+  .worker-sidebar-head,
+  .household-dashboard-wireframe .worker-sidebar-head {
+    align-items: center !important;
+  }
+
+  .worker-brand,
+  .household-dashboard-wireframe .worker-brand {
+    font-size: 0.78rem !important;
+  }
+
+  .worker-logo,
+  .household-dashboard-wireframe .worker-logo {
+    width: 34px !important;
+    height: 34px !important;
+  }
+
+  .worker-topbar,
+  .worker-dashboard .worker-content > .worker-topbar,
+  .household-notifications-header,
+  .worker-notifications-header,
+  .household-notifications-toolbar,
+  .worker-market-head {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .worker-topbar h1,
+  .worker-dashboard .worker-content > .worker-topbar h1,
+  .household-my-jobs-title,
+  .household-detail-page-title,
+  .household-notifications-title {
+    font-size: clamp(1.25rem, 6vw, 1.65rem) !important;
+    line-height: 1.15 !important;
+  }
+
+  .metric-grid,
+  .worker-dashboard-stats,
+  .worker-rating-overview,
+  .worker-rating-stats,
+  .household-dashboard-stats,
+  .household-detail-grid,
+  .household-my-jobs-page .my-jobs-list,
+  .worker-market-grid,
+  .profile-feedback-grid,
+  .household-dashboard-form-grid,
+  .verification-form-grid,
+  .skills-grid,
+  .worker-register-grid,
+  .register-card .row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .household-notifications-page .household-notifications-filter {
+    width: 100% !important;
+    flex-wrap: wrap !important;
+  }
+
+  .household-notifications-page .household-notifications-filter .form-label,
+  .household-notifications-page .household-notifications-filter .form-control,
+  .household-notifications-read-button,
+  .worker-mark-read-button {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .worker-recent-review,
+  .household-feedback-item {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.mobile-dashboard-topbar,
+.mobile-sidebar-overlay {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .mobile-dashboard-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 14px;
+    background: #0f2d1f;
+    box-shadow: 0 8px 18px rgba(15, 45, 31, 0.18);
+  }
+
+  .mobile-burger-button {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 0;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+  }
+
+  .mobile-burger-button span {
+    width: 18px;
+    height: 2px;
+    border-radius: 999px;
+    background: #ffffff;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+
+  .mobile-burger-button.open span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+  }
+
+  .mobile-burger-button.open span:nth-child(2) {
+    opacity: 0;
+  }
+
+  .mobile-burger-button.open span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+  }
+
+  .mobile-dashboard-title {
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  .mobile-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 85;
+    display: block;
+    background: rgba(14, 61, 41, 0.45);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s ease;
+  }
+
+  body.gawago-mobile-menu-open .mobile-sidebar-overlay {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .worker-sidebar,
+  .household-dashboard-sidebar,
+  .superadmin-dashboard .worker-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    z-index: 90 !important;
+    width: 72vw !important;
+    max-width: 300px !important;
+    min-width: 0 !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: auto !important;
+    transform: translateX(-100%) !important;
+    transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1) !important;
+    box-shadow: 18px 0 42px rgba(8, 24, 16, 0.28) !important;
+  }
+
+  body.gawago-mobile-menu-open .worker-sidebar,
+  body.gawago-mobile-menu-open .household-dashboard-sidebar,
+  body.gawago-mobile-menu-open .superadmin-dashboard .worker-sidebar {
+    transform: translateX(0) !important;
+  }
+
+  .worker-sidebar-head,
+  .household-dashboard-wireframe .worker-sidebar-head {
+    cursor: default !important;
+    display: flex !important;
+    grid-template-columns: none !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 18px 16px 14px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+
+  .worker-sidebar-head::after,
+  .household-dashboard-wireframe .worker-sidebar-head::after {
+    content: none !important;
+  }
+
+  .worker-logo,
+  .household-dashboard-wireframe .worker-logo {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  .worker-brand,
+  .household-dashboard-wireframe .worker-brand {
+    color: #ffffff !important;
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+    max-width: 190px !important;
+  }
+
+  .worker-nav {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+    padding: 12px 0 !important;
+    margin: 0 !important;
+    overflow-y: auto !important;
+  }
+
+  .worker-nav-item,
+  .household-dashboard-wireframe .worker-nav-item,
+  .superadmin-dashboard .worker-nav-item {
+    width: 100% !important;
+    min-height: 46px !important;
+    justify-content: flex-start !important;
+    padding: 12px 18px !important;
+    border: 0 !important;
+    border-left: 3px solid transparent !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: rgba(255, 255, 255, 0.68) !important;
+  }
+
+  .worker-nav-item.active,
+  .worker-nav-item:hover,
+  .worker-nav-item:focus-visible,
+  .household-dashboard-wireframe .worker-nav-item.active,
+  .household-dashboard-wireframe .worker-nav-item:hover,
+  .household-dashboard-wireframe .worker-nav-item:focus-visible,
+  .superadmin-dashboard .worker-nav-item.active,
+  .superadmin-dashboard .worker-nav-item:hover,
+  .superadmin-dashboard .worker-nav-item:focus-visible {
+    border-left-color: #4caf74 !important;
+    background: rgba(76, 175, 116, 0.2) !important;
+    color: #ffffff !important;
+  }
+
+  .worker-sidebar-footer,
+  .household-dashboard-wireframe .worker-sidebar-footer {
+    display: block !important;
+    margin-top: auto !important;
+    padding: 16px !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+
+  .worker-sidebar-logout,
+  .household-dashboard-wireframe .worker-sidebar-logout,
+  .superadmin-dashboard .worker-sidebar-logout {
+    width: 100% !important;
+    justify-content: flex-start !important;
+    min-height: 44px !important;
+  }
+
+  .worker-layout,
+  .household-dashboard-shell,
+  .household-post-job-page .worker-layout,
+  .household-my-jobs-page .worker-layout,
+  .household-job-detail-page .worker-layout,
+  .household-profile-page .worker-layout,
+  .household-notifications-page .worker-layout,
+  .profile-page .worker-layout,
+  .worker-get-verified-page .worker-layout,
+  .worker-job-detail-page .worker-layout,
+  .superadmin-dashboard .worker-layout {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.worker-nav-section,
+.household-dashboard-wireframe .worker-nav-section,
+.superadmin-dashboard .worker-nav-section {
+  display: block !important;
+  padding: 14px 18px 6px !important;
+  color: rgba(255, 255, 255, 0.28) !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 1px !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+}
+
+.worker-sidebar-logout,
+.household-dashboard-wireframe .worker-sidebar-logout,
+.superadmin-dashboard .worker-sidebar-logout {
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  min-height: 44px !important;
+  border: 1px solid rgba(220, 80, 80, 0.24) !important;
+  border-radius: 8px !important;
+  background: rgba(180, 50, 50, 0.15) !important;
+  color: #ff9a9a !important;
+  text-align: left !important;
+  font-weight: 800 !important;
+}
+
+.worker-sidebar-logout:hover,
+.worker-sidebar-logout:focus-visible,
+.household-dashboard-wireframe .worker-sidebar-logout:hover,
+.household-dashboard-wireframe .worker-sidebar-logout:focus-visible,
+.superadmin-dashboard .worker-sidebar-logout:hover,
+.superadmin-dashboard .worker-sidebar-logout:focus-visible {
+  border-color: rgba(255, 120, 120, 0.34) !important;
+  background: rgba(180, 50, 50, 0.25) !important;
+  color: #ffffff !important;
 }

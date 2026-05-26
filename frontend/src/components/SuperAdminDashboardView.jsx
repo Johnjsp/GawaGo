@@ -155,6 +155,7 @@ export default function SuperAdminDashboardView({
     {
       id: "adminmgmt",
       label: "Admin Management",
+      section: "Account",
     },
     {
       id: "audit",

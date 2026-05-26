@@ -126,6 +126,7 @@ export function useGawaGoNavigation({
         yearsExperience: currentWorker.yearsExperience || "0",
         skills: currentWorker.skills || [],
         availability: true,
+        profilePhotoFile: null,
         profilePhotoPreview:
           currentWorker.profilePhotoPreview || currentWorker.verificationSubmission?.primaryIdPreview || "",
       });
@@ -178,6 +179,7 @@ export function useGawaGoNavigation({
         phone: currentHousehold.phone || "",
         barangay: currentHousehold.barangay || "",
         streetAddress: currentHousehold.streetAddress || "",
+        profilePhotoFile: null,
         profilePhotoName: currentHousehold.profilePhotoName || "",
         profilePhotoPreview: currentHousehold.profilePhotoPreview || "",
       });

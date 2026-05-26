@@ -142,6 +142,7 @@ function App() {
     phone: "",
     barangay: "",
     streetAddress: "",
+    profilePhotoFile: null,
     profilePhotoName: "",
     profilePhotoPreview: "",
   });
@@ -173,6 +174,7 @@ function App() {
     yearsExperience: "0",
     skills: [],
     availability: true,
+    profilePhotoFile: null,
     profilePhotoPreview: "",
   });
   const [verificationForm, setVerificationForm] = useState({

@@ -6,6 +6,10 @@ import secrets
 from datetime import timedelta
 
 
+def profile_photo_path(instance, filename):
+    return f"profiles/{instance.user_id}/{filename}"
+
+
 class UserProfile(models.Model):
     ROLE_HOUSEHOLD = "household"
     ROLE_WORKER = "worker"
@@ -26,6 +30,7 @@ class UserProfile(models.Model):
     location_label = models.CharField(max_length=255, blank=True, default="")
     latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    profile_photo = models.ImageField(upload_to=profile_photo_path, blank=True, null=True)
     average_rating = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
     rating_count = models.PositiveIntegerField(default=0)
 

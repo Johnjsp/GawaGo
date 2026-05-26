@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   OPENROUTESERVICE_API_KEY,
+  OPENROUTESERVICE_DIRECTIONS_URL,
   OPENROUTESERVICE_SEARCH_URL,
   TAYABAS_CITY_CENTER,
 } from "../constants/appConstants";
@@ -100,13 +101,51 @@ async function geocodeAddress(address) {
   }
 }
 
+async function fetchDrivingRoute(userPoint, targetPoint) {
+  if (!OPENROUTESERVICE_API_KEY || !userPoint || !targetPoint) {
+    return null;
+  }
+  try {
+    const response = await fetch(OPENROUTESERVICE_DIRECTIONS_URL, {
+      method: "POST",
+      headers: {
+        Authorization: OPENROUTESERVICE_API_KEY,
+        "Content-Type": "application/json",
+        Accept: "application/json, application/geo+json",
+      },
+      body: JSON.stringify({
+        coordinates: [
+          [Number(userPoint.longitude), Number(userPoint.latitude)],
+          [Number(targetPoint.longitude), Number(targetPoint.latitude)],
+        ],
+      }),
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    const feature = Array.isArray(data?.features) ? data.features[0] : null;
+    const coordinates = Array.isArray(feature?.geometry?.coordinates) ? feature.geometry.coordinates : [];
+    const points = coordinates
+      .map((coordinate) => [Number(coordinate[1]), Number(coordinate[0])])
+      .filter(([latitude, longitude]) => Number.isFinite(latitude) && Number.isFinite(longitude));
+    const distanceMeters = Number(feature?.properties?.summary?.distance);
+    return {
+      distanceKm: Number.isFinite(distanceMeters) ? distanceMeters / 1000 : null,
+      points,
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
 function createMapIcon(L, label, markerType) {
   const safeLabel = String(label || "").replace(/[<>&"]/g, "");
   return L.divIcon({
     className: `location-distance-marker location-distance-marker-${markerType}`,
-    html: `<span>${safeLabel}</span>`,
-    iconSize: markerType === "household" ? [44, 28] : [28, 28],
-    iconAnchor: markerType === "household" ? [22, 14] : [14, 14],
+    html: safeLabel ? `<span>${safeLabel}</span>` : "<span></span>",
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
   });
 }
 
@@ -128,6 +167,7 @@ export default function LocationDistanceMap({
   targetLocation = "Target location",
   distanceKm,
   formatDistanceFn,
+  onRouteDistanceChange,
 }) {
   const mapNodeRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -137,6 +177,7 @@ export default function LocationDistanceMap({
   });
   const [status, setStatus] = useState("loading");
   const [mapStatus, setMapStatus] = useState("idle");
+  const [routeInfo, setRouteInfo] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,7 +197,31 @@ export default function LocationDistanceMap({
     };
   }, [userLatitude, userLongitude, targetLatitude, targetLongitude, userLocation, targetLocation]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function resolveRoute() {
+      setRouteInfo(null);
+      if (!resolvedPoints.user || !resolvedPoints.target) {
+        onRouteDistanceChange?.(null);
+        return;
+      }
+      const nextRoute = await fetchDrivingRoute(resolvedPoints.user, resolvedPoints.target);
+      if (cancelled) {
+        return;
+      }
+      setRouteInfo(nextRoute);
+      onRouteDistanceChange?.(nextRoute?.distanceKm ?? null);
+    }
+    resolveRoute();
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedPoints]);
+
   const resolvedDistanceKm = useMemo(() => {
+    if (routeInfo?.distanceKm !== null && routeInfo?.distanceKm !== undefined) {
+      return routeInfo.distanceKm;
+    }
     if (distanceKm !== null && distanceKm !== undefined && distanceKm !== "") {
       return Number(distanceKm);
     }
@@ -169,7 +234,7 @@ export default function LocationDistanceMap({
       resolvedPoints.target.latitude,
       resolvedPoints.target.longitude,
     );
-  }, [distanceKm, resolvedPoints]);
+  }, [distanceKm, resolvedPoints, routeInfo]);
   const distanceLabel = (formatDistanceFn || localFormatDistance)(resolvedDistanceKm);
 
   useEffect(() => {
@@ -209,14 +274,20 @@ export default function LocationDistanceMap({
         }).addTo(map);
         const userPoint = [resolvedPoints.user.latitude, resolvedPoints.user.longitude];
         const targetPoint = [resolvedPoints.target.latitude, resolvedPoints.target.longitude];
-        L.marker(userPoint, { icon: createMapIcon(L, "YOU", "household") })
+        const routePoints = routeInfo?.points?.length > 1 ? routeInfo.points : [userPoint, targetPoint];
+        L.marker(userPoint, { icon: createMapIcon(L, "", "household") })
           .addTo(map)
           .bindPopup(userLocation || "User location");
-        L.marker(targetPoint, { icon: createMapIcon(L, "W", "worker") })
+        L.marker(targetPoint, { icon: createMapIcon(L, "", "worker") })
           .addTo(map)
           .bindPopup(targetLocation || "Target location");
-        L.polyline([userPoint, targetPoint], { color: "#0d6efd", weight: 4, opacity: 0.85 }).addTo(map);
-        map.fitBounds(L.latLngBounds([userPoint, targetPoint]).pad(0.28));
+        L.polyline(routePoints, {
+          color: "#0d6efd",
+          weight: 4,
+          opacity: 0.85,
+          dashArray: routeInfo?.points?.length > 1 ? null : "8 8",
+        }).addTo(map);
+        map.fitBounds(L.latLngBounds(routePoints).pad(0.28));
         mapRendered = true;
         window.clearTimeout(fallbackTimer);
         setMapStatus("ready");
@@ -235,7 +306,7 @@ export default function LocationDistanceMap({
         mapInstanceRef.current = null;
       }
     };
-  }, [resolvedPoints, userLocation, targetLocation]);
+  }, [resolvedPoints, routeInfo, userLocation, targetLocation]);
 
   return (
     <div className="location-distance-map">
@@ -265,6 +336,7 @@ export default function LocationDistanceMap({
       <div className="location-distance-summary">
         <span>{distanceLabel}</span>
         <small>
+          {routeInfo?.points?.length > 1 ? "Road route" : "Straight-line estimate"}:{" "}
           {userLocation || "User location"} to {targetLocation || "target location"}
         </small>
       </div>

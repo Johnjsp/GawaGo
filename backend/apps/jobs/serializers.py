@@ -17,10 +17,19 @@ class JobApplicationSerializer(serializers.ModelSerializer):
 
 
 class JobImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
     class Meta:
         model = JobImage
-        fields = ["id", "image", "uploaded_at", "order"]
+        fields = ["id", "image", "image_url", "uploaded_at", "order"]
         read_only_fields = ["id", "uploaded_at"]
+
+    def get_image_url(self, obj):
+        if not obj.image:
+            return ""
+        request = self.context.get("request")
+        url = obj.image.url
+        return request.build_absolute_uri(url) if request else url
 
 
 class JobPostingSerializer(serializers.ModelSerializer):

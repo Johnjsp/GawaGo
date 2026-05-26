@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { SidebarIcon } from "./DashboardLayout";
 import HomeView from "./HomeView";
 import JobImageUpload from "./JobImageUpload";
 import LocationDistanceMap from "./LocationDistanceMap";
 import { haversineDistanceKm } from "../utils/locationServices";
+import { getWorkersNeeded } from "../utils/jobUtils";
 export default function AppViews({
   SKILLS,
   adminSection,
@@ -121,14 +123,30 @@ export default function AppViews({
   const [workerJobTypeFilter, setWorkerJobTypeFilter] = useState("All Types");
   const [workerBarangayFilter, setWorkerBarangayFilter] = useState("");
   const [workerMarketSearch, setWorkerMarketSearch] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [workerProfileEditing, setWorkerProfileEditing] = useState(false);
+  const [workerPhotoModalOpen, setWorkerPhotoModalOpen] = useState(false);
   const [householdDashboardDetailJobId, setHouseholdDashboardDetailJobId] = useState(null);
   const [householdDashboardReviewOpen, setHouseholdDashboardReviewOpen] = useState(false);
   const [householdProfileEditing, setHouseholdProfileEditing] = useState(false);
+  const [selectedWorkerRouteDistanceKm, setSelectedWorkerRouteDistanceKm] = useState(null);
+  const navIcon = (name) => <SidebarIcon name={name} />;
   const householdWorkerFeedback = currentHousehold?.receivedFeedback || [];
   const householdSubmittedReviews = currentHousehold?.givenFeedback || [];
   const workerHouseholdReviews = currentWorker?.receivedReviews || [];
   const workerHouseholdFeedback = workerHouseholdReviews.filter((review) => review.feedback || review.comment);
   const workerHouseholdRatings = workerHouseholdReviews.filter((review) => review.rating != null);
+  const workerRatingCounts = [5, 4, 3, 2, 1].map((rating) => ({
+    rating,
+    count: workerHouseholdRatings.filter((review) => Number(review.rating) === rating).length,
+  }));
+  const workerTotalReviews = workerHouseholdRatings.length;
+  const workerRatingTotal = workerHouseholdRatings.reduce((total, review) => total + Number(review.rating || 0), 0);
+  const workerAverageRating = workerTotalReviews > 0 ? workerRatingTotal / workerTotalReviews : null;
+  const workerFiveStarRate =
+    workerTotalReviews > 0
+      ? Math.round(((workerRatingCounts.find((item) => item.rating === 5)?.count || 0) / workerTotalReviews) * 100)
+      : 0;
   useEffect(() => {
     if (view !== "worker-profile" && workerProfilePanel !== "profile") {
       setWorkerProfilePanel("profile");
@@ -149,13 +167,56 @@ export default function AppViews({
       setHouseholdProfileEditing(false);
     }
   }, [householdProfileEditing, view]);
+  useEffect(() => {
+    if (view !== "worker-profile" && workerProfileEditing) {
+      setWorkerProfileEditing(false);
+    }
+  }, [view, workerProfileEditing]);
+  useEffect(() => {
+    setSelectedWorkerRouteDistanceKm(null);
+  }, [selectedJob?.id, selectedWorker?.id, selectedWorker?.username]);
+  useEffect(() => {
+    document.body.classList.toggle("gawago-mobile-menu-open", mobileMenuOpen);
+    return () => document.body.classList.remove("gawago-mobile-menu-open");
+  }, [mobileMenuOpen]);
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [view]);
+  useEffect(() => {
+    const handleMobileSidebarClick = (event) => {
+      const sidebarHead = event.target.closest(".worker-sidebar-head");
+      const sidebarAction = event.target.closest(".worker-nav-item, .worker-sidebar-logout");
+      if (!window.matchMedia("(max-width: 767px)").matches) {
+        return;
+      }
+      if (sidebarHead) {
+        sidebarHead.closest(".worker-sidebar")?.classList.toggle("mobile-menu-open");
+        return;
+      }
+      if (sidebarAction) {
+        sidebarAction.closest(".worker-sidebar")?.classList.remove("mobile-menu-open");
+      }
+    };
+    document.addEventListener("click", handleMobileSidebarClick);
+    return () => document.removeEventListener("click", handleMobileSidebarClick);
+  }, []);
+  const submitWorkerProfileForm = (event) => {
+    if (!workerProfileEditing) {
+      event.preventDefault();
+      setWorkerProfileEditing(true);
+      return;
+    }
+    const result = handleWorkerProfileSave(event);
+    Promise.resolve(result).then(() => setWorkerProfileEditing(false));
+    return result;
+  };
   const workerMarketCategories = useMemo(() => {
     return SKILLS.filter((serviceType) => serviceType !== "Other").map((serviceType) => {
       const categoryJobs = workerVisibleJobs.filter((job) => job.serviceType === serviceType);
       const matchesWorkerSkills = (currentWorker?.skills || []).includes(serviceType);
       return {
         serviceType,
-        openJobs: categoryJobs.length,
+        openJobs: categoryJobs.reduce((total, job) => total + getWorkersNeeded(job), 0),
         matchesWorkerSkills,
       };
     });
@@ -278,6 +339,23 @@ export default function AppViews({
       )
     : null;
   const selectedWorkerDistanceKm = selectedWorkerCalculatedDistanceKm ?? selectedWorker?.distanceKm ?? null;
+  const selectedWorkerReviews = selectedWorker?.receivedReviews || [];
+  const selectedWorkerRatings = selectedWorkerReviews.filter((review) => review.rating != null);
+  const selectedWorkerRatingCounts = [5, 4, 3, 2, 1].map((rating) => ({
+    rating,
+    count: selectedWorkerRatings.filter((review) => Number(review.rating) === rating).length,
+  }));
+  const selectedWorkerTotalReviews = selectedWorkerRatings.length;
+  const selectedWorkerRatingTotal = selectedWorkerRatings.reduce((total, review) => total + Number(review.rating || 0), 0);
+  const selectedWorkerAverageRating =
+    selectedWorkerTotalReviews > 0 ? selectedWorkerRatingTotal / selectedWorkerTotalReviews : null;
+  const selectedWorkerFiveStarRate =
+    selectedWorkerTotalReviews > 0
+      ? Math.round(
+          ((selectedWorkerRatingCounts.find((item) => item.rating === 5)?.count || 0) / selectedWorkerTotalReviews) *
+            100,
+        )
+      : 0;
   const householdDashboardDetailJob =
     householdJobs.find((job) => String(job.id) === String(householdDashboardDetailJobId)) || null;
   function getAssignedWorkerForJob(job) {
@@ -351,6 +429,32 @@ export default function AppViews({
     householdDashboardDetailJob,
     householdDashboardDetailWorker,
   );
+  const shouldShowSelectedJobReviewForm =
+    selectedJob?.status === "Completed" && selectedJobAssignedWorker && !selectedJobWorkerReview;
+  const shouldShowDashboardReviewForm =
+    householdDashboardDetailJob?.status === "Completed" &&
+    householdDashboardDetailWorker &&
+    !householdDashboardWorkerReview;
+  const renderHouseholdStarRatingInput = (labelId) => {
+    const selectedRating = Number(householdReviewForm.rating || 0);
+
+    return (
+      <div className="household-dashboard-star-rating" id={labelId} role="radiogroup" aria-label="Rate worker">
+        {[1, 2, 3, 4, 5].map((ratingValue) => (
+          <button
+            aria-checked={selectedRating === ratingValue}
+            aria-label={`${ratingValue} star${ratingValue > 1 ? "s" : ""}`}
+            className={`household-dashboard-star-button ${selectedRating >= ratingValue ? "selected" : ""}`}
+            key={ratingValue}
+            onClick={() => setHouseholdReviewForm((prev) => ({ ...prev, rating: String(ratingValue) }))}
+            role="radio"
+            type="button"
+          />
+        ))}
+        <span>{selectedRating ? `${selectedRating}/5` : "Select rating"}</span>
+      </div>
+    );
+  };
   const openHouseholdDashboardJobPanel = (job) => {
     const worker = getAssignedWorkerForJob(job);
     setHouseholdDashboardDetailJobId(job.id);
@@ -372,7 +476,27 @@ export default function AppViews({
   };
   const openHouseholdDashboardReviewsFromJob = () => {
     closeHouseholdDashboardJobPanel();
-    openHouseholdReviewsAll();
+    openHouseholdProfile();
+  };
+  const openReviewFormForWorker = (worker) => {
+    if (worker) {
+      setSelectedWorkerId(worker);
+    }
+    setHouseholdDashboardReviewOpen(true);
+  };
+  const confirmSelectedJobCompleted = () => {
+    if (!selectedJob) {
+      return;
+    }
+    openReviewFormForWorker(selectedJobAssignedWorker);
+    handleConfirmJobCompleted(selectedJob.id);
+  };
+  const confirmDashboardJobCompleted = () => {
+    if (!householdDashboardDetailJob) {
+      return;
+    }
+    openReviewFormForWorker(householdDashboardDetailWorker);
+    handleConfirmJobCompleted(householdDashboardDetailJob.id);
   };
   const handleHouseholdProfileEditSubmit = (event) => {
     if (!householdProfileEditing) {
@@ -386,6 +510,25 @@ export default function AppViews({
 
   return (
     <div className="app-shell">
+      {!["home", "login", "register-worker", "register-household"].includes(view) && (
+        <>
+          <div className="mobile-sidebar-overlay" onClick={() => setMobileMenuOpen(false)} />
+          <header className="mobile-dashboard-topbar">
+            <button
+              type="button"
+              className={`mobile-burger-button ${mobileMenuOpen ? "open" : ""}`}
+              aria-label="Toggle navigation"
+              aria-expanded={mobileMenuOpen}
+              onClick={() => setMobileMenuOpen((open) => !open)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+            <span className="mobile-dashboard-title">GawaGo</span>
+          </header>
+        </>
+      )}
       <main>
         {(view === "home" || view === "login") && (
           <HomeView
@@ -402,7 +545,6 @@ export default function AppViews({
         {view === "register-worker" && (
           <section className="login-section py-5">
             <div className="container login-page-wrap">
-              <h1 className="h3 mb-3">Register as Worker</h1>
               <div className="login-shell shadow-sm">
                 <div className="login-topbar d-flex align-items-center px-3">
                   <span className="badge rounded-pill text-bg-light text-primary me-2">GG</span>
@@ -413,13 +555,21 @@ export default function AppViews({
                     <h2 className="h5 mb-0">Register as Worker</h2>
                   </div>
                   <form className="p-3 p-md-4" onSubmit={handleWorkerRegisterSubmit}>
+                    <div className="register-form-intro">
+                      <h3>Register as Worker</h3>
+                      <p>Set up your worker profile to start applying for jobs near you.</p>
+                    </div>
                     <div className="row g-3">
+                      <div className="col-12">
+                        <div className="register-section-label">Personal Information</div>
+                      </div>
                       <div className="col-md-6">
                         <label className="form-label fw-semibold">First Name</label>
                         <input
                           type="text"
                           name="firstName"
                           className="form-control"
+                          placeholder="Juan"
                           value={workerForm.firstName}
                           onChange={handleWorkerChange}
                         />
@@ -430,6 +580,7 @@ export default function AppViews({
                           type="text"
                           name="lastName"
                           className="form-control"
+                          placeholder="dela Cruz"
                           value={workerForm.lastName}
                           onChange={handleWorkerChange}
                         />
@@ -440,6 +591,7 @@ export default function AppViews({
                           type="text"
                           name="username"
                           className="form-control"
+                          placeholder="juandc"
                           value={workerForm.username}
                           onChange={handleWorkerChange}
                         />
@@ -450,9 +602,13 @@ export default function AppViews({
                           type="email"
                           name="email"
                           className="form-control"
+                          placeholder="juan@email.com"
                           value={workerForm.email}
                           onChange={handleWorkerChange}
                         />
+                      </div>
+                      <div className="col-12">
+                        <div className="register-section-label">Contact & Location</div>
                       </div>
                       <div className="col-md-6">
                         <label className="form-label fw-semibold">Phone Number</label>
@@ -478,12 +634,12 @@ export default function AppViews({
                           value={workerForm.barangay}
                           onChange={handleWorkerChange}
                         >
-                          <option value="">---Select Barangay---</option>
+                          <option value="">--- Select Barangay ---</option>
                           {renderBarangayOptions()}
                         </select>
                       </div>
                       <div className="col-12">
-                        <label className="form-label fw-semibold">Street / House No</label>
+                        <label className="form-label fw-semibold">Street / House No.</label>
                         <input
                           type="text"
                           name="streetAddress"
@@ -495,7 +651,10 @@ export default function AppViews({
                         <p className="form-text mb-0">Location coverage: Tayabas City, Quezon only.</p>
                       </div>
                       <div className="col-12">
-                        <label className="form-label fw-semibold">Bio / About me</label>
+                        <div className="register-section-label">Worker Profile</div>
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label fw-semibold">Bio / About Me</label>
                         <textarea
                           name="bio"
                           className="form-control"
@@ -513,6 +672,7 @@ export default function AppViews({
                           step="0.01"
                           name="hourlyRate"
                           className="form-control"
+                          placeholder="0.00"
                           value={workerForm.hourlyRate}
                           onChange={handleWorkerChange}
                         />
@@ -525,6 +685,7 @@ export default function AppViews({
                           step="0.01"
                           name="dailyRate"
                           className="form-control"
+                          placeholder="0.00"
                           value={workerForm.dailyRate}
                           onChange={handleWorkerChange}
                         />
@@ -536,15 +697,13 @@ export default function AppViews({
                           min="0"
                           name="yearsExperience"
                           className="form-control"
+                          placeholder="0"
                           value={workerForm.yearsExperience}
                           onChange={handleWorkerChange}
                         />
                       </div>
                       <div className="col-12">
-                        <label className="form-label fw-semibold">
-                          {" "}
-                          Skills <span className="fw-normal text-muted">(Select all that apply)</span>
-                        </label>
+                        <div className="register-section-label">Skills <span>(select all that apply)</span></div>
                         <div className="skills-grid">
                           {SKILLS.map((skill) => (
                             <label key={skill} className="form-check">
@@ -572,12 +731,16 @@ export default function AppViews({
                           />
                         </div>
                       )}
+                      <div className="col-12">
+                        <div className="register-section-label">Security</div>
+                      </div>
                       <div className="col-md-6">
                         <label className="form-label fw-semibold">Password</label>
                         <input
                           type="password"
                           name="password"
                           className="form-control"
+                          placeholder="••••••••"
                           value={workerForm.password}
                           onChange={handleWorkerChange}
                         />
@@ -588,6 +751,7 @@ export default function AppViews({
                           type="password"
                           name="confirmPassword"
                           className="form-control"
+                          placeholder="••••••••"
                           value={workerForm.confirmPassword}
                           onChange={handleWorkerChange}
                         />
@@ -618,7 +782,6 @@ export default function AppViews({
         {view === "register-household" && (
           <section className="login-section py-5">
             <div className="container login-page-wrap">
-              <h1 className="h3 mb-3">Register as Household</h1>
               <div className="login-shell shadow-sm">
                 <div className="login-topbar d-flex align-items-center px-3">
                   <span className="badge rounded-pill text-bg-light text-primary me-2">GG</span>
@@ -629,13 +792,21 @@ export default function AppViews({
                     <h2 className="h5 mb-0">Register as Household</h2>
                   </div>
                   <form className="p-3 p-md-4" onSubmit={handleHouseholdRegisterSubmit}>
+                    <div className="register-form-intro">
+                      <h3>Register as Household</h3>
+                      <p>Create your account to start finding trusted workers near you.</p>
+                    </div>
                     <div className="row g-3">
+                      <div className="col-12">
+                        <div className="register-section-label">Personal Information</div>
+                      </div>
                       <div className="col-md-6">
                         <label className="form-label fw-semibold">First Name</label>
                         <input
                           type="text"
                           name="firstName"
                           className="form-control"
+                          placeholder="Juan"
                           value={householdForm.firstName}
                           onChange={handleHouseholdChange}
                         />
@@ -646,6 +817,7 @@ export default function AppViews({
                           type="text"
                           name="lastName"
                           className="form-control"
+                          placeholder="dela Cruz"
                           value={householdForm.lastName}
                           onChange={handleHouseholdChange}
                         />
@@ -656,6 +828,7 @@ export default function AppViews({
                           type="text"
                           name="username"
                           className="form-control"
+                          placeholder="juandc"
                           value={householdForm.username}
                           onChange={handleHouseholdChange}
                         />
@@ -666,9 +839,13 @@ export default function AppViews({
                           type="email"
                           name="email"
                           className="form-control"
+                          placeholder="juan@email.com"
                           value={householdForm.email}
                           onChange={handleHouseholdChange}
                         />
+                      </div>
+                      <div className="col-12">
+                        <div className="register-section-label">Contact & Location</div>
                       </div>
                       <div className="col-md-6">
                         <label className="form-label fw-semibold">Phone Number</label>
@@ -694,12 +871,12 @@ export default function AppViews({
                           value={householdForm.barangay}
                           onChange={handleHouseholdChange}
                         >
-                          <option value="">---Select Barangay---</option>
+                          <option value="">--- Select Barangay ---</option>
                           {renderBarangayOptions()}
                         </select>
                       </div>
                       <div className="col-12">
-                        <label className="form-label fw-semibold">Street / House No</label>
+                        <label className="form-label fw-semibold">Street / House No.</label>
                         <input
                           type="text"
                           name="streetAddress"
@@ -710,25 +887,16 @@ export default function AppViews({
                         />
                         <p className="form-text mb-0">Location coverage: Tayabas City, Quezon only.</p>
                       </div>
-                      {workerForm.skills.includes("Other") && (
-                        <div className="col-12">
-                          <label className="form-label fw-semibold">Other skill</label>
-                          <input
-                            type="text"
-                            name="customSkill"
-                            className="form-control"
-                            placeholder="Enter your other skill"
-                            value={workerForm.customSkill}
-                            onChange={handleWorkerChange}
-                          />
-                        </div>
-                      )}
+                      <div className="col-12">
+                        <div className="register-section-label">Security</div>
+                      </div>
                       <div className="col-md-6">
                         <label className="form-label fw-semibold">Password</label>
                         <input
                           type="password"
                           name="password"
                           className="form-control"
+                          placeholder="••••••••"
                           value={householdForm.password}
                           onChange={handleHouseholdChange}
                         />
@@ -739,6 +907,7 @@ export default function AppViews({
                           type="password"
                           name="confirmPassword"
                           className="form-control"
+                          placeholder="••••••••"
                           value={householdForm.confirmPassword}
                           onChange={handleHouseholdChange}
                         />
@@ -775,35 +944,38 @@ export default function AppViews({
                   <p className="worker-brand mb-0">GawaGo Community Platform</p>
                 </div>
                 <nav className="worker-nav">
-                  <button className="worker-nav-item active">Dashboard</button>
+                  <button className="worker-nav-item active">{navIcon("dashboard")}
+                    <span>Dashboard</span></button>
                   <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
-                    {" "}
-                    Find Jobs{" "}
+                    {navIcon("search")}
+                    <span>Find Jobs</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerProfile}>
-                    {" "}
-                    My Profile{" "}
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerApplications}>
-                    {" "}
-                    My Applications{" "}
+                    {navIcon("applications")}
+                    <span>My Applications</span>
                     {workerApplicationUnreadCount > 0 && (
                       <span className="nav-count-badge">{workerApplicationUnreadCount}</span>
                     )}
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openWorkerGetVerified}>
-                    {" "}
-                    Get Verified{" "}
+                    {navIcon("verified")}
+                    <span>Get Verified</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerNotifications}>
-                    {" "}
-                    Notifications{" "}
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                     {workerUnreadCount > 0 && <span className="nav-count-badge">{workerUnreadCount}</span>}
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -849,7 +1021,10 @@ export default function AppViews({
                   <div className="worker-market-grid">
                     {filteredWorkerMarketCategories.length > 0 ? (
                       filteredWorkerMarketCategories.map((category) => (
-                      <article className="worker-market-card" key={category.serviceType}>
+                      <article
+                        className={`worker-market-card ${category.matchesWorkerSkills ? "worker-market-card-match" : ""}`}
+                        key={category.serviceType}
+                      >
                         <div>
                           <h3>{category.serviceType}</h3>
                           <p>{category.openJobs} open jobs</p>
@@ -892,31 +1067,34 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openWorkerDashboard}>
-                    {" "}
-                    Dashboard{" "}
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
-                  <button className="worker-nav-item active">Find Jobs</button>
+                  <button className="worker-nav-item active">{navIcon("search")}
+                    <span>Find Jobs</span></button>
                   <button className="worker-nav-item" onClick={openWorkerProfile}>
-                    {" "}
-                    My Profile{" "}
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerApplications}>
-                    {" "}
-                    My Applications{" "}
+                    {navIcon("applications")}
+                    <span>My Applications</span>
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openWorkerGetVerified}>
-                    {" "}
-                    Get Verified{" "}
+                    {navIcon("verified")}
+                    <span>Get Verified</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerNotifications}>
-                    {" "}
-                    Notifications{" "}
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                     {workerUnreadCount > 0 && <span className="nav-count-badge">{workerUnreadCount}</span>}
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -1026,27 +1204,35 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openWorkerDashboard}>
-                    Dashboard
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
-                    Find Jobs
+                    {navIcon("search")}
+                    <span>Find Jobs</span>
                   </button>
                   <button className="worker-nav-item active" onClick={() => setWorkerProfilePanel("profile")}>
-                    My Profile
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerApplications}>
-                    My Applications
+                    {navIcon("applications")}
+                    <span>My Applications</span>
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openWorkerGetVerified}>
-                    Get Verified
+                    {navIcon("verified")}
+                    <span>Get Verified</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerNotifications}>
-                    Notifications
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -1165,27 +1351,35 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openWorkerDashboard}>
-                    Dashboard
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
-                    Find Jobs
+                    {navIcon("search")}
+                    <span>Find Jobs</span>
                   </button>
                   <button className="worker-nav-item active" onClick={() => setWorkerProfilePanel("profile")}>
-                    My Profile
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerApplications}>
-                    My Applications
+                    {navIcon("applications")}
+                    <span>My Applications</span>
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openWorkerGetVerified}>
-                    Get Verified
+                    {navIcon("verified")}
+                    <span>Get Verified</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerNotifications}>
-                    Notifications
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -1278,30 +1472,33 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openWorkerDashboard}>
-                    {" "}
-                    Dashboard{" "}
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
-                    {" "}
-                    Find Jobs{" "}
+                    {navIcon("search")}
+                    <span>Find Jobs</span>
                   </button>
-                  <button className="worker-nav-item active">My Profile</button>
+                  <button className="worker-nav-item active">{navIcon("profile")}
+                    <span>My Profile</span></button>
                   <button className="worker-nav-item" onClick={openWorkerApplications}>
-                    {" "}
-                    My Applications{" "}
+                    {navIcon("applications")}
+                    <span>My Applications</span>
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openWorkerGetVerified}>
-                    {" "}
-                    Get Verified{" "}
+                    {navIcon("verified")}
+                    <span>Get Verified</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerNotifications}>
-                    {" "}
-                    Notifications{" "}
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -1312,7 +1509,14 @@ export default function AppViews({
                       <div className="profile-card-head">My Profile</div>
                       <div className="p-4 text-center">
                         {workerMiniPhoto ? (
-                          <img src={workerMiniPhoto} alt="Worker profile" className="profile-photo-large mb-2" />
+                          <button
+                            className="profile-photo-preview-trigger"
+                            type="button"
+                            onClick={() => setWorkerPhotoModalOpen(true)}
+                            aria-label="View profile photo"
+                          >
+                            <img src={workerMiniPhoto} alt="Worker profile" className="profile-photo-large mb-2" />
+                          </button>
                         ) : (
                           <div className="profile-avatar mb-2">
                             {(workerProfileForm.firstName || "W").slice(0, 1).toUpperCase()}
@@ -1379,212 +1583,283 @@ export default function AppViews({
                   <div className="col-lg-8">
                     <div className="profile-card">
                       <div className="profile-card-head">Edit Profile Information</div>
-                      <form className="p-3" onSubmit={handleWorkerProfileSave}>
-                        <h3 className="h6 fw-bold mb-2">Profile Photo</h3>
-                        <div className="mb-3">
-                          <input
-                            type="file"
-                            className="form-control"
-                            name="profilePhoto"
-                            accept="image/*"
-                            onChange={handleWorkerProfileChange}
-                          />
-                          <p className="form-text mb-0">Accepted: JPG, PNG. Clear face photo recommended.</p>
-                          {workerProfileForm.profilePhotoPreview && (
-                            <img
-                              src={workerProfileForm.profilePhotoPreview}
-                              alt="Worker profile preview"
-                              className="img-fluid rounded border mt-2"
-                            />
-                          )}
-                        </div>
-                        <h3 className="h6 fw-bold mb-2">Personal Information</h3>
-                        <div className="row g-2 mb-3">
-                          <div className="col-md-6">
-                            <label className="form-label small fw-semibold mb-1">First Name</label>
+                      <form className="p-3" onSubmit={submitWorkerProfileForm}>
+                        <fieldset disabled={!workerProfileEditing} className="worker-profile-edit-fieldset">
+                          <h3 className="h6 fw-bold mb-2">Profile Photo</h3>
+                          <div className="mb-3">
                             <input
-                              name="firstName"
+                              type="file"
                               className="form-control"
-                              value={workerProfileForm.firstName}
+                              name="profilePhoto"
+                              accept="image/*"
                               onChange={handleWorkerProfileChange}
                             />
+                            <p className="form-text mb-0">Accepted: JPG, PNG. Clear face photo recommended.</p>
                           </div>
-                          <div className="col-md-6">
-                            <label className="form-label small fw-semibold mb-1">Last Name</label>
-                            <input
-                              name="lastName"
-                              className="form-control"
-                              value={workerProfileForm.lastName}
-                              onChange={handleWorkerProfileChange}
-                            />
-                          </div>
-                          <div className="col-md-6">
-                            <label className="form-label small fw-semibold mb-1">Email</label>
-                            <input
-                              type="email"
-                              name="email"
-                              className="form-control"
-                              value={workerProfileForm.email}
-                              onChange={handleWorkerProfileChange}
-                            />
-                          </div>
-                          <div className="col-md-6">
-                            <label className="form-label small fw-semibold mb-1">Phone Number</label>
-                            <input
-                              name="phone"
-                              className="form-control"
-                              value={workerProfileForm.phone}
-                              onChange={handleWorkerProfileChange}
-                            />
-                          </div>
-                          <div className="col-md-6">
-                            <label className="form-label small fw-semibold mb-1">Barangay</label>
-                            <select
-                              name="barangay"
-                              className="form-select"
-                              value={workerProfileForm.barangay}
-                              onChange={handleWorkerProfileChange}
-                            >
-                              <option value="">---Select Barangay---</option>
-                              {renderBarangayOptions()}
-                            </select>
-                          </div>
-                          <div className="col-md-6">
-                            <label className="form-label small fw-semibold mb-1">Street / House No.</label>
-                            <input
-                              name="streetAddress"
-                              className="form-control"
-                              value={workerProfileForm.streetAddress}
-                              onChange={handleWorkerProfileChange}
-                            />
-                          </div>
-                        </div>
-                        <h3 className="h6 fw-bold mb-2">Worker Information</h3>
-                        <div className="mb-2">
-                          <label className="form-label small fw-semibold mb-1">Bio / About Me</label>
-                          <textarea
-                            name="bio"
-                            className="form-control"
-                            rows="3"
-                            value={workerProfileForm.bio}
-                            onChange={handleWorkerProfileChange}
-                          />
-                        </div>
-                        <div className="row g-2 mb-3">
-                          <div className="col-md-4">
-                            <label className="form-label small fw-semibold mb-1">Availability</label>
-                            <div className="form-check mt-1">
+                          <h3 className="h6 fw-bold mb-2">Personal Information</h3>
+                          <div className="row g-2 mb-3">
+                            <div className="col-md-6">
+                              <label className="form-label small fw-semibold mb-1">First Name</label>
                               <input
-                                className="form-check-input"
-                                type="checkbox"
-                                id="availability"
-                                name="availability"
-                                checked={workerProfileForm.availability}
+                                name="firstName"
+                                className="form-control"
+                                value={workerProfileForm.firstName}
                                 onChange={handleWorkerProfileChange}
                               />
-                              <label className="form-check-label" htmlFor="availability">
-                                {" "}
-                                Available{" "}
-                              </label>
+                            </div>
+                            <div className="col-md-6">
+                              <label className="form-label small fw-semibold mb-1">Last Name</label>
+                              <input
+                                name="lastName"
+                                className="form-control"
+                                value={workerProfileForm.lastName}
+                                onChange={handleWorkerProfileChange}
+                              />
+                            </div>
+                            <div className="col-md-6">
+                              <label className="form-label small fw-semibold mb-1">Email</label>
+                              <input
+                                type="email"
+                                name="email"
+                                className="form-control"
+                                value={workerProfileForm.email}
+                                onChange={handleWorkerProfileChange}
+                              />
+                            </div>
+                            <div className="col-md-6">
+                              <label className="form-label small fw-semibold mb-1">Phone Number</label>
+                              <input
+                                name="phone"
+                                className="form-control"
+                                value={workerProfileForm.phone}
+                                onChange={handleWorkerProfileChange}
+                              />
+                            </div>
+                            <div className="col-md-6">
+                              <label className="form-label small fw-semibold mb-1">Barangay</label>
+                              <select
+                                name="barangay"
+                                className="form-select"
+                                value={workerProfileForm.barangay}
+                                onChange={handleWorkerProfileChange}
+                              >
+                                <option value="">---Select Barangay---</option>
+                                {renderBarangayOptions()}
+                              </select>
+                            </div>
+                            <div className="col-md-6">
+                              <label className="form-label small fw-semibold mb-1">Street / House No.</label>
+                              <input
+                                name="streetAddress"
+                                className="form-control"
+                                value={workerProfileForm.streetAddress}
+                                onChange={handleWorkerProfileChange}
+                              />
                             </div>
                           </div>
-                          <div className="col-md-4">
-                            <label className="form-label small fw-semibold mb-1">Hourly Rate (PHP)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              name="hourlyRate"
+                          <h3 className="h6 fw-bold mb-2">Worker Information</h3>
+                          <div className="mb-2">
+                            <label className="form-label small fw-semibold mb-1">Bio / About Me</label>
+                            <textarea
+                              name="bio"
                               className="form-control"
-                              value={workerProfileForm.hourlyRate}
+                              rows="3"
+                              value={workerProfileForm.bio}
                               onChange={handleWorkerProfileChange}
                             />
                           </div>
-                          <div className="col-md-4">
-                            <label className="form-label small fw-semibold mb-1">Daily Rate (PHP)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              name="dailyRate"
-                              className="form-control"
-                              value={workerProfileForm.dailyRate}
-                              onChange={handleWorkerProfileChange}
-                            />
-                          </div>
-                        </div>
-                        <div className="mb-3">
-                          <label className="form-label fw-semibold">
-                            {" "}
-                            Skills <span className="fw-normal text-muted">(Select all that apply)</span>
-                          </label>
-                          <div className="skills-grid">
-                            {SKILLS.map((skill) => (
-                              <label key={skill} className="form-check">
+                          <div className="row g-2 mb-3">
+                            <div className="col-md-4">
+                              <label className="form-label small fw-semibold mb-1">Availability</label>
+                              <div className="form-check mt-1">
                                 <input
-                                  type="checkbox"
                                   className="form-check-input"
-                                  checked={workerProfileForm.skills.includes(skill)}
-                                  onChange={() => toggleWorkerProfileSkill(skill)}
+                                  type="checkbox"
+                                  id="availability"
+                                  name="availability"
+                                  checked={workerProfileForm.availability}
+                                  onChange={handleWorkerProfileChange}
                                 />
-                                <span className="form-check-label">{skill}</span>
-                              </label>
-                            ))}
+                                <label className="form-check-label" htmlFor="availability">
+                                  {" "}
+                                  Available{" "}
+                                </label>
+                              </div>
+                            </div>
+                            <div className="col-md-4">
+                              <label className="form-label small fw-semibold mb-1">Hourly Rate (PHP)</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                name="hourlyRate"
+                                className="form-control"
+                                value={workerProfileForm.hourlyRate}
+                                onChange={handleWorkerProfileChange}
+                              />
+                            </div>
+                            <div className="col-md-4">
+                              <label className="form-label small fw-semibold mb-1">Daily Rate (PHP)</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                name="dailyRate"
+                                className="form-control"
+                                value={workerProfileForm.dailyRate}
+                                onChange={handleWorkerProfileChange}
+                              />
+                            </div>
                           </div>
-                        </div>
-                        <div className="d-flex gap-2">
-                          <button className="btn btn-primary" type="submit">
+                          <div className="mb-3">
+                            <label className="form-label fw-semibold">
+                              {" "}
+                              Skills <span className="fw-normal text-muted">(Select all that apply)</span>
+                            </label>
+                            <div className="skills-grid">
+                              {SKILLS.map((skill) => (
+                                <label key={skill} className="form-check">
+                                  <input
+                                    type="checkbox"
+                                    className="form-check-input"
+                                    checked={workerProfileForm.skills.includes(skill)}
+                                    onChange={() => toggleWorkerProfileSkill(skill)}
+                                  />
+                                  <span className="form-check-label">{skill}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        </fieldset>
+                        <div className="d-flex justify-content-end">
+                          <button
+                            className="btn btn-primary"
+                            type={workerProfileEditing ? "submit" : "button"}
+                            onClick={(event) => {
+                              if (!workerProfileEditing) {
+                                event.preventDefault();
+                                setWorkerProfileEditing(true);
+                              }
+                            }}
+                          >
                             {" "}
-                            Save Changes{" "}
-                          </button>
-                          <button className="btn btn-outline-secondary" type="button" onClick={openWorkerDashboard}>
-                            {" "}
-                            Cancel{" "}
+                            {workerProfileEditing ? "Save Changes" : "Edit Profile"}{" "}
                           </button>
                         </div>
                       </form>
                     </div>
                   </div>
                 </div>
-                <section className="profile-footer" aria-labelledby="worker-profile-feedback-title">
-                  <h2 className="household-profile-feedback-title" id="worker-profile-feedback-title">
-                    Feedback & Rating
-                  </h2>
-                  <div className="profile-feedback-grid">
-                    <article className="profile-feedback-card profile-feedback-card-wide">
-                      <header className="profile-card-header feedback-header">
-                        <span>Feedback & Ratings from Households</span>
-                        <button
-                          type="button"
-                          className="btn btn-light btn-sm rounded-pill"
-                          onClick={() => setWorkerProfilePanel("feedback")}
-                        >
-                          View More
-                        </button>
-                      </header>
-                      <div className="p-3 d-grid gap-2">
-                        {workerHouseholdReviews.slice(0, 2).length > 0 ? (
-                          workerHouseholdReviews
-                            .slice(0, 2)
-                            .map((review) => (
-                              <div className="review-item" key={review.id || `${review.authorName}-${review.createdAt}`}>
-                                <div className="d-flex justify-content-between gap-2">
-                                  <p className="mb-1 fw-semibold">{review.authorName || review.author || "Household"}</p>
-                                  {review.rating != null && <strong>{review.rating}/5</strong>}
-                                </div>
-                                <p className="mb-1 small text-muted">
-                                  {review.feedback || review.comment || "No comment provided."}
-                                </p>
-                                <p className="mb-0 small text-muted">{review.createdAt || review.date || "Recently"}</p>
-                              </div>
-                            ))
-                        ) : (
-                          <div className="review-item">
-                            <p className="mb-0 text-muted">No household feedback or ratings yet.</p>
-                          </div>
-                        )}
+                {workerPhotoModalOpen && workerMiniPhoto && (
+                  <div
+                    className="profile-photo-modal-backdrop"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Profile photo preview"
+                    onClick={() => setWorkerPhotoModalOpen(false)}
+                  >
+                    <button
+                      className="profile-photo-modal-close"
+                      type="button"
+                      onClick={() => setWorkerPhotoModalOpen(false)}
+                      aria-label="Close profile photo preview"
+                    >
+                      Close
+                    </button>
+                    <img
+                      src={workerMiniPhoto}
+                      alt="Worker profile enlarged"
+                      className="profile-photo-modal-image"
+                      onClick={(event) => event.stopPropagation()}
+                    />
+                  </div>
+                )}
+                <section className="profile-footer worker-rating-summary" aria-labelledby="worker-profile-feedback-title">
+                  <header className="worker-rating-header">
+                    <h2 id="worker-profile-feedback-title">☆ Feedback & Rating</h2>
+                    <span>From households</span>
+                  </header>
+                  <div className="worker-rating-body">
+                    <div className="worker-rating-overview">
+                      <div className="worker-rating-score">
+                        <strong>{workerAverageRating != null ? workerAverageRating.toFixed(1) : "No ratings yet"}</strong>
+                        {workerAverageRating != null && <span className="worker-rating-stars">★★★★★</span>}
+                        <small>
+                          {workerTotalReviews} {workerTotalReviews === 1 ? "review" : "reviews"}
+                        </small>
                       </div>
-                    </article>
+                      <div className="worker-rating-bars" aria-label="Rating distribution">
+                        {workerRatingCounts.map(({ rating, count }) => {
+                          const percentage = workerTotalReviews > 0 ? (count / workerTotalReviews) * 100 : 0;
+                          return (
+                            <div className="worker-rating-bar-row" key={rating}>
+                              <span>{rating}★</span>
+                              <div className="worker-rating-track">
+                                <div className="worker-rating-fill" style={{ width: `${percentage}%` }} />
+                              </div>
+                              <strong>{count}</strong>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="worker-rating-stats">
+                      <div>
+                        <strong>{workerTotalReviews}</strong>
+                        <span>Total reviews</span>
+                      </div>
+                      <div>
+                        <strong>{workerAverageRating != null ? workerAverageRating.toFixed(1) : "--"}</strong>
+                        <span>Average rating</span>
+                      </div>
+                      <div>
+                        <strong>{workerTotalReviews > 0 ? `${workerFiveStarRate}%` : "--"}</strong>
+                        <span>5-star rate</span>
+                      </div>
+                    </div>
+
+                    <div className="worker-recent-reviews-head">
+                      <h3>Recent reviews</h3>
+                      <button type="button" onClick={() => setWorkerProfilePanel("feedback")}>
+                        View all →
+                      </button>
+                    </div>
+
+                    <div className="worker-recent-reviews">
+                      {workerHouseholdReviews.slice(0, 2).length > 0 ? (
+                        workerHouseholdReviews.slice(0, 2).map((review) => {
+                          const author = review.authorName || review.author || "Household";
+                          const initials = author
+                            .split(" ")
+                            .map((part) => part.slice(0, 1))
+                            .join("")
+                            .slice(0, 2)
+                            .toUpperCase();
+                          return (
+                            <article className="worker-recent-review" key={review.id || `${author}-${review.createdAt}`}>
+                              <div className="worker-review-avatar">{initials || "HH"}</div>
+                              <div className="worker-review-copy">
+                                <div className="worker-review-title-row">
+                                  <div>
+                                    <strong>{author}</strong>
+                                    <small>{formatDateTime(review.createdAt || review.date || "") || "Recently"}</small>
+                                  </div>
+                                  {review.rating != null && (
+                                    <span className="worker-review-rating">★★★★★ {Number(review.rating).toFixed(1)}</span>
+                                  )}
+                                </div>
+                                <p>{review.feedback || review.comment || "No comment provided."}</p>
+                              </div>
+                            </article>
+                          );
+                        })
+                      ) : (
+                        <article className="worker-recent-review worker-recent-review-empty">
+                          <p>No household feedback or ratings yet.</p>
+                        </article>
+                      )}
+                    </div>
                   </div>
                 </section>
               </div>
@@ -1601,36 +1876,38 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openWorkerDashboard}>
-                    {" "}
-                    Dashboard{" "}
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
-                    {" "}
-                    Find Jobs{" "}
+                    {navIcon("search")}
+                    <span>Find Jobs</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerProfile}>
-                    {" "}
-                    My Profile{" "}
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item active">
-                    {" "}
-                    My Applications{" "}
+                    {navIcon("applications")}
+                    <span>My Applications</span>
                     {workerApplicationUnreadCount > 0 && (
                       <span className="nav-count-badge">{workerApplicationUnreadCount}</span>
                     )}
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openWorkerGetVerified}>
-                    {" "}
-                    Get Verified{" "}
+                    {navIcon("verified")}
+                    <span>Get Verified</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerNotifications}>
-                    {" "}
-                    Notifications{" "}
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -1704,33 +1981,35 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openWorkerDashboard}>
-                    {" "}
-                    Dashboard{" "}
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
-                    {" "}
-                    Find Jobs{" "}
+                    {navIcon("search")}
+                    <span>Find Jobs</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerProfile}>
-                    {" "}
-                    My Profile{" "}
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerApplications}>
-                    {" "}
-                    My Applications{" "}
+                    {navIcon("applications")}
+                    <span>My Applications</span>
                     {workerApplicationUnreadCount > 0 && (
                       <span className="nav-count-badge">{workerApplicationUnreadCount}</span>
                     )}
                   </button>
-                  <button className="worker-nav-item active">Get Verified</button>
+                  <button className="worker-nav-item active">{navIcon("verified")}
+                    <span>Get Verified</span></button>
                   <button className="worker-nav-item" onClick={openWorkerNotifications}>
-                    {" "}
-                    Notifications{" "}
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -1865,7 +2144,7 @@ export default function AppViews({
           </section>
         )}
         {view === "worker-notifications" && (
-          <section className="worker-dashboard">
+          <section className="worker-dashboard worker-notifications-page">
             <div className="worker-layout">
               <aside className="worker-sidebar">
                 <div className="worker-sidebar-head">
@@ -1874,41 +2153,42 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openWorkerDashboard}>
-                    {" "}
-                    Dashboard{" "}
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openAllWorkerFindJobs}>
-                    {" "}
-                    Find Jobs{" "}
+                    {navIcon("search")}
+                    <span>Find Jobs</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerProfile}>
-                    {" "}
-                    My Profile{" "}
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item" onClick={openWorkerApplications}>
-                    {" "}
-                    My Applications{" "}
+                    {navIcon("applications")}
+                    <span>My Applications</span>
                     {workerApplicationUnreadCount > 0 && (
                       <span className="nav-count-badge">{workerApplicationUnreadCount}</span>
                     )}
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openWorkerGetVerified}>
-                    {" "}
-                    Get Verified{" "}
+                    {navIcon("verified")}
+                    <span>Get Verified</span>
                   </button>
-                  <button className="worker-nav-item active">Notifications</button>
+                  <button className="worker-nav-item active">{navIcon("notifications")}
+                    <span>Notifications</span></button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
               <div className="worker-content">
-                <div className="worker-topbar">
-                  <h1 className="h4 mb-0">Notifications</h1>
-                </div>
-                <div className="d-flex justify-content-end mt-3">
+                <div className="worker-notifications-header">
+                  <h1>Notifications</h1>
                   <button
                     className="btn btn-outline-secondary worker-mark-read-button"
                     type="button"
@@ -1918,7 +2198,7 @@ export default function AppViews({
                     Mark All as Read{" "}
                   </button>
                 </div>
-                <div className="mt-3 d-grid gap-2">
+                <div className="worker-notifications-list">
                   {workerNotificationsWithReadState.map((item) => (
                     <article
                       className={`notification-card ${item.unread ? "unread" : ""}`}
@@ -1947,15 +2227,16 @@ export default function AppViews({
                     className={`worker-nav-item ${adminSection === "verification" ? "active" : ""}`}
                     onClick={openAdminDashboard}
                   >
-                    {" "}
-                    Verification Queue{" "}
+                    {navIcon("verification")}
+                    <span>Verification Queue</span>
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button
                     className={`worker-nav-item ${adminSection === "history" ? "active" : ""}`}
                     onClick={openAdminWorkersHistory}
                   >
-                    {" "}
-                    Workers History{" "}
+                    {navIcon("history")}
+                    <span>Workers History</span>
                   </button>
                 </nav>
               </aside>
@@ -2220,26 +2501,29 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openHouseholdDashboard}>
-                    {" "}
-                    Dashboard{" "}
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
-                  <button className="worker-nav-item active">Post a Job</button>
+                  <button className="worker-nav-item active">{navIcon("post-job")}
+                    <span>Post a Job</span></button>
                   <button className="worker-nav-item" onClick={openHouseholdMyJobs}>
-                    {" "}
-                    My Jobs{" "}
+                    {navIcon("jobs")}
+                    <span>My Jobs</span>
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openHouseholdProfile}>
-                    {" "}
-                    My Profile{" "}
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdNotifications}>
-                    {" "}
-                    Notifications{" "}
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -2407,26 +2691,29 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openHouseholdDashboard}>
-                    {" "}
-                    Dashboard{" "}
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdPostJob}>
-                    {" "}
-                    Post a Job{" "}
+                    {navIcon("post-job")}
+                    <span>Post a Job</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdMyJobs}>
-                    {" "}
-                    My Jobs{" "}
+                    {navIcon("jobs")}
+                    <span>My Jobs</span>
                   </button>
-                  <button className="worker-nav-item active">My Profile</button>
+                  <span className="worker-nav-section">Account</span>
+                  <button className="worker-nav-item active">{navIcon("profile")}
+                    <span>My Profile</span></button>
                   <button className="worker-nav-item" onClick={openHouseholdNotifications}>
-                    {" "}
-                    Notifications{" "}
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -2664,24 +2951,31 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openHouseholdDashboard}>
-                    Dashboard
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdPostJob}>
-                    Post a Job
+                    {navIcon("post-job")}
+                    <span>Post a Job</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdMyJobs}>
-                    My Jobs
+                    {navIcon("jobs")}
+                    <span>My Jobs</span>
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item active" onClick={openHouseholdProfile}>
-                    My Profile
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdNotifications}>
-                    Notifications
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -2767,24 +3061,31 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openHouseholdDashboard}>
-                    Dashboard
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdPostJob}>
-                    Post a Job
+                    {navIcon("post-job")}
+                    <span>Post a Job</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdMyJobs}>
-                    My Jobs
+                    {navIcon("jobs")}
+                    <span>My Jobs</span>
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item active" onClick={openHouseholdProfile}>
-                    My Profile
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdNotifications}>
-                    Notifications
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -2896,26 +3197,29 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openHouseholdDashboard}>
-                    {" "}
-                    Dashboard{" "}
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdPostJob}>
-                    {" "}
-                    Post a Job{" "}
+                    {navIcon("post-job")}
+                    <span>Post a Job</span>
                   </button>
-                  <button className="worker-nav-item active">My Jobs</button>
+                  <button className="worker-nav-item active">{navIcon("jobs")}
+                    <span>My Jobs</span></button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openHouseholdProfile}>
-                    {" "}
-                    My Profile{" "}
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdNotifications}>
-                    {" "}
-                    Notifications{" "}
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -2956,36 +3260,41 @@ export default function AppViews({
                     </div>
                     <div className="my-jobs-list">
                       {filteredHouseholdJobs.length > 0 ? (
-                        filteredHouseholdJobs.map((job) => (
-                          <article
-                            key={job.id}
-                            className={`job-summary-card ${selectedJob?.id === job.id ? "active" : ""}`}
-                          >
-                            <span className={`badge ${getJobStatusBadgeClass(job.status)}`}>{job.status}</span>
-                            <h2 className="job-summary-title">{job.jobTitle || job.serviceType}</h2>
-                            <dl className="job-summary-meta">
-                              <div>
-                                <dt>Offer Rate:</dt>
-                                <dd>{formatRate(job.offeredRate, job.rateType)}</dd>
-                              </div>
-                              <div>
-                                <dt>Schedule:</dt>
-                                <dd>{formatDateTime(job.preferredDate, job.preferredTime)}</dd>
-                              </div>
-                              <div>
-                                <dt>Applicants:</dt>
-                                <dd>{(job.applications || []).length}</dd>
-                              </div>
-                            </dl>
-                            <button
-                              type="button"
-                              className="btn btn-primary job-summary-action"
-                              onClick={() => openHouseholdJobDetail(job.id)}
+                        filteredHouseholdJobs.map((job) => {
+                          const isCompletedJob = String(job.status || "").toLowerCase() === "completed";
+                          return (
+                            <article
+                              key={job.id}
+                              className={`job-summary-card ${selectedJob?.id === job.id ? "active" : ""}`}
                             >
-                              View Details
-                            </button>
-                          </article>
-                        ))
+                              <span className={`badge ${getJobStatusBadgeClass(job.status)}`}>{job.status}</span>
+                              <h2 className="job-summary-title">{job.jobTitle || job.serviceType}</h2>
+                              <dl className="job-summary-meta">
+                                <div>
+                                  <dt>Offer Rate:</dt>
+                                  <dd>{formatRate(job.offeredRate, job.rateType)}</dd>
+                                </div>
+                                <div>
+                                  <dt>Schedule:</dt>
+                                  <dd>{formatDateTime(job.preferredDate, job.preferredTime)}</dd>
+                                </div>
+                                <div>
+                                  <dt>Applicants:</dt>
+                                  <dd>{(job.applications || []).length}</dd>
+                                </div>
+                              </dl>
+                              {!isCompletedJob && (
+                                <button
+                                  type="button"
+                                  className="btn btn-primary job-summary-action"
+                                  onClick={() => openHouseholdJobDetail(job.id)}
+                                >
+                                  View Details
+                                </button>
+                              )}
+                            </article>
+                          );
+                        })
                       ) : (
                         <article className="household-my-jobs-empty">
                           <h2>No {householdJobStatusFilter.toLowerCase()} jobs found</h2>
@@ -3009,32 +3318,36 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openHouseholdDashboard}>
-                    Dashboard
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdPostJob}>
-                    Post a Job
+                    {navIcon("post-job")}
+                    <span>Post a Job</span>
                   </button>
                   <button className="worker-nav-item active" onClick={openHouseholdMyJobs}>
-                    My Jobs
+                    {navIcon("jobs")}
+                    <span>My Jobs</span>
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openHouseholdProfile}>
-                    My Profile
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdNotifications}>
-                    Notifications
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
               <div className="worker-content">
                 <h1 className="household-detail-page-title mb-3">Job Details</h1>
-                <button className="btn btn-outline-secondary household-detail-back mb-3" type="button" onClick={openHouseholdMyJobs}>
-                  Back to My Jobs
-                </button>
 
                 <section className="household-detail-panel profile-card p-3 p-md-4">
                   <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
@@ -3130,75 +3443,49 @@ export default function AppViews({
                             ? "Review the completed work, then confirm completion."
                             : "No worker is assigned yet, so completion controls are not available."}
                     </div>
-                    <div className="household-dashboard-completion-actions">
-                      <button
-                        className={`btn ${
-                          selectedJob.status === "Completed" || !selectedJobAssignedWorker ? "btn-secondary" : "btn-success"
-                        }`}
-                        type="button"
-                        disabled={selectedJob.status === "Completed" || !selectedJobAssignedWorker}
-                        onClick={() => handleConfirmJobCompleted(selectedJob.id)}
-                      >
-                        {selectedJob.status === "Completed" ? "Completion Confirmed" : "Confirm Completed"}
-                      </button>
-                      <button
-                        className={`btn ${selectedJobWorkerReview ? "btn-secondary" : "btn-primary"}`}
-                        type="button"
-                        disabled={!selectedJobAssignedWorker || selectedJob.status !== "Completed" || Boolean(selectedJobWorkerReview)}
-                        onClick={() => {
-                          if (selectedJobAssignedWorker) {
-                            setSelectedWorkerId(selectedJobAssignedWorker);
-                          }
-                          setHouseholdDashboardReviewOpen((prev) => !prev);
-                        }}
-                      >
-                        {selectedJobWorkerReview ? "Worker Reviewed" : "Rate Worker"}
-                      </button>
-                    </div>
+                    {selectedJob.status !== "Completed" && (
+                      <div className="household-dashboard-completion-actions">
+                        <button
+                          className={`btn ${!selectedJobAssignedWorker ? "btn-secondary" : "btn-success"}`}
+                          type="button"
+                          disabled={!selectedJobAssignedWorker}
+                          onClick={confirmSelectedJobCompleted}
+                        >
+                          Confirm Completed
+                        </button>
+                      </div>
+                    )}
                     {selectedJobWorkerReview && (
                       <div className="alert alert-success mb-0">
                         Review completed. You rated this worker {selectedJobWorkerReview.rating}/5.
                       </div>
                     )}
-                    {householdDashboardReviewOpen && !selectedJobWorkerReview && (
+                    {(householdDashboardReviewOpen || shouldShowSelectedJobReviewForm) && !selectedJobWorkerReview && (
                       <form className="household-dashboard-review-form" onSubmit={handleHouseholdReviewSubmit}>
-                        <label className="form-label fw-semibold" htmlFor="household-detail-rating-input">
-                          Rate from 1-5
-                        </label>
-                        <input
-                          className="form-control"
-                          id="household-detail-rating-input"
-                          max="5"
-                          min="1"
-                          onChange={(event) => {
-                            const numericRating = Number(event.target.value);
-                            const nextRating =
-                              Number.isFinite(numericRating) && numericRating > 0
-                                ? Math.min(5, Math.max(1, numericRating))
-                                : "";
-                            setHouseholdReviewForm((prev) => ({
-                              ...prev,
-                              rating: nextRating === "" ? "" : String(nextRating),
-                            }));
-                          }}
-                          placeholder="e.g. 3.5"
-                          step="0.5"
-                          type="number"
-                          value={householdReviewForm.rating}
-                        />
+                        <label className="form-label fw-semibold" htmlFor="household-detail-rating-stars">Rating</label>
+                        {renderHouseholdStarRatingInput("household-detail-rating-stars")}
                         <label className="form-label fw-semibold">Feedback for worker</label>
                         <textarea
                           className="form-control"
-                          rows="4"
+                          rows="3"
                           placeholder="Write feedback about the worker..."
                           value={householdReviewForm.feedback}
                           onChange={(event) =>
                             setHouseholdReviewForm((prev) => ({ ...prev, feedback: event.target.value }))
                           }
                         />
-                        <button className="btn btn-success" type="submit">
-                          Submit Rating
-                        </button>
+                        <div className="household-dashboard-form-actions">
+                          <button className="btn btn-success" type="submit">
+                            Done
+                          </button>
+                          <button
+                            className="btn btn-outline-secondary"
+                            type="button"
+                            onClick={openHouseholdMyJobs}
+                          >
+                            Close
+                          </button>
+                        </div>
                       </form>
                     )}
                   </div>
@@ -3273,19 +3560,25 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openHouseholdDashboard}>
-                    Dashboard
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdPostJob}>
-                    Post a Job
+                    {navIcon("post-job")}
+                    <span>Post a Job</span>
                   </button>
                   <button className="worker-nav-item active" onClick={openHouseholdMyJobs}>
-                    My Jobs
+                    {navIcon("jobs")}
+                    <span>My Jobs</span>
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openHouseholdProfile}>
-                    My Profile
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdNotifications}>
-                    Notifications
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                     {householdUnreadCount > 0 && <span className="nav-count-badge">{householdUnreadCount}</span>}
                   </button>
                 </nav>
@@ -3316,24 +3609,25 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openHouseholdDashboard}>
-                    {" "}
-                    Dashboard{" "}
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdPostJob}>
-                    {" "}
-                    Post a Job{" "}
+                    {navIcon("post-job")}
+                    <span>Post a Job</span>
                   </button>
                   <button className="worker-nav-item active" onClick={openHouseholdMyJobs}>
-                    {" "}
-                    My Jobs{" "}
+                    {navIcon("jobs")}
+                    <span>My Jobs</span>
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openHouseholdProfile}>
-                    {" "}
-                    My Profile{" "}
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item active" onClick={openHouseholdNotifications}>
-                    {" "}
-                    Notifications{" "}
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                     {householdUnreadCount > 0 && <span className="nav-count-badge">{householdUnreadCount}</span>}
                   </button>
                 </nav>
@@ -3420,7 +3714,9 @@ export default function AppViews({
                     <div className="profile-card mb-3" data-distance-location-map="true">
                       <div className="profile-card-head d-flex justify-content-between align-items-center gap-3">
                         <span>Distance & Location</span>
-                        <span className="badge text-bg-light">{formatDistance(selectedWorkerDistanceKm)}</span>
+                        <span className="badge text-bg-light">
+                          {formatDistance(selectedWorkerRouteDistanceKm ?? selectedWorkerDistanceKm)}
+                        </span>
                       </div>
                       <div className="p-3">
                         <LocationDistanceMap
@@ -3435,6 +3731,7 @@ export default function AppViews({
                           targetLocation={formatLocation(selectedWorker.barangay, selectedWorker.streetAddress)}
                           distanceKm={selectedWorkerDistanceKm}
                           formatDistanceFn={formatDistance}
+                          onRouteDistanceChange={setSelectedWorkerRouteDistanceKm}
                         />
                       </div>
                     </div>
@@ -3450,74 +3747,91 @@ export default function AppViews({
                     </div>
                   </div>
                 </div>
-                <section className="smart-match-feedback-section profile-footer" aria-labelledby="smart-match-feedback-title">
-                  <h2 className="household-profile-feedback-title" id="smart-match-feedback-title">
-                    Feedback & Rating
-                  </h2>
-                  <div className="profile-feedback-grid">
-                    <article className="profile-feedback-card">
-                      <header className="profile-card-header feedback-header">
-                        <span>Feedback from Workers</span>
-                        <button
-                          type="button"
-                          className="btn btn-light btn-sm rounded-pill"
-                          onClick={openHouseholdFeedbackAll}
-                        >
-                          View All
-                        </button>
-                      </header>
-                      <div className="p-3 d-grid gap-2">
-                        {householdWorkerFeedback.slice(0, 2).length > 0 ? (
-                          householdWorkerFeedback.slice(0, 2).map((review) => (
-                            <div className="review-item" key={review.id || `${review.authorName}-${review.createdAt}`}>
-                              <p className="mb-1 fw-semibold">{review.authorName || review.author || "Worker"}</p>
-                              <p className="mb-1 small text-muted">
-                                {review.feedback || review.comment || "No comment provided."}
-                              </p>
-                              <p className="mb-0 small text-muted">{review.createdAt || review.date || "Recently"}</p>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="review-item">
-                            <p className="mb-0 text-muted">No worker feedback yet.</p>
-                          </div>
-                        )}
+                <section className="smart-match-feedback-section profile-footer worker-rating-summary" aria-labelledby="smart-match-feedback-title">
+                  <header className="worker-rating-header">
+                    <h2 id="smart-match-feedback-title">☆ Feedback & Rating</h2>
+                    <span>From households</span>
+                  </header>
+                  <div className="worker-rating-body">
+                    <div className="worker-rating-overview">
+                      <div className="worker-rating-score">
+                        <strong>
+                          {selectedWorkerAverageRating != null ? selectedWorkerAverageRating.toFixed(1) : "No ratings yet"}
+                        </strong>
+                        {selectedWorkerAverageRating != null && <span className="worker-rating-stars">★★★★★</span>}
+                        <small>
+                          {selectedWorkerTotalReviews} {selectedWorkerTotalReviews === 1 ? "review" : "reviews"}
+                        </small>
                       </div>
-                    </article>
-                    <article className="profile-feedback-card">
-                      <header className="profile-card-header feedback-header">
-                        <span>Reviews You Submitted</span>
-                        <button
-                          type="button"
-                          className="btn btn-light btn-sm rounded-pill"
-                          onClick={openHouseholdReviewsAll}
-                        >
-                          View All
-                        </button>
-                      </header>
-                      <div className="p-3 d-grid gap-2">
-                        {householdSubmittedReviews.slice(0, 2).length > 0 ? (
-                          householdSubmittedReviews.slice(0, 2).map((review) => (
-                            <div className="review-item" key={review.id || `${review.targetName}-${review.createdAt}`}>
-                              <div className="d-flex justify-content-between gap-2">
-                                <div>
-                                  <p className="mb-1 fw-semibold">{review.targetName || review.target || "Worker"}</p>
-                                  <p className="mb-1 small text-muted">
-                                    {review.feedback || review.comment || "No comment provided."}
-                                  </p>
-                                  <p className="mb-0 small text-muted">{review.createdAt || review.date || "Recently"}</p>
-                                </div>
-                                <strong>{review.rating != null ? `${review.rating}/5` : "Feedback"}</strong>
+                      <div className="worker-rating-bars" aria-label="Rating distribution">
+                        {selectedWorkerRatingCounts.map(({ rating, count }) => {
+                          const percentage = selectedWorkerTotalReviews > 0 ? (count / selectedWorkerTotalReviews) * 100 : 0;
+                          return (
+                            <div className="worker-rating-bar-row" key={rating}>
+                              <span>{rating}★</span>
+                              <div className="worker-rating-track">
+                                <div className="worker-rating-fill" style={{ width: `${percentage}%` }} />
                               </div>
+                              <strong>{count}</strong>
                             </div>
-                          ))
-                        ) : (
-                          <div className="review-item">
-                            <p className="mb-0 text-muted">No submitted reviews yet.</p>
-                          </div>
-                        )}
+                          );
+                        })}
                       </div>
-                    </article>
+                    </div>
+
+                    <div className="worker-rating-stats">
+                      <div>
+                        <strong>{selectedWorkerTotalReviews}</strong>
+                        <span>Total reviews</span>
+                      </div>
+                      <div>
+                        <strong>{selectedWorkerAverageRating != null ? selectedWorkerAverageRating.toFixed(1) : "--"}</strong>
+                        <span>Average rating</span>
+                      </div>
+                      <div>
+                        <strong>{selectedWorkerTotalReviews > 0 ? `${selectedWorkerFiveStarRate}%` : "--"}</strong>
+                        <span>5-star rate</span>
+                      </div>
+                    </div>
+
+                    <div className="worker-recent-reviews-head">
+                      <h3>Recent reviews</h3>
+                    </div>
+
+                    <div className="worker-recent-reviews">
+                      {selectedWorkerReviews.slice(0, 2).length > 0 ? (
+                        selectedWorkerReviews.slice(0, 2).map((review) => {
+                          const author = review.authorName || review.author || "Household";
+                          const initials = author
+                            .split(" ")
+                            .map((part) => part.slice(0, 1))
+                            .join("")
+                            .slice(0, 2)
+                            .toUpperCase();
+                          return (
+                            <article className="worker-recent-review" key={review.id || `${author}-${review.createdAt}`}>
+                              <div className="worker-review-avatar">{initials || "HH"}</div>
+                              <div className="worker-review-copy">
+                                <div className="worker-review-title-row">
+                                  <div>
+                                    <strong>{author}</strong>
+                                    <small>{formatDateTime(review.createdAt || review.date || "") || "Recently"}</small>
+                                  </div>
+                                  {review.rating != null && (
+                                    <span className="worker-review-rating">★★★★★ {Number(review.rating).toFixed(1)}</span>
+                                  )}
+                                </div>
+                                <p>{review.feedback || review.comment || "No comment provided."}</p>
+                              </div>
+                            </article>
+                          );
+                        })
+                      ) : (
+                        <article className="worker-recent-review worker-recent-review-empty">
+                          <p>No household feedback or ratings yet.</p>
+                        </article>
+                      )}
+                    </div>
                   </div>
                 </section>
               </div>
@@ -3534,30 +3848,32 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item" onClick={openHouseholdDashboard}>
-                    {" "}
-                    Dashboard{" "}
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdPostJob}>
-                    {" "}
-                    Post a Job{" "}
+                    {navIcon("post-job")}
+                    <span>Post a Job</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdMyJobs}>
-                    {" "}
-                    My Jobs{" "}
+                    {navIcon("jobs")}
+                    <span>My Jobs</span>
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openHouseholdProfile}>
-                    {" "}
-                    My Profile{" "}
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item active" onClick={openHouseholdNotifications}>
-                    {" "}
-                    Notifications{" "}
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                     {householdUnreadCount > 0 && <span className="nav-count-badge">{householdUnreadCount}</span>}
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -3606,36 +3922,12 @@ export default function AppViews({
                           <article
                             className={`notification-card household-notification-item ${item.unread ? "unread" : ""}`}
                             key={item.id}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => {
-                              markNotificationRead(item.id);
-                              openHouseholdNotificationWorker(item);
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
-                                markNotificationRead(item.id);
-                                openHouseholdNotificationWorker(item);
-                              }
-                            }}
                           >
                             <div>
                               <p className="small text-muted mb-1">{item.date}</p>
                               <h2 className="h6 mb-1">{item.title}</h2>
                               <p className="mb-0">{item.message}</p>
                             </div>
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary btn-sm"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                markNotificationRead(item.id);
-                                openHouseholdNotificationWorker(item);
-                              }}
-                            >
-                              View Details
-                            </button>
                           </article>
                         ))
                       ) : (
@@ -3659,7 +3951,6 @@ export default function AppViews({
         )}
         {view === "household-dashboard" && (
           <section className="worker-dashboard household-dashboard-wireframe">
-            <div className="household-dashboard-brandbar">GawaGo</div>
             <div className="household-dashboard-shell">
               <aside className="worker-sidebar household-dashboard-sidebar">
                 <div className="worker-sidebar-head">
@@ -3668,25 +3959,32 @@ export default function AppViews({
                 </div>
                 <nav className="worker-nav">
                   <button className="worker-nav-item active" onClick={openHouseholdDashboard}>
-                    Dashboard
+                    {navIcon("dashboard")}
+                    <span>Dashboard</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdPostJob}>
-                    Post a Job
+                    {navIcon("post-job")}
+                    <span>Post a Job</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdMyJobs}>
-                    My Jobs
+                    {navIcon("jobs")}
+                    <span>My Jobs</span>
                   </button>
+                  <span className="worker-nav-section">Account</span>
                   <button className="worker-nav-item" onClick={openHouseholdProfile}>
-                    My Profile
+                    {navIcon("profile")}
+                    <span>My Profile</span>
                   </button>
                   <button className="worker-nav-item" onClick={openHouseholdNotifications}>
-                    Notifications
+                    {navIcon("notifications")}
+                    <span>Notifications</span>
                     {householdUnreadCount > 0 && <span className="nav-count-badge">{householdUnreadCount}</span>}
                   </button>
                 </nav>
                 <div className="worker-sidebar-footer">
                   <button className="worker-sidebar-logout" type="button" onClick={handleLogout}>
-                    Log Out
+                    {navIcon("logout")}
+                    <span>Log Out</span>
                   </button>
                 </div>
               </aside>
@@ -3914,57 +4212,34 @@ export default function AppViews({
                                 </p>
                               </li>
                             </ol>
-                            <div className="household-dashboard-completion-actions">
-                              <button
-                                className={`btn ${
-                                  householdDashboardDetailJob.status === "Completed" || !householdDashboardDetailWorker
-                                    ? "btn-secondary"
-                                    : "btn-success"
-                                }`}
-                                type="button"
-                                disabled={householdDashboardDetailJob.status === "Completed" || !householdDashboardDetailWorker}
-                                onClick={() => handleConfirmJobCompleted(householdDashboardDetailJob.id)}
+                            {householdDashboardDetailJob.status !== "Completed" && (
+                              <div className="household-dashboard-completion-actions">
+                                <button
+                                  className={`btn ${!householdDashboardDetailWorker ? "btn-secondary" : "btn-success"}`}
+                                  type="button"
+                                  disabled={!householdDashboardDetailWorker}
+                                  onClick={confirmDashboardJobCompleted}
+                                >
+                                  Confirm Completed
+                                </button>
+                              </div>
+                            )}
+                            {householdDashboardWorkerReview && (
+                              <div className="alert alert-success mb-0 household-dashboard-review-complete">
+                                <span>Review completed. You rated this worker {householdDashboardWorkerReview.rating}/5.</span>
+                              </div>
+                            )}
+                            {(householdDashboardReviewOpen || shouldShowDashboardReviewForm) && !householdDashboardWorkerReview && (
+                              <form
+                                className="household-dashboard-review-form"
+                                id="household-dashboard-review-form"
+                                onSubmit={handleHouseholdReviewSubmit}
                               >
-                                {householdDashboardDetailJob.status === "Completed"
-                                  ? "Completion Confirmed"
-                                  : "Confirm Completed"}
-                              </button>
-                              <button
-                                className="btn btn-primary"
-                                type="button"
-                                disabled={!householdDashboardDetailWorker}
-                                onClick={() => setHouseholdDashboardReviewOpen((prev) => !prev)}
-                              >
-                                Rate Worker
-                              </button>
-                            </div>
-                            {householdDashboardReviewOpen && (
-                              <form className="household-dashboard-review-form" onSubmit={handleHouseholdReviewSubmit}>
-                                <label className="form-label fw-semibold" htmlFor="household-dashboard-rating-input">
-                                  Rate from 1-5
+                                <label className="form-label fw-semibold" htmlFor="household-dashboard-rating-stars">
+                                  Rating
                                 </label>
-                                <input
-                                  className="form-control"
-                                  id="household-dashboard-rating-input"
-                                  max="5"
-                                  min="1"
-                                  onChange={(event) => {
-                                    const numericRating = Number(event.target.value);
-                                    const nextRating =
-                                      Number.isFinite(numericRating) && numericRating > 0
-                                        ? Math.min(5, Math.max(1, numericRating))
-                                        : "";
-                                    setHouseholdReviewForm((prev) => ({
-                                      ...prev,
-                                      rating: nextRating === "" ? "" : String(nextRating),
-                                    }));
-                                  }}
-                                  placeholder="e.g. 3.5"
-                                  step="0.5"
-                                  type="number"
-                                  value={householdReviewForm.rating}
-                                />
-                                <div className="household-dashboard-star-rating" aria-label="Rating preview">
+                                {renderHouseholdStarRatingInput("household-dashboard-rating-stars")}
+                                <div className="household-dashboard-star-rating household-dashboard-rating-preview-hidden" aria-label="Rating preview">
                                   {[1, 2, 3, 4, 5].map((ratingValue) => {
                                     const selectedRating = Number(householdReviewForm.rating || 0);
                                     const isFull = selectedRating >= ratingValue;
@@ -3986,25 +4261,38 @@ export default function AppViews({
                                 <label className="form-label fw-semibold">Feedback for worker</label>
                                 <textarea
                                   className="form-control"
-                                  rows="4"
+                                  rows="3"
                                   placeholder="Write feedback about the worker..."
                                   value={householdReviewForm.feedback}
                                   onChange={(event) =>
                                     setHouseholdReviewForm((prev) => ({ ...prev, feedback: event.target.value }))
                                   }
                                 />
-                                <button className="btn btn-success" type="submit">
-                                  Submit Rating
-                                </button>
                               </form>
                             )}
                             <div className="household-dashboard-modal-actions">
                               <button
-                                className="btn btn-outline-secondary"
-                                type="button"
-                                onClick={closeHouseholdDashboardJobPanel}
+                                className="btn btn-success"
+                                form={
+                                  (householdDashboardReviewOpen || shouldShowDashboardReviewForm) &&
+                                  !householdDashboardWorkerReview
+                                    ? "household-dashboard-review-form"
+                                    : undefined
+                                }
+                                type={
+                                  (householdDashboardReviewOpen || shouldShowDashboardReviewForm) &&
+                                  !householdDashboardWorkerReview
+                                    ? "submit"
+                                    : "button"
+                                }
+                                onClick={
+                                  (householdDashboardReviewOpen || shouldShowDashboardReviewForm) &&
+                                  !householdDashboardWorkerReview
+                                    ? undefined
+                                    : closeHouseholdDashboardJobPanel
+                                }
                               >
-                                Close
+                                Done
                               </button>
                               {householdDashboardDetailJob.status === "Completed" && (
                                 <button

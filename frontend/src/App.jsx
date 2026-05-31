@@ -1,6 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { apiRequest, clearAuthToken, getAuthToken, setAuthToken, setUnauthorizedHandler } from "./api/apiClient";
-import ForgotPasswordView from "./components/ForgotPasswordView";
 import {
   BARANGAYS,
   DEMO_HOUSEHOLD_ACCOUNTS,
@@ -10,10 +9,10 @@ import {
   EMPTY_HOUSEHOLD_REVIEW_FORM,
   EMPTY_WORKER_FEEDBACK_FORM,
   EMPTY_WORKER_FORM,
+  IS_DEMO_MODE,
   PHILIPPINES_MAP_CENTER,
   SKILLS,
   STORAGE_KEYS,
-  SUPER_ADMIN_ACCOUNT,
 } from "./constants/appConstants";
 import {
   formatCurrency,
@@ -80,9 +79,6 @@ import { readResponseData } from "./utils/apiUtils";
 import { loadLeafletAssets } from "./utils/mapAssets";
 import { renderBarangayOptions } from "./utils/formOptions";
 import "./styles/analytics.css";
-import AppViews from "./components/AppViews";
-import SuperAdminDashboardView from "./components/SuperAdminDashboardView";
-import WorkerJobDetailView from "./components/WorkerJobDetailView";
 import { useGawaGoNavigation } from "./hooks/useGawaGoNavigation";
 import { useBackendSync } from "./hooks/useBackendSync";
 import { usePasswordReset } from "./hooks/usePasswordReset";
@@ -93,8 +89,26 @@ import { useDashboardMetrics } from "./hooks/useDashboardMetrics";
 import { useBackendPolling } from "./hooks/useBackendPolling";
 import { useGawaGoDomEffects } from "./hooks/useGawaGoDomEffects";
 import { useGawaGoPersistence } from "./hooks/useGawaGoPersistence";
+
+const AppViews = lazy(() => import("./components/AppViews"));
+const ForgotPasswordView = lazy(() => import("./components/ForgotPasswordView"));
+const SuperAdminDashboardView = lazy(() => import("./components/SuperAdminDashboardView"));
+const WorkerJobDetailView = lazy(() => import("./components/WorkerJobDetailView"));
+
+function ViewLoading() {
+  return (
+    <main className="min-vh-100 d-flex align-items-center justify-content-center bg-light">
+      <div className="text-center">
+        <div className="spinner-border text-success" role="status" aria-label="Loading" />
+      </div>
+    </main>
+  );
+}
+
 function App() {
-  ensureDemoVersion();
+  if (IS_DEMO_MODE) {
+    ensureDemoVersion();
+  }
   const [view, setView] = useState("home");
   const [loginForm, setLoginForm] = useState({
     username: "",
@@ -113,16 +127,24 @@ function App() {
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [registeredWorkers, setRegisteredWorkers] = useState(() =>
-    mergeDemoRecords(getStoredCollection(STORAGE_KEYS.workers, []), DEMO_WORKER_ACCOUNTS),
+    IS_DEMO_MODE ? mergeDemoRecords(getStoredCollection(STORAGE_KEYS.workers, []), DEMO_WORKER_ACCOUNTS) : [],
   );
   const [registeredHouseholds, setRegisteredHouseholds] = useState(() =>
-    mergeDemoRecords(getStoredCollection(STORAGE_KEYS.households, []), DEMO_HOUSEHOLD_ACCOUNTS),
+    IS_DEMO_MODE ? mergeDemoRecords(getStoredCollection(STORAGE_KEYS.households, []), DEMO_HOUSEHOLD_ACCOUNTS) : [],
   );
   const [verificationRequests, setVerificationRequests] = useState(() =>
-    mergeDemoRecords(getStoredCollection(STORAGE_KEYS.verificationRequests, []), DEMO_VERIFICATION_REQUESTS, "id"),
+    IS_DEMO_MODE
+      ? mergeDemoRecords(getStoredCollection(STORAGE_KEYS.verificationRequests, []), DEMO_VERIFICATION_REQUESTS, "id")
+      : [],
   );
   const [postedJobs, setPostedJobs] = useState(() =>
-    mergeDemoRecords(getStoredCollection(STORAGE_KEYS.jobs, []).map(normalizeJobRecord), createDemoJobPostings(), "id"),
+    IS_DEMO_MODE
+      ? mergeDemoRecords(
+          getStoredCollection(STORAGE_KEYS.jobs, []).map(normalizeJobRecord),
+          createDemoJobPostings(),
+          "id",
+        )
+      : [],
   );
   const [backendNotifications, setBackendNotifications] = useState([]);
   const [selectedVerificationRequestId, setSelectedVerificationRequestId] = useState(null);
@@ -174,12 +196,15 @@ function App() {
     yearsExperience: "0",
     skills: [],
     availability: true,
+    availabilityWindows: [],
     profilePhotoFile: null,
     profilePhotoPreview: "",
   });
   const [verificationForm, setVerificationForm] = useState({
     primaryIdName: "",
+    primaryIdFile: null,
     secondaryDocName: "",
+    secondaryDocFile: null,
     notes: "",
     primaryIdPreview: "",
     secondaryDocPreview: "",
@@ -200,7 +225,6 @@ function App() {
     zoom: 6,
     touched: false,
   });
-  const householdJobMapContainerIdRef = useRef(`household-job-map-${Math.random().toString(36).slice(2)}`);
   const householdJobBarangaySyncRef = useRef(0);
   const { handleForgotPasswordChange, handleForgotPasswordEmailSubmit, handleResetPassword, handleVerifyResetToken } =
     usePasswordReset({
@@ -212,6 +236,9 @@ function App() {
       setForgotPasswordStep,
     });
   useEffect(() => {
+    if (!IS_DEMO_MODE) {
+      return;
+    }
     setRegisteredWorkers((prev) => mergeDemoRecords(prev, DEMO_WORKER_ACCOUNTS));
     setRegisteredHouseholds((prev) => mergeDemoRecords(prev, DEMO_HOUSEHOLD_ACCOUNTS));
     setVerificationRequests((prev) => mergeDemoRecords(prev, DEMO_VERIFICATION_REQUESTS, "id"));
@@ -515,6 +542,7 @@ function App() {
     postedJobs,
     registeredHouseholds,
     registeredWorkers,
+    verificationRequests,
   });
   useBackendPolling({
     currentUser,
@@ -533,6 +561,7 @@ function App() {
     setCurrentUser,
   });
   useGawaGoPersistence({
+    isDemoMode: IS_DEMO_MODE,
     notificationReads,
     postedJobs,
     registeredHouseholds,
@@ -644,7 +673,6 @@ function App() {
     EMPTY_HOUSEHOLD_REVIEW_FORM,
     EMPTY_WORKER_FEEDBACK_FORM,
     EMPTY_WORKER_FORM,
-    SUPER_ADMIN_ACCOUNT,
     apiRequest,
     clearAuthToken,
     createJobRecord,
@@ -704,7 +732,6 @@ function App() {
     setRegisteredWorkers,
     setSelectedJobId,
     setSelectedVerificationRequestId,
-    setSuperAdminSection,
     setVerificationRequests,
     setView,
     setWorkerFeedbackForm,
@@ -738,41 +765,15 @@ function App() {
     syncHouseholdJobBarangayLocation,
   });
   useGawaGoDomEffects({
-    captureHouseholdJobLocation,
     clearAuthToken,
     currentHousehold,
     currentUser,
-    currentWorker,
-    currentWorkerJobDetail,
-    formatDistance,
-    formatLocation,
-    getBarangayCenter,
-    getDisplayName,
-    getHiringProgressLabel,
-    getHouseholdPhoto,
-    getPendingApplicationCount,
     getSavedHouseholdLocation,
-    handleRejectApplication,
-    haversineDistanceKm,
-    householdJobCoordinates,
-    householdJobForm,
-    householdJobLocationPreview,
-    householdJobMapContainerIdRef,
-    householdJobMapMode,
-    householdJobMapRef,
-    householdJobMapViewRef,
     householdJobs,
-    loadLeafletAssets,
-    openFilePreview,
-    placeHouseholdJobPin,
-    registeredHouseholds,
-    selectedJob,
     selectedJobId,
     selectedVerificationRequestId,
-    selectedWorker,
     setCurrentUser,
     setHouseholdJobForm,
-    setHouseholdJobMapMode,
     setLoginForm,
     setSelectedJobId,
     setSelectedVerificationRequestId,
@@ -781,70 +782,77 @@ function App() {
     setView,
     verificationRequests,
     view,
-    workerVisibleJobs,
   });
   if (view === "worker-job-detail") {
     return (
-      <WorkerJobDetailView
-        currentUser={currentUser}
-        currentWorker={currentWorker}
-        currentWorkerJobDetail={currentWorkerJobDetail}
-        currentWorkerJobHousehold={currentWorkerJobHousehold}
-        handleApplyToJob={handleApplyToJob}
-        handleLogout={handleLogout}
-        openWorkerApplications={openWorkerApplications}
-        openWorkerDashboard={openWorkerDashboard}
-        openWorkerFindJobs={openWorkerFindJobs}
-        openWorkerGetVerified={openWorkerGetVerified}
-        openWorkerNotifications={openWorkerNotifications}
-        openWorkerProfile={openWorkerProfile}
-        workerApplicationUnreadCount={workerApplicationUnreadCount}
-        workerMiniPhoto={workerMiniPhoto}
-      />
+      <Suspense fallback={<ViewLoading />}>
+        <WorkerJobDetailView
+          currentUser={currentUser}
+          currentWorker={currentWorker}
+          currentWorkerJobDetail={currentWorkerJobDetail}
+          currentWorkerJobHousehold={currentWorkerJobHousehold}
+          handleApplyToJob={handleApplyToJob}
+          handleLogout={handleLogout}
+          openWorkerApplications={openWorkerApplications}
+          openWorkerDashboard={openWorkerDashboard}
+          openWorkerFindJobs={openWorkerFindJobs}
+          openWorkerGetVerified={openWorkerGetVerified}
+          openWorkerNotifications={openWorkerNotifications}
+          openWorkerProfile={openWorkerProfile}
+          workerApplicationUnreadCount={workerApplicationUnreadCount}
+          workerMiniPhoto={workerMiniPhoto}
+        />
+      </Suspense>
     );
   }
   if (view === "superadmin-dashboard") {
     return (
-      <SuperAdminDashboardView
-        currentUser={currentUser}
-        handleAdminApproveVerification={handleAdminApproveVerification}
-        handleAdminRejectVerification={handleAdminRejectVerification}
-        handleLogout={handleLogout}
-        heatMapMetric={heatMapMetric}
-        openFilePreview={openFilePreview}
-        openVerificationRequest={openVerificationRequest}
-        pendingVerificationRequests={pendingVerificationRequests}
-        postedJobs={postedJobs}
-        registeredHouseholds={registeredHouseholds}
-        registeredWorkers={registeredWorkers}
-        rejectedVerificationRequests={rejectedVerificationRequests}
-        selectedVerificationRequest={selectedVerificationRequest}
-        setHeatMapMetric={setHeatMapMetric}
-        setSuperAdminSection={setSuperAdminSection}
-        superAdminSection={superAdminSection}
-        verificationRequests={verificationRequests}
-      />
+      <Suspense fallback={<ViewLoading />}>
+        <SuperAdminDashboardView
+          currentUser={currentUser}
+          dashboardMetrics={dashboardMetrics}
+          handleAdminApproveVerification={handleAdminApproveVerification}
+          handleAdminRejectVerification={handleAdminRejectVerification}
+          handleLogout={handleLogout}
+          heatMapMetric={heatMapMetric}
+          openFilePreview={openFilePreview}
+          openVerificationRequest={openVerificationRequest}
+          pendingVerificationRequests={pendingVerificationRequests}
+          postedJobs={postedJobs}
+          registeredHouseholds={registeredHouseholds}
+          registeredWorkers={registeredWorkers}
+          rejectedVerificationRequests={rejectedVerificationRequests}
+          selectedVerificationRequest={selectedVerificationRequest}
+          setHeatMapMetric={setHeatMapMetric}
+          setSuperAdminSection={setSuperAdminSection}
+          superAdminSection={superAdminSection}
+          verificationRequests={verificationRequests}
+        />
+      </Suspense>
     );
   }
   if (view === "forgot-password") {
     return (
-      <ForgotPasswordView
-        form={forgotPasswordForm}
-        step={forgotPasswordStep}
-        notice={forgotPasswordNotice}
-        error={forgotPasswordError}
-        loading={forgotPasswordLoading}
-        onChange={handleForgotPasswordChange}
-        onEmailSubmit={handleForgotPasswordEmailSubmit}
-        onVerifyToken={handleVerifyResetToken}
-        onResetPassword={handleResetPassword}
-        onOpenLogin={openLogin}
-        onOpenForgotPassword={openForgotPassword}
-      />
+      <Suspense fallback={<ViewLoading />}>
+        <ForgotPasswordView
+          form={forgotPasswordForm}
+          step={forgotPasswordStep}
+          notice={forgotPasswordNotice}
+          error={forgotPasswordError}
+          loading={forgotPasswordLoading}
+          onChange={handleForgotPasswordChange}
+          onEmailSubmit={handleForgotPasswordEmailSubmit}
+          onVerifyToken={handleVerifyResetToken}
+          onResetPassword={handleResetPassword}
+          onOpenLogin={openLogin}
+          onOpenForgotPassword={openForgotPassword}
+        />
+      </Suspense>
     );
   }
   return (
-    <AppViews
+    <Suspense fallback={<ViewLoading />}>
+      <AppViews
       SKILLS={SKILLS}
       adminSection={adminSection}
       adminVisibleWorkers={adminVisibleWorkers}
@@ -879,6 +887,7 @@ function App() {
       handleLoginChange={handleLoginChange}
       handleLoginSubmit={handleLoginSubmit}
       handleLogout={handleLogout}
+      handleRejectApplication={handleRejectApplication}
       handleVerificationChange={handleVerificationChange}
       handleVerificationSubmit={handleVerificationSubmit}
       handleWorkerChange={handleWorkerChange}
@@ -887,8 +896,13 @@ function App() {
       handleWorkerFeedbackForReviewSubmit={handleWorkerFeedbackForReviewSubmit}
       handleWorkerRegisterSubmit={handleWorkerRegisterSubmit}
       householdForm={householdForm}
+      householdJobCoordinates={householdJobCoordinates}
       householdJobForm={householdJobForm}
       householdJobImages={{ files: householdJobImages, onChange: setHouseholdJobImages }}
+      householdJobLocationPreview={householdJobLocationPreview}
+      householdJobMapMode={householdJobMapMode}
+      householdJobMapRef={householdJobMapRef}
+      householdJobMapViewRef={householdJobMapViewRef}
       householdJobs={householdJobs}
       householdNotificationsWithReadState={householdNotificationsWithReadState}
       householdProfileForm={householdProfileForm}
@@ -923,9 +937,13 @@ function App() {
       openWorkerProfile={openWorkerProfile}
       openWorkerRegister={openWorkerRegister}
       pendingVerificationRequests={pendingVerificationRequests}
+      registeredHouseholds={registeredHouseholds}
       registeredWorkers={registeredWorkers}
       rejectedVerificationRequests={rejectedVerificationRequests}
       renderBarangayOptions={renderBarangayOptions}
+      captureHouseholdJobLocation={captureHouseholdJobLocation}
+      loadLeafletAssets={loadLeafletAssets}
+      placeHouseholdJobPin={placeHouseholdJobPin}
       selectedJob={selectedJob}
       selectedMatchedWorkers={selectedMatchedWorkers}
       selectedVerificationRequest={selectedVerificationRequest}
@@ -933,8 +951,10 @@ function App() {
       selectedWorker={selectedWorker}
       selectedWorkerPhoto={selectedWorkerPhoto}
       setHouseholdReviewForm={setHouseholdReviewForm}
+      setHouseholdJobMapMode={setHouseholdJobMapMode}
       setSelectedJobId={setSelectedJobId}
       setSelectedWorkerId={setSelectedWorkerId}
+      setWorkerProfileForm={setWorkerProfileForm}
       toggleSkill={toggleSkill}
       toggleWorkerProfileSkill={toggleWorkerProfileSkill}
       verificationForm={verificationForm}
@@ -949,7 +969,8 @@ function App() {
       workerProfileForm={workerProfileForm}
       workerUnreadCount={workerUnreadCount}
       workerVisibleJobs={workerVisibleJobs}
-    />
+      />
+    </Suspense>
   );
 }
 export default App;

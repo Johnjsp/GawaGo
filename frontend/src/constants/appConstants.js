@@ -56,9 +56,9 @@ export const STORAGE_KEYS = {
   verificationRequests: "gawago-verification-requests",
   notificationReads: "gawago-notification-reads",
 };
-export const SUPER_ADMIN_ACCOUNT = { username: "superadmin", password: "superadmin123", displayName: "Super Admin" };
 export const DEMO_DATA_VERSION = "v18";
 export const DEMO_VERSION_KEY = "gawago-demo-data-version";
+export const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 export const API_BASE_URL = getApiBaseUrl();
 export const ACCOUNTS_API_BASE_URL = `${API_BASE_URL}/accounts`;
 export const EMPTY_WORKER_FORM = {
@@ -90,7 +90,7 @@ export const EMPTY_HOUSEHOLD_FORM = {
   confirmPassword: "",
 };
 export const EMPTY_HOUSEHOLD_REVIEW_FORM = { rating: "5", feedback: "", jobId: "" };
-export const EMPTY_WORKER_FEEDBACK_FORM = { feedback: "", jobId: "" };
+export const EMPTY_WORKER_FEEDBACK_FORM = { rating: "5", feedback: "", jobId: "" };
 export const GMAIL_ADDRESS_PATTERN = /^[A-Z0-9._%+-]+@gmail\.com$/i;
 export const OPENROUTESERVICE_API_KEY = import.meta.env.VITE_OPENROUTESERVICE_API_KEY || "";
 export const OPENROUTESERVICE_SEARCH_URL =

@@ -1,22 +1,22 @@
-import secrets
-
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.mail import BadHeaderError
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.models import PasswordResetRequest, SignupVerificationRequest, UserProfile
+from apps.accounts.models import PasswordResetRequest, SignupVerificationRequest, UserProfile, WorkerAvailability
 from apps.accounts.serializers import (
     ForgotPasswordRequestSerializer,
     LoginSerializer,
     PasswordResetRequestSerializer,
+    PublicUserProfileSerializer,
     RegisterSerializer,
     ProfileUpdateSerializer,
     ResetPasswordSerializer,
@@ -24,18 +24,32 @@ from apps.accounts.serializers import (
     UserProfileSerializer,
     VerifyResetTokenSerializer,
     VerifySignupSerializer,
+    WorkerAvailabilityBulkSerializer,
+    WorkerAvailabilitySerializer,
 )
-from apps.accounts.services import create_password_reset_request, send_password_reset_email, validate_latest_reset_request
+from apps.notifications.models import Notification
+from apps.notifications.services import create_notification
+from apps.accounts.services import (
+    create_password_reset_request,
+    send_password_reset_email,
+    validate_latest_reset_request,
+)
 from apps.common.authentication import create_jwt_token
-
-
-def generate_token() -> str:
-    return f"{secrets.randbelow(1_000_000):06d}"
+from apps.reviews.services import assign_due_default_worker_ratings
 
 
 class UserProfileListView(generics.ListAPIView):
-    queryset = UserProfile.objects.select_related("user").all()
-    serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = UserProfile.objects.select_related("user").order_by("id")
+
+    def get_queryset(self):
+        assign_due_default_worker_ratings()
+        return super().get_queryset()
+
+    def get_serializer_class(self):
+        if self.request.user.is_authenticated and self.request.user.is_staff:
+            return UserProfileSerializer
+        return PublicUserProfileSerializer
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -66,8 +80,6 @@ class RegisterView(APIView):
                 first_name=data.get("first_name", ""),
                 last_name=data.get("last_name", ""),
             )
-            user.is_active = True
-            user.save(update_fields=["is_active"])
             profile = UserProfile.objects.create(
                 user=user,
                 role=data["role"],
@@ -83,7 +95,7 @@ class RegisterView(APIView):
             )
         return Response(
             {
-                "detail": "Account created. You can now login.",
+                "detail": "Account created. You can now log in.",
                 "user": {
                     "id": user.id,
                     "username": user.username,
@@ -106,26 +118,16 @@ class LoginView(APIView):
         username = serializer.validated_data["username"].strip()
         password = serializer.validated_data["password"]
         matched_user = User.objects.filter(username__iexact=username).first()
+        if matched_user and not matched_user.is_active and matched_user.check_password(password):
+            matched_user.is_active = True
+            matched_user.save(update_fields=["is_active"])
         user = authenticate(
             request,
             username=matched_user.username if matched_user else username,
             password=password,
         )
         if not user:
-            inactive_user = matched_user
-            if inactive_user and inactive_user.check_password(password) and not inactive_user.is_active:
-                inactive_user.is_active = True
-                inactive_user.save(update_fields=["is_active"])
-                user = inactive_user
-            else:
-                return Response({"detail": "Invalid username or password."}, status=status.HTTP_400_BAD_REQUEST)
-        if not user.is_active:
-            if user.check_password(password):
-                user.is_active = True
-                user.save(update_fields=["is_active"])
-            else:
-                return Response({"detail": "Invalid username or password."}, status=status.HTTP_400_BAD_REQUEST)
-        login(request, user)
+            return Response({"detail": "Invalid username or password."}, status=status.HTTP_400_BAD_REQUEST)
         profile = UserProfile.objects.filter(user=user).first()
         account_role = "admin" if user.is_staff else (profile.role if profile else UserProfile.ROLE_WORKER)
         return Response(
@@ -153,7 +155,7 @@ class VerifySignupView(APIView):
         request_obj = SignupVerificationRequest.objects.filter(email=email).select_related("user").first()
         if not request_obj or not request_obj.verify_token(token):
             return Response({"detail": "Invalid or expired verification code."}, status=status.HTTP_400_BAD_REQUEST)
-        request_obj.verified_at = request_obj.verified_at or request_obj.created_at
+        request_obj.verified_at = request_obj.verified_at or timezone.now()
         request_obj.save(update_fields=["verified_at"])
         request_obj.user.is_active = True
         request_obj.user.save(update_fields=["is_active"])
@@ -215,7 +217,7 @@ class ResetPasswordView(APIView):
 
         reset_request.user.set_password(new_password)
         reset_request.user.save(update_fields=["password"])
-        reset_request.used_at = reset_request.used_at or reset_request.created_at
+        reset_request.used_at = reset_request.used_at or timezone.now()
         reset_request.save(update_fields=["used_at"])
         return Response({"detail": "Password reset successful."}, status=status.HTTP_200_OK)
 
@@ -260,10 +262,16 @@ class MeProfileView(APIView):
             user.email = serializer.validated_data["email"].strip().lower()
         user.save()
 
-        for field in ["role", "phone", "bio", "years_experience", "skills", "hourly_rate", "daily_rate", "location_label", "latitude", "longitude", "profile_photo"]:
+        for field in ["phone", "bio", "years_experience", "skills", "hourly_rate", "daily_rate", "location_label", "latitude", "longitude", "profile_photo"]:
             if field in serializer.validated_data:
                 setattr(profile, field, serializer.validated_data[field])
         profile.save()
+        create_notification(
+            recipient=user,
+            notification_type=Notification.TYPE_ACCOUNT_ACTIVITY,
+            title="Profile updated",
+            message="Your GawaGo account profile was updated. If you did not make this change, please reset your password or contact support.",
+        )
         return Response({
             "detail": "Profile updated.",
             "user": {
@@ -275,3 +283,34 @@ class MeProfileView(APIView):
             },
             "profile": UserProfileSerializer(profile, context={"request": request}).data,
         })
+
+
+class WorkerAvailabilityView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_worker_profile(self, request):
+        profile = getattr(request.user, "profile", None)
+        if not profile or profile.role != UserProfile.ROLE_WORKER:
+            return None
+        return profile
+
+    def get(self, request):
+        if not self.get_worker_profile(request):
+            return Response({"detail": "Only workers can manage availability."}, status=status.HTTP_403_FORBIDDEN)
+        windows = request.user.availability_windows.filter(is_available=True).order_by("date", "start_time")
+        return Response(WorkerAvailabilitySerializer(windows, many=True).data)
+
+    def put(self, request):
+        if not self.get_worker_profile(request):
+            return Response({"detail": "Only workers can manage availability."}, status=status.HTTP_403_FORBIDDEN)
+        serializer = WorkerAvailabilityBulkSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            request.user.availability_windows.all().delete()
+            windows = [
+                WorkerAvailability(worker=request.user, **window)
+                for window in serializer.validated_data["availability_windows"]
+            ]
+            WorkerAvailability.objects.bulk_create(windows)
+        saved_windows = request.user.availability_windows.filter(is_available=True).order_by("date", "start_time")
+        return Response(WorkerAvailabilitySerializer(saved_windows, many=True).data)

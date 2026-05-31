@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { SidebarIcon } from "./DashboardLayout";
 import HomeView from "./HomeView";
+import HouseholdJobMapPanel from "./HouseholdJobMapPanel";
 import JobImageUpload from "./JobImageUpload";
 import LocationDistanceMap from "./LocationDistanceMap";
 import { haversineDistanceKm } from "../utils/locationServices";
-import { getWorkersNeeded } from "../utils/jobUtils";
+import { getBarangayCenter } from "../utils/locationUtils";
+import { getHiringProgressLabel, getPendingApplicationCount, getWorkersNeeded } from "../utils/jobUtils";
 export default function AppViews({
   SKILLS,
   adminSection,
@@ -40,6 +42,7 @@ export default function AppViews({
   handleLoginChange,
   handleLoginSubmit,
   handleLogout,
+  handleRejectApplication,
   handleVerificationChange,
   handleVerificationSubmit,
   handleWorkerChange,
@@ -48,8 +51,13 @@ export default function AppViews({
   handleWorkerProfileSave,
   handleWorkerRegisterSubmit,
   householdForm,
+  householdJobCoordinates,
   householdJobForm,
   householdJobImages,
+  householdJobLocationPreview,
+  householdJobMapMode,
+  householdJobMapRef,
+  householdJobMapViewRef,
   householdJobs,
   householdNotificationsWithReadState,
   householdProfileForm,
@@ -84,9 +92,13 @@ export default function AppViews({
   openWorkerProfile,
   openWorkerRegister,
   pendingVerificationRequests,
+  registeredHouseholds,
   registeredWorkers,
   rejectedVerificationRequests,
   renderBarangayOptions,
+  captureHouseholdJobLocation,
+  loadLeafletAssets,
+  placeHouseholdJobPin,
   selectedJob,
   selectedMatchedWorkers,
   selectedVerificationRequest,
@@ -94,8 +106,10 @@ export default function AppViews({
   selectedWorker,
   selectedWorkerPhoto,
   setHouseholdReviewForm,
+  setHouseholdJobMapMode,
   setSelectedJobId,
   setSelectedWorkerId,
+  setWorkerProfileForm,
   toggleSkill,
   toggleWorkerProfileSkill,
   verificationForm,
@@ -124,6 +138,35 @@ export default function AppViews({
   const [workerBarangayFilter, setWorkerBarangayFilter] = useState("");
   const [workerMarketSearch, setWorkerMarketSearch] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const addWorkerAvailabilityWindow = () => {
+    setWorkerProfileForm((prev) => ({
+      ...prev,
+      availabilityWindows: [
+        ...(prev.availabilityWindows || []),
+        {
+          id: `availability-${Date.now()}`,
+          date: "",
+          startTime: "08:00",
+          endTime: "17:00",
+          isAvailable: true,
+        },
+      ],
+    }));
+  };
+  const updateWorkerAvailabilityWindow = (windowId, field, value) => {
+    setWorkerProfileForm((prev) => ({
+      ...prev,
+      availabilityWindows: (prev.availabilityWindows || []).map((window) =>
+        window.id === windowId ? { ...window, [field]: value } : window,
+      ),
+    }));
+  };
+  const removeWorkerAvailabilityWindow = (windowId) => {
+    setWorkerProfileForm((prev) => ({
+      ...prev,
+      availabilityWindows: (prev.availabilityWindows || []).filter((window) => window.id !== windowId),
+    }));
+  };
   const [workerProfileEditing, setWorkerProfileEditing] = useState(false);
   const [workerPhotoModalOpen, setWorkerPhotoModalOpen] = useState(false);
   const [householdDashboardDetailJobId, setHouseholdDashboardDetailJobId] = useState(null);
@@ -131,6 +174,55 @@ export default function AppViews({
   const [householdProfileEditing, setHouseholdProfileEditing] = useState(false);
   const [selectedWorkerRouteDistanceKm, setSelectedWorkerRouteDistanceKm] = useState(null);
   const navIcon = (name) => <SidebarIcon name={name} />;
+  const getDistancePoint = (record) => {
+    const latitude = record?.latitude ?? null;
+    const longitude = record?.longitude ?? null;
+    if (
+      latitude !== null &&
+      longitude !== null &&
+      Number.isFinite(Number(latitude)) &&
+      Number.isFinite(Number(longitude))
+    ) {
+      return {
+        latitude,
+        longitude,
+      };
+    }
+    return getBarangayCenter(record?.barangay || "");
+  };
+  const getWorkerJobDistanceLabel = (job) => {
+    if (!currentWorker || !job) {
+      return "";
+    }
+    const household = registeredHouseholds.find((item) => item.username === job.householdUsername);
+    const workerPoint = getDistancePoint(currentWorker);
+    const jobPoint = getDistancePoint({
+      barangay: household?.barangay || job.barangay,
+      latitude: job.latitude ?? household?.latitude ?? null,
+      longitude: job.longitude ?? household?.longitude ?? null,
+    });
+    return formatDistance(
+      haversineDistanceKm(workerPoint.latitude, workerPoint.longitude, jobPoint.latitude, jobPoint.longitude),
+    );
+  };
+  const currentWorkerIsVerified = String(currentWorker?.verification || "").toLowerCase() === "verified";
+  const selectedWorkerApplication =
+    selectedJob && selectedWorker
+      ? (selectedJob.applications || []).find(
+          (item) =>
+            String(item.workerId) === String(selectedWorker.id) ||
+            item.workerUsername === selectedWorker.username,
+        )
+      : null;
+  const canRejectSelectedWorkerApplication =
+    selectedWorkerApplication && !["Hired", "Rejected"].includes(selectedWorkerApplication.status);
+  const selectedWorkerVerificationRequest =
+    selectedWorker
+      ? verificationRequests.find((item) => item.id === selectedWorker.verificationRequestId) ||
+        verificationRequests.find((item) => item.workerId === selectedWorker.id) ||
+        selectedWorker.verificationSubmission ||
+        null
+      : null;
   const householdWorkerFeedback = currentHousehold?.receivedFeedback || [];
   const householdSubmittedReviews = currentHousehold?.givenFeedback || [];
   const workerHouseholdReviews = currentWorker?.receivedReviews || [];
@@ -322,10 +414,13 @@ export default function AppViews({
   const submitHouseholdFeedbackReply = (event, review) => {
     event.preventDefault();
     const draftKey = review.id || `${review.authorUsername}-${review.createdAt}`;
-    handleWorkerFeedbackForReviewSubmit(review, workerHouseholdReplyDrafts[draftKey] || "");
+    const draft = workerHouseholdReplyDrafts[draftKey] || { feedback: "", rating: "5" };
+    const feedback = typeof draft === "string" ? draft : draft.feedback;
+    const rating = typeof draft === "string" ? "5" : draft.rating;
+    handleWorkerFeedbackForReviewSubmit(review, feedback, rating);
     setWorkerHouseholdReplyDrafts((prev) => ({
       ...prev,
-      [draftKey]: "",
+      [draftKey]: { feedback: "", rating: "5" },
     }));
   };
   const selectedWorkerJobLatitude = selectedJob?.latitude ?? currentHousehold?.latitude ?? null;
@@ -1155,6 +1250,7 @@ export default function AppViews({
                           <p className="mb-1">{formatDateTime(job.preferredDate, job.preferredTime)}</p>
                           <p className="mb-1 text-primary">{formatRate(job.offeredRate, job.rateType)}</p>
                           <p className="mb-3">{job.householdName || "Household"}</p>
+                          <div className="worker-job-distance-badge mb-3">{getWorkerJobDistanceLabel(job)}</div>
                           <div className="d-flex gap-2">
                             <button
                               className="btn btn-outline-secondary btn-sm flex-fill"
@@ -1164,15 +1260,23 @@ export default function AppViews({
                               {" "}
                               View Details{" "}
                             </button>
-                            <button
-                              className="btn btn-primary btn-sm flex-fill"
-                              type="button"
-                              onClick={() => handleApplyToJob(job.id)}
-                            >
-                              {" "}
-                              Apply Now{" "}
-                            </button>
+                            {currentWorkerIsVerified && (
+                              <button
+                                className="btn btn-primary btn-sm flex-fill"
+                                type="button"
+                                onClick={() => handleApplyToJob(job.id)}
+                              >
+                                {" "}
+                                Apply Now{" "}
+                              </button>
+                            )}
                           </div>
+                          {!currentWorkerIsVerified && (
+                            <div className="alert alert-warning mt-3 mb-0 py-2 small">
+                              Locked until verified: you can browse jobs, but applications are unavailable until admin
+                              approval.
+                            </div>
+                          )}
                         </article>
                       </div>
                     ))
@@ -1299,6 +1403,33 @@ export default function AppViews({
                                     className="d-grid gap-2 mt-3"
                                     onSubmit={(event) => submitHouseholdFeedbackReply(event, review)}
                                   >
+                                    <label className="form-label fw-semibold mb-0" htmlFor={`worker-rating-${draftKey}`}>
+                                      Rate household
+                                    </label>
+                                    <select
+                                      className="form-select"
+                                      id={`worker-rating-${draftKey}`}
+                                      value={
+                                        typeof workerHouseholdReplyDrafts[draftKey] === "object"
+                                          ? workerHouseholdReplyDrafts[draftKey]?.rating || "5"
+                                          : "5"
+                                      }
+                                      onChange={(event) =>
+                                        setWorkerHouseholdReplyDrafts((prev) => ({
+                                          ...prev,
+                                          [draftKey]: {
+                                            ...(typeof prev[draftKey] === "object" ? prev[draftKey] : { feedback: prev[draftKey] || "" }),
+                                            rating: event.target.value,
+                                          },
+                                        }))
+                                      }
+                                    >
+                                      <option value="5">5 stars</option>
+                                      <option value="4">4 stars</option>
+                                      <option value="3">3 stars</option>
+                                      <option value="2">2 stars</option>
+                                      <option value="1">1 star</option>
+                                    </select>
                                     <label className="form-label fw-semibold mb-0" htmlFor={`worker-reply-${draftKey}`}>
                                       Send feedback to household
                                     </label>
@@ -1307,11 +1438,18 @@ export default function AppViews({
                                       id={`worker-reply-${draftKey}`}
                                       rows="3"
                                       placeholder="Write feedback for the household..."
-                                      value={workerHouseholdReplyDrafts[draftKey] || ""}
+                                      value={
+                                        typeof workerHouseholdReplyDrafts[draftKey] === "object"
+                                          ? workerHouseholdReplyDrafts[draftKey]?.feedback || ""
+                                          : workerHouseholdReplyDrafts[draftKey] || ""
+                                      }
                                       onChange={(event) =>
                                         setWorkerHouseholdReplyDrafts((prev) => ({
                                           ...prev,
-                                          [draftKey]: event.target.value,
+                                          [draftKey]: {
+                                            ...(typeof prev[draftKey] === "object" ? prev[draftKey] : { rating: "5" }),
+                                            feedback: event.target.value,
+                                          },
                                         }))
                                       }
                                     />
@@ -1669,24 +1807,7 @@ export default function AppViews({
                             />
                           </div>
                           <div className="row g-2 mb-3">
-                            <div className="col-md-4">
-                              <label className="form-label small fw-semibold mb-1">Availability</label>
-                              <div className="form-check mt-1">
-                                <input
-                                  className="form-check-input"
-                                  type="checkbox"
-                                  id="availability"
-                                  name="availability"
-                                  checked={workerProfileForm.availability}
-                                  onChange={handleWorkerProfileChange}
-                                />
-                                <label className="form-check-label" htmlFor="availability">
-                                  {" "}
-                                  Available{" "}
-                                </label>
-                              </div>
-                            </div>
-                            <div className="col-md-4">
+                            <div className="col-md-6">
                               <label className="form-label small fw-semibold mb-1">Hourly Rate (PHP)</label>
                               <input
                                 type="number"
@@ -1698,7 +1819,7 @@ export default function AppViews({
                                 onChange={handleWorkerProfileChange}
                               />
                             </div>
-                            <div className="col-md-4">
+                            <div className="col-md-6">
                               <label className="form-label small fw-semibold mb-1">Daily Rate (PHP)</label>
                               <input
                                 type="number"
@@ -1710,6 +1831,58 @@ export default function AppViews({
                                 onChange={handleWorkerProfileChange}
                               />
                             </div>
+                          </div>
+                          <div className="mb-3">
+                            <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+                              <label className="form-label fw-semibold mb-0">Availability Windows</label>
+                              <button
+                                className="btn btn-outline-primary btn-sm"
+                                type="button"
+                                disabled={!workerProfileEditing}
+                                onClick={addWorkerAvailabilityWindow}
+                              >
+                                Add Window
+                              </button>
+                            </div>
+                            {(workerProfileForm.availabilityWindows || []).length > 0 ? (
+                              <div className="worker-availability-list">
+                                {(workerProfileForm.availabilityWindows || []).map((window) => (
+                                  <div className="worker-availability-row" key={window.id}>
+                                    <input
+                                      type="date"
+                                      className="form-control"
+                                      value={window.date}
+                                      disabled={!workerProfileEditing}
+                                      onChange={(event) => updateWorkerAvailabilityWindow(window.id, "date", event.target.value)}
+                                    />
+                                    <input
+                                      type="time"
+                                      className="form-control"
+                                      value={String(window.startTime || "").slice(0, 5)}
+                                      disabled={!workerProfileEditing}
+                                      onChange={(event) => updateWorkerAvailabilityWindow(window.id, "startTime", event.target.value)}
+                                    />
+                                    <input
+                                      type="time"
+                                      className="form-control"
+                                      value={String(window.endTime || "").slice(0, 5)}
+                                      disabled={!workerProfileEditing}
+                                      onChange={(event) => updateWorkerAvailabilityWindow(window.id, "endTime", event.target.value)}
+                                    />
+                                    <button
+                                      className="btn btn-outline-danger btn-sm"
+                                      type="button"
+                                      disabled={!workerProfileEditing}
+                                      onClick={() => removeWorkerAvailabilityWindow(window.id)}
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="small text-muted mb-0">Add available dates and times so households can match with you.</p>
+                            )}
                           </div>
                           <div className="mb-3">
                             <label className="form-label fw-semibold">
@@ -2198,6 +2371,12 @@ export default function AppViews({
                     Mark All as Read{" "}
                   </button>
                 </div>
+                {currentWorker?.verification !== "Verified" && (
+                  <div className="alert alert-warning mt-3 mb-0 py-2">
+                    Your account is not verified yet. Please complete verification to become eligible for hiring and
+                    priority matching.
+                  </div>
+                )}
                 <div className="worker-notifications-list">
                   {workerNotificationsWithReadState.map((item) => (
                     <article
@@ -2309,17 +2488,13 @@ export default function AppViews({
                             {selectedVerificationRequest.primaryIdPreview && (
                               <div className="col-md-6">
                                 <div className="verification-note h-100">
-                                  <p className="small fw-semibold mb-2">Primary ID Preview</p>
+                                  <p className="small fw-semibold mb-2">Primary ID</p>
                                   <button
                                     type="button"
-                                    className="btn btn-link p-0 border-0"
+                                    className="btn btn-outline-primary btn-sm"
                                     onClick={() => openFilePreview(selectedVerificationRequest.primaryIdPreview)}
                                   >
-                                    <img
-                                      src={selectedVerificationRequest.primaryIdPreview}
-                                      alt="Primary ID preview"
-                                      className="img-fluid rounded border"
-                                    />
+                                    Open Primary ID
                                   </button>
                                 </div>
                               </div>
@@ -2327,21 +2502,14 @@ export default function AppViews({
                             {selectedVerificationRequest.secondaryDocPreview && (
                               <div className="col-md-6">
                                 <div className="verification-note h-100">
-                                  <p className="small fw-semibold mb-2">Supporting Doc Preview</p>
-                                  <a
-                                    href={selectedVerificationRequest.secondaryDocPreview}
-                                    download={selectedVerificationRequest.secondaryDocName || "supporting-doc"}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="d-inline-block"
+                                  <p className="small fw-semibold mb-2">Supporting Document</p>
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-primary btn-sm"
+                                    onClick={() => openFilePreview(selectedVerificationRequest.secondaryDocPreview)}
                                   >
-                                    <img
-                                      src={selectedVerificationRequest.secondaryDocPreview}
-                                      alt="Supporting document preview"
-                                      className="img-fluid rounded border"
-                                    />
-                                  </a>
-                                  <p className="small text-muted mb-0 mt-2">Click to download the file.</p>
+                                    Open Supporting Document
+                                  </button>
                                 </div>
                               </div>
                             )}
@@ -2662,6 +2830,17 @@ export default function AppViews({
                           <option>Fixed Rate</option>
                         </select>
                       </div>
+                      <HouseholdJobMapPanel
+                        captureHouseholdJobLocation={captureHouseholdJobLocation}
+                        householdJobCoordinates={householdJobCoordinates}
+                        householdJobLocationPreview={householdJobLocationPreview}
+                        householdJobMapMode={householdJobMapMode}
+                        householdJobMapRef={householdJobMapRef}
+                        householdJobMapViewRef={householdJobMapViewRef}
+                        loadLeafletAssets={loadLeafletAssets}
+                        placeHouseholdJobPin={placeHouseholdJobPin}
+                        setHouseholdJobMapMode={setHouseholdJobMapMode}
+                      />
                     </div>
                     <div className="household-reference-images">
                       <label className="form-label fw-semibold">Reference Images</label>
@@ -2890,9 +3069,14 @@ export default function AppViews({
                         {(currentHousehold?.receivedFeedback || []).slice(0, 2).length > 0 ? (
                           (currentHousehold?.receivedFeedback || []).slice(0, 2).map((review) => (
                             <div className="review-item" key={review.id || `${review.authorName}-${review.createdAt}`}>
-                              <p className="mb-1 fw-semibold">Anonymous Worker</p>
-                              <p className="mb-1 small text-muted">{review.feedback || review.comment || "No comment provided."}</p>
-                              <p className="mb-0 small text-muted">{review.createdAt || review.date || "Recently"}</p>
+                              <div className="d-flex justify-content-between gap-2">
+                                <div>
+                                  <p className="mb-1 fw-semibold">Anonymous Worker</p>
+                                  <p className="mb-1 small text-muted">{review.feedback || review.comment || "No comment provided."}</p>
+                                  <p className="mb-0 small text-muted">{review.createdAt || review.date || "Recently"}</p>
+                                </div>
+                                <strong>{review.rating != null ? `${review.rating}/5` : "Feedback"}</strong>
+                              </div>
                             </div>
                           ))
                         ) : (
@@ -3021,7 +3205,10 @@ export default function AppViews({
                           <article className="household-feedback-item" key={review.id || `${review.createdAt}-${index}`}>
                             <div className="household-feedback-avatar">A</div>
                             <div className="household-feedback-copy">
-                              <h2>Anonymous Worker</h2>
+                              <div className="household-review-title-row">
+                                <h2>Anonymous Worker</h2>
+                                {review.rating != null && <strong>{review.rating}/5</strong>}
+                              </div>
                               <p>{review.feedback || review.comment || "No comment provided."}</p>
                               <small>{review.createdAt || review.date || "Recently"}</small>
                               <details className="household-feedback-more">
@@ -3291,6 +3478,12 @@ export default function AppViews({
                                 >
                                   View Details
                                 </button>
+                              )}
+                              {selectedJob?.id === job.id && (
+                                <div className="alert alert-info mt-3 mb-0 py-2">
+                                  Hiring progress: {getHiringProgressLabel(job)} worker(s) hired. Pending applications:{" "}
+                                  {getPendingApplicationCount(job)}.
+                                </div>
                               )}
                             </article>
                           );
@@ -3697,6 +3890,15 @@ export default function AppViews({
                           {" "}
                           Hire This Worker{" "}
                         </button>
+                        {canRejectSelectedWorkerApplication && (
+                          <button
+                            className="btn btn-outline-danger w-100 mb-2"
+                            type="button"
+                            onClick={() => handleRejectApplication(selectedWorker.id, selectedJob.id)}
+                          >
+                            Reject Application
+                          </button>
+                        )}
                         <button className="btn btn-outline-secondary w-100" type="button" onClick={openHouseholdMyJobs}>
                           {" "}
                           Go Back{" "}
@@ -3735,6 +3937,54 @@ export default function AppViews({
                         />
                       </div>
                     </div>
+                    {selectedWorkerVerificationRequest && (
+                      <div className="profile-card mb-3">
+                        <div className="profile-card-head">Verification Details</div>
+                        <div className="p-3">
+                          <div className="d-grid gap-2">
+                            {[
+                              ["Status", selectedWorkerVerificationRequest.status || selectedWorker.verification || "Pending"],
+                              ["Primary ID", selectedWorkerVerificationRequest.primaryIdName],
+                              ["Secondary Document", selectedWorkerVerificationRequest.secondaryDocName],
+                              ["Submitted", selectedWorkerVerificationRequest.submittedAt],
+                              ["Reviewed", selectedWorkerVerificationRequest.reviewedAt],
+                              ["Worker Notes", selectedWorkerVerificationRequest.notes],
+                              ["Admin Note", selectedWorkerVerificationRequest.reviewNote],
+                            ]
+                              .filter(([, value]) => value)
+                              .map(([label, value]) => (
+                                <p className="mb-0 small d-flex justify-content-between gap-3" key={label}>
+                                  <span className="text-muted">{label}</span>
+                                  <strong className="text-end">{value || "Not provided"}</strong>
+                                </p>
+                              ))}
+                          </div>
+                          {(selectedWorkerVerificationRequest.primaryIdPreview ||
+                            selectedWorkerVerificationRequest.secondaryDocPreview) && (
+                            <div className="d-flex flex-wrap gap-2 mt-3">
+                              {selectedWorkerVerificationRequest.primaryIdPreview && (
+                                <button
+                                  className="btn btn-outline-secondary btn-sm"
+                                  type="button"
+                                  onClick={() => openFilePreview(selectedWorkerVerificationRequest.primaryIdPreview)}
+                                >
+                                  View Primary ID
+                                </button>
+                              )}
+                              {selectedWorkerVerificationRequest.secondaryDocPreview && (
+                                <button
+                                  className="btn btn-outline-secondary btn-sm"
+                                  type="button"
+                                  onClick={() => openFilePreview(selectedWorkerVerificationRequest.secondaryDocPreview)}
+                                >
+                                  View Secondary Document
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     <div className="profile-card mb-3">
                       <div className="profile-card-head">Skills & Expertise</div>
                       <div className="p-3 d-flex gap-2 flex-wrap">

@@ -807,3 +807,231 @@ class JobPermissionTests(TestCase):
         self.assertEqual(mail.outbox[-1].to, [self.worker.email])
         self.assertEqual(mail.outbox[-1].subject, "GawaGo: Application rejected")
         self.assertIn(self.job.title, mail.outbox[-1].body)
+
+
+class JobLifecycleTransitionTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.household = User.objects.create_user(username="lifecycle-household", password="password")
+        self.worker = User.objects.create_user(username="lifecycle-worker", password="password")
+        self.reject_worker = User.objects.create_user(username="lifecycle-reject-worker", password="password")
+        UserProfile.objects.create(user=self.household, role=UserProfile.ROLE_HOUSEHOLD)
+        UserProfile.objects.create(
+            user=self.worker,
+            role=UserProfile.ROLE_WORKER,
+            verification_status="verified",
+        )
+        UserProfile.objects.create(
+            user=self.reject_worker,
+            role=UserProfile.ROLE_WORKER,
+            verification_status="verified",
+        )
+        self.job = JobPosting.objects.create(
+            household=self.household,
+            title="Lifecycle cleaning",
+            job_type="House Cleaning",
+            required_skill="House Cleaning",
+            schedule="2026-06-04 10:00",
+            schedule_type="One-Time",
+            preferred_date="2026-06-04",
+            preferred_time="10:00",
+            location_label="Isabang, Tayabas",
+            latitude="13.9622745",
+            longitude="121.5632841",
+            service_rate="500.00",
+            worker_slots=1,
+        )
+
+    def apply_as_worker(self, worker=None):
+        worker = worker or self.worker
+        self.client.force_authenticate(user=worker)
+        return self.client.post(reverse("job-apply", args=[self.job.id]), {}, format="json")
+
+    def send_hire_request(self, application):
+        self.client.force_authenticate(user=self.household)
+        return self.client.patch(
+            reverse("job-application-status", args=[application.id]),
+            {"status": JobApplication.STATUS_HIRE_REQUESTED},
+            format="json",
+        )
+
+    def decide_hire_request(self, application, decision, worker=None):
+        self.client.force_authenticate(user=worker or application.worker)
+        return self.client.patch(
+            reverse("job-application-decision", args=[application.id]),
+            {"decision": decision},
+            format="json",
+        )
+
+    def complete_job_from_household(self):
+        self.client.force_authenticate(user=self.household)
+        return self.client.patch(
+            reverse("job-detail", args=[self.job.id]),
+            {"status": JobPosting.STATUS_COMPLETED},
+            format="json",
+        )
+
+    def submit_review(self, author, target, rating="5.0"):
+        self.client.force_authenticate(user=author)
+        return self.client.post(
+            reverse("review-list-create"),
+            {
+                "target_username": target.username,
+                "job_id": self.job.id,
+                "job_title": self.job.title,
+                "rating": rating,
+                "feedback": "Lifecycle review",
+            },
+            format="json",
+        )
+
+    def test_worker_applies_transition_creates_pending_application(self):
+        response = self.apply_as_worker()
+
+        self.assertEqual(response.status_code, 201)
+        application = JobApplication.objects.get(job=self.job, worker=self.worker)
+        self.assertEqual(application.status, JobApplication.STATUS_PENDING)
+        self.job.refresh_from_db()
+        self.assertEqual(self.job.status, JobPosting.STATUS_OPEN)
+        self.client.force_authenticate(user=self.worker)
+        detail_response = self.client.get(reverse("job-detail", args=[self.job.id]))
+        self.assertFalse(detail_response.data["can_apply"])
+        self.assertFalse(detail_response.data["can_accept_hire_request"])
+
+    def test_household_sends_hire_request_transition(self):
+        self.apply_as_worker()
+        application = JobApplication.objects.get(job=self.job, worker=self.worker)
+
+        response = self.send_hire_request(application)
+
+        self.assertEqual(response.status_code, 200)
+        application.refresh_from_db()
+        self.job.refresh_from_db()
+        self.assertEqual(application.status, JobApplication.STATUS_HIRE_REQUESTED)
+        self.assertEqual(self.job.status, JobPosting.STATUS_OPEN)
+        self.client.force_authenticate(user=self.worker)
+        detail_response = self.client.get(reverse("job-detail", args=[self.job.id]))
+        self.assertTrue(detail_response.data["can_accept_hire_request"])
+        self.assertFalse(detail_response.data["can_apply"])
+
+    def test_worker_accepts_hire_request_transition(self):
+        self.apply_as_worker()
+        application = JobApplication.objects.get(job=self.job, worker=self.worker)
+        self.send_hire_request(application)
+
+        response = self.decide_hire_request(application, "accept")
+
+        self.assertEqual(response.status_code, 200)
+        application.refresh_from_db()
+        self.job.refresh_from_db()
+        self.assertEqual(application.status, JobApplication.STATUS_HIRED)
+        self.assertEqual(self.job.status, JobPosting.STATUS_ASSIGNED)
+        self.client.force_authenticate(user=self.worker)
+        detail_response = self.client.get(reverse("job-detail", args=[self.job.id]))
+        self.assertEqual(detail_response.data["hired_count"], 1)
+        self.assertFalse(detail_response.data["can_accept_hire_request"])
+        self.assertTrue(detail_response.data["can_request_completion"])
+
+    def test_worker_rejects_hire_request_transition(self):
+        self.apply_as_worker(self.reject_worker)
+        application = JobApplication.objects.get(job=self.job, worker=self.reject_worker)
+        self.send_hire_request(application)
+
+        response = self.decide_hire_request(application, "reject", worker=self.reject_worker)
+
+        self.assertEqual(response.status_code, 200)
+        application.refresh_from_db()
+        self.job.refresh_from_db()
+        self.assertEqual(application.status, JobApplication.STATUS_REJECTED)
+        self.assertEqual(self.job.status, JobPosting.STATUS_OPEN)
+        self.client.force_authenticate(user=self.reject_worker)
+        detail_response = self.client.get(reverse("job-detail", args=[self.job.id]))
+        self.assertFalse(detail_response.data["can_apply"])
+        self.assertFalse(detail_response.data["can_accept_hire_request"])
+        self.assertFalse(detail_response.data["can_request_completion"])
+
+    def test_worker_requests_completion_transition(self):
+        self.apply_as_worker()
+        application = JobApplication.objects.get(job=self.job, worker=self.worker)
+        self.send_hire_request(application)
+        self.decide_hire_request(application, "accept")
+
+        self.client.force_authenticate(user=self.worker)
+        response = self.client.post(
+            reverse("job-request-completion", args=[self.job.id]),
+            {"note": "Service completed."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        application.refresh_from_db()
+        self.job.refresh_from_db()
+        self.assertEqual(application.status, JobApplication.STATUS_HIRED)
+        self.assertEqual(application.note, "Service completed.")
+        self.assertEqual(self.job.status, JobPosting.STATUS_COMPLETION_REQUESTED)
+        self.assertFalse(response.data["can_request_completion"])
+        notification = Notification.objects.get(
+            recipient=self.household,
+            notification_type=Notification.TYPE_COMPLETION,
+            title="Worker requested completion",
+        )
+        self.assertEqual(notification.related_job_id, self.job.id)
+        self.assertEqual(notification.related_application_id, application.id)
+        self.assertTrue(notification.requires_action)
+
+    def test_household_confirms_completion_transition(self):
+        self.apply_as_worker()
+        application = JobApplication.objects.get(job=self.job, worker=self.worker)
+        self.send_hire_request(application)
+        self.decide_hire_request(application, "accept")
+        self.client.force_authenticate(user=self.worker)
+        self.client.post(reverse("job-request-completion", args=[self.job.id]), {}, format="json")
+
+        response = self.complete_job_from_household()
+
+        self.assertEqual(response.status_code, 200)
+        application.refresh_from_db()
+        self.job.refresh_from_db()
+        self.assertEqual(self.job.status, JobPosting.STATUS_COMPLETED)
+        self.assertEqual(application.status, JobApplication.STATUS_COMPLETED)
+        self.assertIsNotNone(self.job.completed_at)
+        self.assertEqual(response.data["hired_count"], 1)
+        self.assertTrue(response.data["can_review"])
+
+    def test_reviews_are_blocked_before_completion_and_allowed_after_completion(self):
+        self.apply_as_worker()
+        application = JobApplication.objects.get(job=self.job, worker=self.worker)
+        self.send_hire_request(application)
+        self.decide_hire_request(application, "accept")
+
+        household_review_before = self.submit_review(self.household, self.worker)
+        worker_review_before = self.submit_review(self.worker, self.household)
+
+        self.assertEqual(household_review_before.status_code, 400)
+        self.assertEqual(worker_review_before.status_code, 400)
+        self.assertFalse(Review.objects.exists())
+
+        self.client.force_authenticate(user=self.worker)
+        self.client.post(reverse("job-request-completion", args=[self.job.id]), {}, format="json")
+        self.complete_job_from_household()
+
+        self.client.force_authenticate(user=self.household)
+        household_detail = self.client.get(reverse("job-detail", args=[self.job.id]))
+        self.client.force_authenticate(user=self.worker)
+        worker_detail = self.client.get(reverse("job-detail", args=[self.job.id]))
+        self.assertTrue(household_detail.data["can_review"])
+        self.assertTrue(worker_detail.data["can_review"])
+
+        household_review_after = self.submit_review(self.household, self.worker)
+        worker_review_after = self.submit_review(self.worker, self.household, rating="4.0")
+
+        self.assertEqual(household_review_after.status_code, 201)
+        self.assertEqual(worker_review_after.status_code, 201)
+        self.assertEqual(Review.objects.count(), 2)
+
+        self.client.force_authenticate(user=self.household)
+        household_reviewed_detail = self.client.get(reverse("job-detail", args=[self.job.id]))
+        self.client.force_authenticate(user=self.worker)
+        worker_reviewed_detail = self.client.get(reverse("job-detail", args=[self.job.id]))
+        self.assertFalse(household_reviewed_detail.data["can_review"])
+        self.assertFalse(worker_reviewed_detail.data["can_review"])

@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from decimal import Decimal
 from unittest.mock import patch
@@ -154,6 +154,7 @@ class RecommendedWorkersAvailabilityTests(TestCase):
         alias_result = next(item for item in response.data["results"] if item["worker_username"] == "alias-worker")
         self.assertTrue(alias_result["matches_skill"])
 
+    @override_settings(OPENROUTESERVICE_API_KEY="")
     def test_matching_does_not_fall_back_to_straight_line_distance(self):
         response = self.client.get(reverse("recommended-workers"), {"job_id": self.job.id})
 

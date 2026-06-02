@@ -10,8 +10,10 @@ except ImportError:
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 
-# Load environment variables from .env file
+# Load environment variables from common local env files.
 load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR / "backend" / ".env")
+load_dotenv(BASE_DIR / "frontend" / ".env")
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "change-me-for-local-development")
 
@@ -157,7 +159,10 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "no-reply@gawago.local")
 PASSWORD_RESET_TOKEN_TTL_MINUTES = int(os.environ.get("PASSWORD_RESET_TOKEN_TTL_MINUTES", "10"))
-OPENROUTESERVICE_API_KEY = os.environ.get("OPENROUTESERVICE_API_KEY", "")
+OPENROUTESERVICE_API_KEY = os.environ.get("OPENROUTESERVICE_API_KEY") or os.environ.get(
+    "VITE_OPENROUTESERVICE_API_KEY",
+    "",
+)
 OPENROUTESERVICE_DIRECTIONS_URL = os.environ.get(
     "OPENROUTESERVICE_DIRECTIONS_URL",
     "https://api.openrouteservice.org/v2/directions/driving-car/geojson",

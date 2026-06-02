@@ -206,8 +206,19 @@ export default function AppViews({
   };
   const currentWorkerIsVerified = String(currentWorker?.verification || "").toLowerCase() === "verified";
   const workerPendingHireRequests = workerApplications.filter((job) => job.applicationStatus === "Hire Request");
+  const hiringNotificationHasRequestCard = (notification) => {
+    if (notification.notificationType !== "hiring") {
+      return false;
+    }
+    const message = String(notification.message || "").toLowerCase();
+    return workerPendingHireRequests.some((job) => {
+      const title = String(job.jobTitle || "").trim().toLowerCase();
+      const serviceType = String(job.serviceType || "").trim().toLowerCase();
+      return (title && message.includes(title)) || (serviceType && message.includes(serviceType));
+    });
+  };
   const workerGeneralNotifications = workerNotificationsWithReadState.filter(
-    (item) => item.notificationType !== "hiring",
+    (item) => item.notificationType !== "hiring" || !hiringNotificationHasRequestCard(item),
   );
   const selectedWorkerApplication =
     selectedJob && selectedWorker
@@ -2700,6 +2711,17 @@ export default function AppViews({
                       <p className="small text-muted mb-1">{item.date}</p>
                       <h2 className="h6 mb-1">{item.title}</h2>
                       <p className="mb-0">{item.message}</p>
+                      {item.notificationType === "hiring" && (
+                        <div className="worker-hire-request-actions mt-3">
+                          <button
+                            className="btn btn-outline-secondary btn-sm"
+                            type="button"
+                            onClick={openWorkerApplications}
+                          >
+                            View Request Details
+                          </button>
+                        </div>
+                      )}
                     </article>
                   ))}
                   {workerPendingHireRequests.length === 0 && workerGeneralNotifications.length === 0 && (

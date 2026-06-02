@@ -2804,6 +2804,19 @@ export default function AppViews({
                           type="button"
                           onClick={() => {
                             const jobId = workerHireRequestPreviewJob.id;
+                            try {
+                              window.sessionStorage.setItem(
+                                `gawago-worker-hire-request-${currentWorker?.id || currentWorker?.username || "worker"}-${jobId}`,
+                                JSON.stringify({
+                                  jobId,
+                                  applicationId: workerHireRequestPreviewJob.applicationId,
+                                  applicationStatus: "Hire Request",
+                                  openedFrom: "notification",
+                                }),
+                              );
+                            } catch (error) {
+                              // Session storage is only a UI hint; the backend remains the source of truth.
+                            }
                             setWorkerHireRequestPreview(null);
                             openWorkerJobDetail(jobId);
                           }}

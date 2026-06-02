@@ -54,8 +54,27 @@ export default function WorkerJobDetailView({
   const [completionNote, setCompletionNote] = useState("I have completed the service today.");
   const distanceLabel = formatDistance(routeDistanceKm ?? jobDistanceKm);
   const canApply = currentWorker?.verification === "Verified";
-  const currentWorkerApplicationStatus = job?.applicationStatus || currentWorkerApplication?.status || "";
-  const currentWorkerApplicationId = job?.applicationId || currentWorkerApplication?.id || null;
+  const storedHireRequestContext = (() => {
+    if (!job || !currentWorker || typeof window === "undefined") {
+      return null;
+    }
+    try {
+      const value = window.sessionStorage.getItem(
+        `gawago-worker-hire-request-${currentWorker.id || currentWorker.username || "worker"}-${job.id}`,
+      );
+      if (!value) {
+        return null;
+      }
+      const parsed = JSON.parse(value);
+      return String(parsed?.jobId) === String(job.id) ? parsed : null;
+    } catch (error) {
+      return null;
+    }
+  })();
+  const currentWorkerApplicationStatus =
+    storedHireRequestContext?.applicationStatus || job?.applicationStatus || currentWorkerApplication?.status || "";
+  const currentWorkerApplicationId =
+    storedHireRequestContext?.applicationId || job?.applicationId || currentWorkerApplication?.id || null;
   const hasHireRequest = currentWorkerApplicationStatus === "Hire Request";
   const hasRejectedHireRequest = currentWorkerApplicationStatus === "Rejected";
   const isHiredForJob = currentWorkerApplicationStatus === "Hired";
@@ -270,8 +289,12 @@ export default function WorkerJobDetailView({
                           </div>
                         )}
                         <div className="worker-job-actions">
-                          <button className="btn btn-outline-secondary btn-sm" type="button" onClick={openWorkerFindJobs}>
-                            Back to Find Jobs
+                          <button
+                            className="btn btn-outline-secondary btn-sm"
+                            type="button"
+                            onClick={hasHireRequest ? openWorkerNotifications : openWorkerFindJobs}
+                          >
+                            {hasHireRequest ? "Back to Notifications" : "Back to Find Jobs"}
                           </button>
                           {hasHireRequest ? (
                             <>
@@ -279,7 +302,16 @@ export default function WorkerJobDetailView({
                                 className="btn btn-success btn-sm"
                                 type="button"
                                 disabled={!currentWorkerApplicationId}
-                                onClick={() => handleWorkerHireDecision(currentWorkerApplicationId, "accept")}
+                                onClick={() => {
+                                  try {
+                                    window.sessionStorage.removeItem(
+                                      `gawago-worker-hire-request-${currentWorker.id || currentWorker.username || "worker"}-${job.id}`,
+                                    );
+                                  } catch (error) {
+                                    // Ignore storage cleanup failures.
+                                  }
+                                  handleWorkerHireDecision(currentWorkerApplicationId, "accept");
+                                }}
                               >
                                 Accept Request
                               </button>
@@ -287,7 +319,16 @@ export default function WorkerJobDetailView({
                                 className="btn btn-outline-danger btn-sm"
                                 type="button"
                                 disabled={!currentWorkerApplicationId}
-                                onClick={() => handleWorkerHireDecision(currentWorkerApplicationId, "reject")}
+                                onClick={() => {
+                                  try {
+                                    window.sessionStorage.removeItem(
+                                      `gawago-worker-hire-request-${currentWorker.id || currentWorker.username || "worker"}-${job.id}`,
+                                    );
+                                  } catch (error) {
+                                    // Ignore storage cleanup failures.
+                                  }
+                                  handleWorkerHireDecision(currentWorkerApplicationId, "reject");
+                                }}
                               >
                                 Reject Request
                               </button>

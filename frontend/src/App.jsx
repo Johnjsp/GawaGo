@@ -65,7 +65,6 @@ import {
   getPendingApplicationCount,
   getWorkerJobMatches,
   getWorkersNeeded,
-  isJobOpenForApplications,
 } from "./utils/jobUtils";
 import {
   getHouseholdNotifications,
@@ -761,7 +760,6 @@ function App() {
     householdJobLocationPreview,
     householdProfileForm,
     householdReviewForm,
-    isJobOpenForApplications,
     isNumericIdentifier,
     isValidGmailAddress,
     loginForm,
@@ -946,7 +944,6 @@ function App() {
       handleCancelJob={handleCancelJob}
       handleConfirmJobCompleted={handleConfirmJobCompleted}
       handleHireWorker={handleHireWorker}
-      handleWorkerHireDecision={handleWorkerHireDecision}
       handleWorkerRequestCompletion={handleWorkerRequestCompletion}
       handleHouseholdChange={handleHouseholdChange}
       handleHouseholdJobChange={handleHouseholdJobChange}

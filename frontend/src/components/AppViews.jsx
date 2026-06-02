@@ -32,7 +32,6 @@ export default function AppViews({
   handleCancelJob,
   handleConfirmJobCompleted,
   handleHireWorker,
-  handleWorkerHireDecision,
   handleWorkerRequestCompletion,
   handleHouseholdChange,
   handleHouseholdJobChange,
@@ -205,8 +204,7 @@ export default function AppViews({
       ? formatDistance(backendDistanceKm)
       : "Road distance unavailable";
   };
-  const currentWorkerIsVerified = String(currentWorker?.verification || "").toLowerCase() === "verified";
-  const workerPendingHireRequests = workerApplications.filter((job) => job.applicationStatus === "Hire Request");
+  const workerPendingHireRequests = workerApplications.filter((job) => job.canAcceptHireRequest);
   const workerPendingHireRequestNotifications = workerNotificationsWithReadState.filter(
     (item) => item.actionType === "hire_request" && item.requiresAction && item.applicationId,
   );
@@ -612,26 +610,12 @@ export default function AppViews({
   const renderWorkerApplicationAction = (job) => {
     const isCompleted = job.status === "Completed" || job.applicationStatus === "Completed";
     const isWaitingForHousehold = job.status === "Waiting for Household Confirmation";
-    const isHired = job.applicationStatus === "Hired";
 
-    if (job.applicationStatus === "Hire Request") {
+    if (job.canAcceptHireRequest) {
       return (
-        <div className="worker-application-actions">
-          <button
-            className="btn btn-success btn-sm"
-            type="button"
-            onClick={() => handleWorkerHireDecision(job.applicationId, "accept")}
-          >
-            Accept
-          </button>
-          <button
-            className="btn btn-outline-danger btn-sm"
-            type="button"
-            onClick={() => handleWorkerHireDecision(job.applicationId, "reject")}
-          >
-            Reject
-          </button>
-        </div>
+        <button className="btn btn-primary btn-sm" type="button" onClick={() => openWorkerJobDetail(job.id)}>
+          View Request
+        </button>
       );
     }
 
@@ -647,7 +631,7 @@ export default function AppViews({
       return <span className="worker-application-status-note">Waiting for household</span>;
     }
 
-    if (isHired) {
+    if (job.canRequestCompletion) {
       return (
         <button
           className="btn btn-success btn-sm"
@@ -763,23 +747,13 @@ export default function AppViews({
         if (job.status === "Cancelled") {
           return false;
         }
-        if (job.status !== "Completed") {
-          return true;
-        }
-        return !getHouseholdReviewForJobWorker(job, getAssignedWorkerForJob(job));
+        return job.status !== "Completed" || job.canReview;
       }),
-    [currentHousehold?.givenFeedback, householdJobs, registeredWorkers],
+    [householdJobs],
   );
   const pendingHouseholdReviewJobs = useMemo(
-    () =>
-      householdJobs.filter((job) => {
-        if (job.status !== "Completed") {
-          return false;
-        }
-        const assignedWorker = getAssignedWorkerForJob(job);
-        return assignedWorker && !getHouseholdReviewForJobWorker(job, assignedWorker);
-      }),
-    [currentHousehold?.givenFeedback, householdJobs, registeredWorkers],
+    () => householdJobs.filter((job) => job.canReview),
+    [householdJobs],
   );
   const filteredHouseholdJobs = useMemo(() => {
     if (householdJobStatusFilter === "All") {
@@ -795,11 +769,9 @@ export default function AppViews({
     householdDashboardDetailWorker,
   );
   const shouldShowSelectedJobReviewForm =
-    selectedJob?.status === "Completed" && selectedJobAssignedWorker && !selectedJobWorkerReview;
+    Boolean(selectedJob?.canReview) && selectedJobAssignedWorker && !selectedJobWorkerReview;
   const shouldShowDashboardReviewForm =
-    householdDashboardDetailJob?.status === "Completed" &&
-    householdDashboardDetailWorker &&
-    !householdDashboardWorkerReview;
+    Boolean(householdDashboardDetailJob?.canReview) && householdDashboardDetailWorker && !householdDashboardWorkerReview;
   const renderHouseholdStarRatingInput = (labelId) => {
     const selectedRating = Number(householdReviewForm.rating || 0);
 
@@ -1561,7 +1533,7 @@ export default function AppViews({
                               {" "}
                               View Details{" "}
                             </button>
-                            {currentWorkerIsVerified && (
+                            {job.canApply && (
                               <button
                                 className="btn btn-primary btn-sm flex-fill"
                                 type="button"
@@ -1572,10 +1544,9 @@ export default function AppViews({
                               </button>
                             )}
                           </div>
-                          {!currentWorkerIsVerified && (
+                          {!job.canApply && !job.applicationStatus && (
                             <div className="alert alert-warning mt-3 mb-0 py-2 small">
-                              Locked until verified: you can browse jobs, but applications are unavailable until admin
-                              approval.
+                              Applications are unavailable for this job right now.
                             </div>
                           )}
                         </article>

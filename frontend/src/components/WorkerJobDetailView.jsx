@@ -29,23 +29,8 @@ export default function WorkerJobDetailView({
     job?.householdName || job?.householdUsername || "Household",
   );
   const householdPhoto = getHouseholdPhoto(household);
-  const alreadyApplied =
-    job && currentWorker
-      ? (job.applications || []).some(
-          (application) =>
-            String(application.workerId) === String(currentWorker.id) ||
-            application.workerUsername === currentWorker.username,
-        )
-      : false;
-  const currentWorkerApplication =
-    job?.currentWorkerApplication ||
-    (job && currentWorker
-      ? (job.applications || []).find(
-          (application) =>
-            String(application.workerId) === String(currentWorker.id) ||
-            application.workerUsername === currentWorker.username,
-        )
-      : null);
+  const currentWorkerApplication = job?.currentWorkerApplication || null;
+  const alreadyApplied = Boolean(currentWorkerApplication);
   const jobLatitude = job?.latitude ?? household?.latitude ?? null;
   const jobLongitude = job?.longitude ?? household?.longitude ?? null;
   const workerLatitude = currentWorker?.latitude ?? null;
@@ -56,16 +41,13 @@ export default function WorkerJobDetailView({
   const distanceLabel = formatDistance(routeDistanceKm ?? jobDistanceKm);
   const currentWorkerApplicationStatus = job?.applicationStatus || currentWorkerApplication?.status || "";
   const currentWorkerApplicationId = job?.applicationId || currentWorkerApplication?.id || null;
-  const hasHireRequest = currentWorkerApplicationStatus === "Hire Request";
   const hasRejectedHireRequest = currentWorkerApplicationStatus === "Rejected";
-  const isHiredForJob = currentWorkerApplicationStatus === "Hired";
   const isAssignedWorker = ["Hired", "Completed"].includes(currentWorkerApplicationStatus);
   const isCompletionRequested = job?.status === "Waiting for Household Confirmation";
   const isCompletedJob = job?.status === "Completed";
-  const canApply = job?.canApply ?? (currentWorker?.verification === "Verified" && !alreadyApplied);
-  const canAcceptHireRequest = job?.canAcceptHireRequest ?? hasHireRequest;
-  const canRequestCompletion =
-    job?.canRequestCompletion ?? (isHiredForJob && !isCompletionRequested && !isCompletedJob);
+  const canApply = Boolean(job?.canApply);
+  const canAcceptHireRequest = Boolean(job?.canAcceptHireRequest);
+  const canRequestCompletion = Boolean(job?.canRequestCompletion);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   useEffect(() => {
     setRouteDistanceKm(null);
@@ -303,7 +285,7 @@ export default function WorkerJobDetailView({
                             <button
                               className="btn btn-primary btn-sm"
                               type="button"
-                              disabled={alreadyApplied || !canApply}
+                              disabled={!canApply}
                               onClick={() => handleApplyToJob(job.id)}
                             >
                               {alreadyApplied
@@ -319,9 +301,9 @@ export default function WorkerJobDetailView({
                             This household sent you a hire request. Review the job details before accepting or rejecting.
                           </div>
                         )}
-                        {!canApply && !alreadyApplied && (
+                        {!canApply && !alreadyApplied && !canAcceptHireRequest && (
                           <div className="alert alert-warning mt-3 mb-0 py-2">
-                            You cannot apply yet. Please complete your verification first to unlock job applications.
+                            Applications are unavailable for this job right now.
                           </div>
                         )}
                       </div>

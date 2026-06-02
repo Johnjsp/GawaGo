@@ -41,7 +41,6 @@ export function useGawaGoActions({
   householdJobLocationPreview,
   householdProfileForm,
   householdReviewForm,
-  isJobOpenForApplications,
   isNumericIdentifier,
   isValidGmailAddress,
   loginForm,
@@ -92,22 +91,13 @@ export function useGawaGoActions({
       window.alert("Please login as a worker first.");
       return;
     }
-    if (String(currentWorker.verification).toLowerCase() !== "verified") {
-      window.alert("Please complete verification before applying to jobs.");
-      return;
-    }
     const job = postedJobs.find((item) => item.id === jobId);
     if (!job) {
       window.alert("Job not found.");
       return;
     }
-    if (!isJobOpenForApplications(job)) {
-      window.alert("This job is already closed.");
-      return;
-    }
-    const alreadyApplied = (job.applications || []).some((application2) => application2.workerId === currentWorker.id);
-    if (alreadyApplied) {
-      window.alert("You already applied for this job.");
+    if (!job.canApply) {
+      window.alert("Applications are unavailable for this job right now.");
       return;
     }
     (async () => {

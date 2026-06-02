@@ -501,11 +501,32 @@ export default function AppViews({
     markNotificationRead(notification.id);
     setHouseholdNotificationPreview(notification);
   };
+  const openStructuredNotificationAction = (notification) => {
+    if (!notification?.requiresAction && !notification?.actionType) {
+      return false;
+    }
+    if (notification.id) {
+      markNotificationRead(notification.id);
+    }
+    if (currentUser?.role === "worker" && notification.jobId) {
+      openWorkerJobDetail(notification.jobId);
+      return true;
+    }
+    if (currentUser?.role === "household" && notification.jobId) {
+      openHouseholdJobDetail(notification.jobId);
+      return true;
+    }
+    return false;
+  };
   const closeHouseholdNotificationPreview = () => {
     setHouseholdNotificationPreview(null);
   };
   const openHouseholdNotificationPreviewDetails = () => {
     if (!householdNotificationPreview) {
+      return;
+    }
+    if (openStructuredNotificationAction(householdNotificationPreview)) {
+      closeHouseholdNotificationPreview();
       return;
     }
     const worker = getHouseholdNotificationWorker(householdNotificationPreview);
@@ -2733,8 +2754,21 @@ export default function AppViews({
                   ))}
                   {workerGeneralNotifications.map((item) => (
                     <article
-                      className={`notification-card ${item.unread ? "unread" : ""}`}
+                      className={`notification-card ${item.requiresAction ? "worker-hire-request-clickable" : ""} ${item.unread ? "unread" : ""}`}
                       key={item.id}
+                      role={item.requiresAction ? "button" : undefined}
+                      tabIndex={item.requiresAction ? 0 : undefined}
+                      onClick={item.requiresAction ? () => openStructuredNotificationAction(item) : undefined}
+                      onKeyDown={
+                        item.requiresAction
+                          ? (event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                openStructuredNotificationAction(item);
+                              }
+                            }
+                          : undefined
+                      }
                     >
                       <p className="small text-muted mb-1">{item.date}</p>
                       <h2 className="h6 mb-1">{item.title}</h2>

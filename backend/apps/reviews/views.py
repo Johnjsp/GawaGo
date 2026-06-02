@@ -114,5 +114,9 @@ class ReviewListCreateView(APIView):
             notification_type=Notification.TYPE_ANALYTICS,
             title="New feedback received" if author_role == "worker" else "New review received",
             message=notification_message,
+            actor=author_user,
+            related_job_id=job.id,
+            action_type=Notification.ACTION_REVIEW,
+            action_url=f"/reviews/jobs/{job.id}",
         )
         return Response(ReviewSerializer(review).data, status=status.HTTP_201_CREATED)

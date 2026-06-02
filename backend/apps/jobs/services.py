@@ -28,6 +28,14 @@ def create_household_review_reminder(job: JobPosting, application: JobApplicatio
         notification_type=Notification.TYPE_REVIEW_REMINDER,
         title="Review worker service",
         message=f"{job.title} is complete. Please submit feedback for {worker_name}.",
+        related_job_id=job.id,
+        related_application_id=application.id,
+        action_type=Notification.ACTION_REVIEW,
+        action_url=f"/household/jobs/{job.id}/review",
+        requires_action=True,
+        defaults={
+            "actor": application.worker,
+        },
     )
     if created:
         send_notification_email(job.household, notification.title, notification.message)
@@ -51,6 +59,12 @@ def complete_job(job: JobPosting) -> JobPosting:
             notification_type=Notification.TYPE_COMPLETION,
             title="Job completed",
             message=f"{job.title} was marked completed.",
+            actor=job.household,
+            related_job_id=job.id,
+            related_application_id=application.id,
+            action_type=Notification.ACTION_REVIEW,
+            action_url=f"/worker/jobs/{job.id}/review",
+            requires_action=True,
         )
 
     completed_applications = job.applications.select_related("worker").filter(

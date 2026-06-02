@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import UserProfile
 from apps.jobs.models import JobApplication, JobPosting
+from apps.notifications.models import Notification
 from apps.reviews.models import Review
 
 
@@ -112,6 +113,16 @@ class ReviewPermissionTests(TestCase):
         self.worker.profile.refresh_from_db()
         self.assertEqual(self.worker.profile.average_rating, Decimal("5.00"))
         self.assertEqual(self.worker.profile.rating_count, 1)
+        notification = Notification.objects.get(
+            recipient=self.worker,
+            notification_type=Notification.TYPE_ANALYTICS,
+            title="New review received",
+        )
+        self.assertEqual(notification.actor, self.household)
+        self.assertEqual(notification.related_job_id, self.completed_job.id)
+        self.assertEqual(notification.action_type, Notification.ACTION_REVIEW)
+        self.assertEqual(notification.action_url, f"/reviews/jobs/{self.completed_job.id}")
+        self.assertFalse(notification.requires_action)
 
     def test_worker_rating_stats_recalculate_when_ratings_change(self):
         self.client.force_authenticate(user=self.household)
@@ -179,6 +190,16 @@ class ReviewPermissionTests(TestCase):
         self.assertIsNone(response.data["author"])
         self.assertEqual(response.data["author_username"], "")
         self.assertEqual(response.data["author_name"], "Anonymous worker")
+        notification = Notification.objects.get(
+            recipient=self.household,
+            notification_type=Notification.TYPE_ANALYTICS,
+            title="New feedback received",
+        )
+        self.assertEqual(notification.actor, self.worker)
+        self.assertEqual(notification.related_job_id, self.completed_job.id)
+        self.assertEqual(notification.action_type, Notification.ACTION_REVIEW)
+        self.assertEqual(notification.action_url, f"/reviews/jobs/{self.completed_job.id}")
+        self.assertFalse(notification.requires_action)
 
     def test_worker_feedback_author_is_hidden_when_household_fetches_reviews(self):
         Review.objects.create(

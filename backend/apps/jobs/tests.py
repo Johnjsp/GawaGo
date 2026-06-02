@@ -212,6 +212,28 @@ class JobPermissionTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertFalse(JobApplication.objects.filter(job=self.job, worker=new_worker).exists())
 
+    def test_worker_application_creates_structured_household_notification(self):
+        new_worker = User.objects.create_user(username="worker-apply-structured", password="password")
+        UserProfile.objects.create(user=new_worker, role=UserProfile.ROLE_WORKER, verification_status="verified")
+        self.client.force_authenticate(user=new_worker)
+
+        response = self.client.post(reverse("job-apply", args=[self.job.id]), {}, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        application = JobApplication.objects.get(job=self.job, worker=new_worker)
+        notification = Notification.objects.get(
+            recipient=self.household,
+            notification_type=Notification.TYPE_APPLICATION,
+            title="New worker application",
+            message__contains=self.job.title,
+        )
+        self.assertEqual(notification.actor, new_worker)
+        self.assertEqual(notification.related_job_id, self.job.id)
+        self.assertEqual(notification.related_application_id, application.id)
+        self.assertEqual(notification.action_type, Notification.ACTION_JOB_DETAIL)
+        self.assertEqual(notification.action_url, f"/household/jobs/{self.job.id}/applications")
+        self.assertTrue(notification.requires_action)
+
     def test_non_owner_cannot_edit_job(self):
         self.client.force_authenticate(user=self.other_household)
 
@@ -389,21 +411,29 @@ class JobPermissionTests(TestCase):
         self.assertEqual(self.job.status, JobPosting.STATUS_COMPLETED)
         self.assertIsNotNone(self.job.completed_at)
         self.assertEqual(self.application.status, JobApplication.STATUS_COMPLETED)
-        self.assertTrue(
-            Notification.objects.filter(
-                recipient=self.worker,
-                notification_type=Notification.TYPE_COMPLETION,
-                title="Job completed",
-                message__contains=self.job.title,
-            ).exists()
+        completion_notification = Notification.objects.get(
+            recipient=self.worker,
+            notification_type=Notification.TYPE_COMPLETION,
+            title="Job completed",
+            message__contains=self.job.title,
         )
-        self.assertTrue(
-            Notification.objects.filter(
-                recipient=self.household,
-                notification_type=Notification.TYPE_REVIEW_REMINDER,
-                message__contains=self.worker.username,
-            ).exists()
+        self.assertEqual(completion_notification.actor, self.household)
+        self.assertEqual(completion_notification.related_job_id, self.job.id)
+        self.assertEqual(completion_notification.related_application_id, self.application.id)
+        self.assertEqual(completion_notification.action_type, Notification.ACTION_REVIEW)
+        self.assertEqual(completion_notification.action_url, f"/worker/jobs/{self.job.id}/review")
+        self.assertTrue(completion_notification.requires_action)
+        reminder_notification = Notification.objects.get(
+            recipient=self.household,
+            notification_type=Notification.TYPE_REVIEW_REMINDER,
+            message__contains=self.worker.username,
         )
+        self.assertEqual(reminder_notification.actor, self.worker)
+        self.assertEqual(reminder_notification.related_job_id, self.job.id)
+        self.assertEqual(reminder_notification.related_application_id, self.application.id)
+        self.assertEqual(reminder_notification.action_type, Notification.ACTION_REVIEW)
+        self.assertEqual(reminder_notification.action_url, f"/household/jobs/{self.job.id}/review")
+        self.assertTrue(reminder_notification.requires_action)
         subjects = [message.subject for message in mail.outbox]
         self.assertIn("GawaGo: Job completed", subjects)
         self.assertIn("GawaGo: Review worker service", subjects)
@@ -525,6 +555,33 @@ class JobPermissionTests(TestCase):
         self.application.refresh_from_db()
         self.assertEqual(self.application.status, JobApplication.STATUS_PENDING)
 
+    def test_job_owner_can_directly_hire_pending_application_with_structured_notification(self):
+        self.client.force_authenticate(user=self.household)
+
+        response = self.client.patch(
+            reverse("job-application-status", args=[self.application.id]),
+            {"status": JobApplication.STATUS_HIRED},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.application.refresh_from_db()
+        self.job.refresh_from_db()
+        self.assertEqual(self.application.status, JobApplication.STATUS_HIRED)
+        self.assertEqual(self.job.status, JobPosting.STATUS_ASSIGNED)
+        notification = Notification.objects.get(
+            recipient=self.worker,
+            notification_type=Notification.TYPE_ACCEPTED,
+            title="Application accepted",
+            message__contains=self.job.title,
+        )
+        self.assertEqual(notification.actor, self.household)
+        self.assertEqual(notification.related_job_id, self.job.id)
+        self.assertEqual(notification.related_application_id, self.application.id)
+        self.assertEqual(notification.action_type, Notification.ACTION_JOB_DETAIL)
+        self.assertEqual(notification.action_url, f"/worker/jobs/{self.job.id}")
+        self.assertFalse(notification.requires_action)
+
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_job_owner_can_send_hire_request_for_pending_application(self):
         self.client.force_authenticate(user=self.household)
@@ -589,6 +646,18 @@ class JobPermissionTests(TestCase):
             {"decision": "accept"},
             format="json",
         )
+        accepted_notification = Notification.objects.get(
+            recipient=self.household,
+            notification_type=Notification.TYPE_ACCEPTED,
+            title="Hire request accepted",
+            message__contains=self.job.title,
+        )
+        self.assertEqual(accepted_notification.actor, self.worker)
+        self.assertEqual(accepted_notification.related_job_id, self.job.id)
+        self.assertEqual(accepted_notification.related_application_id, self.application.id)
+        self.assertEqual(accepted_notification.action_type, Notification.ACTION_JOB_DETAIL)
+        self.assertEqual(accepted_notification.action_url, f"/household/jobs/{self.job.id}")
+        self.assertFalse(accepted_notification.requires_action)
         self.client.force_authenticate(user=self.household)
 
         response = self.client.patch(
@@ -629,14 +698,18 @@ class JobPermissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.application.refresh_from_db()
         self.assertEqual(self.application.status, JobApplication.STATUS_REJECTED)
-        self.assertTrue(
-            Notification.objects.filter(
-                recipient=self.worker,
-                notification_type=Notification.TYPE_REJECTION,
-                title="Application rejected",
-                message__contains=self.job.title,
-            ).exists()
+        notification = Notification.objects.get(
+            recipient=self.worker,
+            notification_type=Notification.TYPE_REJECTION,
+            title="Application rejected",
+            message__contains=self.job.title,
         )
+        self.assertEqual(notification.actor, self.household)
+        self.assertEqual(notification.related_job_id, self.job.id)
+        self.assertEqual(notification.related_application_id, self.application.id)
+        self.assertEqual(notification.action_type, Notification.ACTION_JOB_DETAIL)
+        self.assertEqual(notification.action_url, f"/worker/jobs/{self.job.id}")
+        self.assertFalse(notification.requires_action)
         self.assertEqual(mail.outbox[-1].to, [self.worker.email])
         self.assertEqual(mail.outbox[-1].subject, "GawaGo: Application rejected")
         self.assertIn(self.job.title, mail.outbox[-1].body)

@@ -208,6 +208,12 @@ class JobApplicationView(APIView):
             notification_type=Notification.TYPE_APPLICATION,
             title="New worker application",
             message=f"{worker.username} applied to {job.title}.",
+            actor=worker,
+            related_job_id=job.id,
+            related_application_id=application.id,
+            action_type=Notification.ACTION_JOB_DETAIL,
+            action_url=f"/household/jobs/{job.id}/applications",
+            requires_action=True,
         )
         return Response(JobApplicationSerializer(application).data, status=status.HTTP_201_CREATED)
 
@@ -298,6 +304,11 @@ class JobApplicationStatusView(APIView):
                 notification_type=Notification.TYPE_ACCEPTED,
                 title="Application accepted",
                 message=f"Your application for {application.job.title} was accepted.",
+                actor=application.job.household,
+                related_job_id=application.job_id,
+                related_application_id=application.id,
+                action_type=Notification.ACTION_JOB_DETAIL,
+                action_url=f"/worker/jobs/{application.job_id}",
             )
         elif application.status == JobApplication.STATUS_HIRE_REQUESTED:
             create_notification(
@@ -321,6 +332,11 @@ class JobApplicationStatusView(APIView):
                 notification_type=Notification.TYPE_REJECTION,
                 title="Application rejected",
                 message=f"Your application for {application.job.title} was rejected.",
+                actor=application.job.household,
+                related_job_id=application.job_id,
+                related_application_id=application.id,
+                action_type=Notification.ACTION_JOB_DETAIL,
+                action_url=f"/worker/jobs/{application.job_id}",
             )
         return Response(JobApplicationSerializer(application).data)
 
@@ -413,6 +429,12 @@ class JobCompletionRequestView(APIView):
             notification_type=Notification.TYPE_COMPLETION,
             title="Worker requested completion",
             message=message,
+            actor=request.user,
+            related_job_id=job.id,
+            related_application_id=application.id,
+            action_type=Notification.ACTION_JOB_DETAIL,
+            action_url=f"/household/jobs/{job.id}/completion",
+            requires_action=True,
         )
         return Response(JobPostingSerializer(job, context={"request": request}).data)
 
@@ -452,6 +474,11 @@ class JobApplicationDecisionView(APIView):
                 notification_type=Notification.TYPE_ACCEPTED,
                 title="Hire request accepted",
                 message=f"{application.worker.username} accepted your hire request for {application.job.title}.",
+                actor=application.worker,
+                related_job_id=application.job_id,
+                related_application_id=application.id,
+                action_type=Notification.ACTION_JOB_DETAIL,
+                action_url=f"/household/jobs/{application.job_id}",
             )
         else:
             application.status = JobApplication.STATUS_REJECTED
@@ -461,5 +488,10 @@ class JobApplicationDecisionView(APIView):
                 notification_type=Notification.TYPE_REJECTION,
                 title="Hire request rejected",
                 message=f"{application.worker.username} rejected your hire request for {application.job.title}.",
+                actor=application.worker,
+                related_job_id=application.job_id,
+                related_application_id=application.id,
+                action_type=Notification.ACTION_JOB_DETAIL,
+                action_url=f"/household/jobs/{application.job_id}",
             )
         return Response(JobApplicationSerializer(application).data)

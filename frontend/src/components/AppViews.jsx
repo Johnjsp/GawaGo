@@ -358,7 +358,16 @@ export default function AppViews({
     return result;
   };
   const workerMarketCategories = useMemo(() => {
-    return SKILLS.filter((serviceType) => serviceType !== "Other").map((serviceType) => {
+    const defaultServiceTypes = SKILLS.filter((serviceType) => serviceType !== "Other");
+    const knownServiceKeys = new Set(defaultServiceTypes.map((serviceType) => serviceType.trim().toLowerCase()));
+    const customServiceTypes = [
+      ...new Set(
+        workerVisibleJobs
+          .map((job) => String(job.serviceType || "").trim())
+          .filter((serviceType) => serviceType && !knownServiceKeys.has(serviceType.toLowerCase())),
+      ),
+    ].sort((first, second) => first.localeCompare(second));
+    return [...defaultServiceTypes, ...customServiceTypes].map((serviceType) => {
       const categoryJobs = workerVisibleJobs.filter((job) => job.serviceType === serviceType);
       const matchesWorkerSkills = (currentWorker?.skills || []).includes(serviceType);
       return {

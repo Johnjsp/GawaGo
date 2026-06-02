@@ -51,6 +51,20 @@ def ensure_worker_profile(user, role_hint=""):
     return profile
 
 
+def ensure_household_profile(user, role_hint=""):
+    profile = getattr(user, "profile", None)
+    normalized_hint = str(role_hint or "").strip().lower()
+    if profile and profile.role == UserProfile.ROLE_HOUSEHOLD:
+        return profile
+    if normalized_hint != UserProfile.ROLE_HOUSEHOLD:
+        return None
+    if not profile:
+        return UserProfile.objects.create(user=user, role=UserProfile.ROLE_HOUSEHOLD)
+    profile.role = UserProfile.ROLE_HOUSEHOLD
+    profile.save(update_fields=["role"])
+    return profile
+
+
 def build_schedule_label(validated_data):
     schedule = validated_data.get("schedule", "").strip()
     if schedule:
@@ -110,7 +124,9 @@ class JobViewSet(viewsets.ModelViewSet):
             if image_file.size > max_file_size:
                 return Response({"detail": "Each image must be 5MB or smaller."}, status=status.HTTP_400_BAD_REQUEST)
         household = request.user
-        if not getattr(household, "profile", None) or household.profile.role != UserProfile.ROLE_HOUSEHOLD:
+        auth_payload = request.auth if isinstance(request.auth, dict) else {}
+        household_profile = ensure_household_profile(household, auth_payload.get("role", ""))
+        if not household_profile:
             return Response({"detail": "Only households can create job postings."}, status=status.HTTP_403_FORBIDDEN)
         requested_status = serializer.validated_data.get("status", JobPosting.STATUS_OPEN)
         if requested_status != JobPosting.STATUS_OPEN:

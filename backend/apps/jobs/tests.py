@@ -6,6 +6,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.accounts.models import UserProfile
+from apps.common.authentication import create_jwt_token
 from apps.jobs.models import JobApplication, JobPosting
 from apps.jobs.services import complete_job
 from apps.notifications.models import Notification
@@ -253,6 +254,41 @@ class JobPermissionTests(TestCase):
         job = JobPosting.objects.get(title="Structured schedule job")
         self.assertEqual(str(job.preferred_date), "2026-06-02")
         self.assertEqual(job.preferred_time.strftime("%H:%M"), "09:30")
+
+    def test_household_token_repairs_stale_profile_role_when_creating_job(self):
+        stale_household = User.objects.create_user(username="stalehousehold", password="password")
+        UserProfile.objects.create(user=stale_household, role=UserProfile.ROLE_WORKER)
+        token = create_jwt_token(
+            {
+                "user_id": stale_household.id,
+                "username": stale_household.username,
+                "role": UserProfile.ROLE_HOUSEHOLD,
+            }
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
+        response = self.client.post(
+            reverse("job-list"),
+            {
+                "title": "Role repair job",
+                "job_type": "Painting",
+                "required_skill": "Painting",
+                "schedule_type": "One-Time",
+                "preferred_date": "2026-06-13",
+                "preferred_time": "09:09",
+                "location_label": "Lalo, Tayabas",
+                "latitude": "13.9622745",
+                "longitude": "121.5632841",
+                "service_rate": "100.00",
+                "worker_slots": 1,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        stale_household.profile.refresh_from_db()
+        self.assertEqual(stale_household.profile.role, UserProfile.ROLE_HOUSEHOLD)
+        self.assertTrue(JobPosting.objects.filter(title="Role repair job", household=stale_household).exists())
 
     def test_household_cannot_create_job_with_non_open_status(self):
         self.client.force_authenticate(user=self.household)

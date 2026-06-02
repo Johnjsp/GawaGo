@@ -336,6 +336,8 @@ export function normalizeBackendNotification(notification) {
     notificationType: notification.notification_type || notification.notificationType || "analytics",
     title: notification.title || "Notification",
     message: notification.message || "",
+    actorId: notification.actor ?? notification.actor_id ?? notification.actorId ?? null,
+    actorUsername: notification.actor_username || notification.actorUsername || "",
     jobId: notification.related_job_id ?? notification.relatedJobId ?? notification.job_id ?? notification.jobId ?? null,
     applicationId:
       notification.related_application_id ??
@@ -344,6 +346,8 @@ export function normalizeBackendNotification(notification) {
       notification.applicationId ??
       null,
     actionType: notification.action_type || notification.actionType || "",
+    actionUrl: notification.action_url || notification.actionUrl || "",
+    requiresAction: Boolean(notification.requires_action ?? notification.requiresAction ?? false),
     date: notification.created_at || notification.createdAt || "Recently",
     unread: !notification.is_read,
   };

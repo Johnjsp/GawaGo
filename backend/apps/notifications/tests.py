@@ -96,15 +96,21 @@ class NotificationPermissionTests(TestCase):
             notification_type=Notification.TYPE_ACCOUNT_ACTIVITY,
             title="Detailed account activity",
             message=detail_message,
+            actor=self.other_user,
             related_job_id=10,
             related_application_id=20,
             action_type=Notification.ACTION_HIRE_REQUEST,
+            action_url="/worker/jobs/10",
+            requires_action=True,
         )
 
         self.assertEqual(notification.recipient, self.recipient)
+        self.assertEqual(notification.actor, self.other_user)
         self.assertEqual(notification.related_job_id, 10)
         self.assertEqual(notification.related_application_id, 20)
         self.assertEqual(notification.action_type, Notification.ACTION_HIRE_REQUEST)
+        self.assertEqual(notification.action_url, "/worker/jobs/10")
+        self.assertTrue(notification.requires_action)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, [self.recipient.email])
         self.assertEqual(mail.outbox[0].subject, "GawaGo: Detailed account activity")
@@ -114,7 +120,19 @@ class NotificationPermissionTests(TestCase):
         self.notification.related_job_id = 11
         self.notification.related_application_id = 22
         self.notification.action_type = Notification.ACTION_HIRE_REQUEST
-        self.notification.save(update_fields=["related_job_id", "related_application_id", "action_type"])
+        self.notification.actor = self.other_user
+        self.notification.action_url = "/worker/jobs/11"
+        self.notification.requires_action = True
+        self.notification.save(
+            update_fields=[
+                "related_job_id",
+                "related_application_id",
+                "action_type",
+                "actor",
+                "action_url",
+                "requires_action",
+            ]
+        )
         self.client.force_authenticate(user=self.recipient)
 
         response = self.client.get(reverse("notification-list"))
@@ -124,3 +142,7 @@ class NotificationPermissionTests(TestCase):
         self.assertEqual(notification_payload["related_job_id"], 11)
         self.assertEqual(notification_payload["related_application_id"], 22)
         self.assertEqual(notification_payload["action_type"], Notification.ACTION_HIRE_REQUEST)
+        self.assertEqual(notification_payload["actor"], self.other_user.id)
+        self.assertEqual(notification_payload["actor_username"], self.other_user.username)
+        self.assertEqual(notification_payload["action_url"], "/worker/jobs/11")
+        self.assertTrue(notification_payload["requires_action"])

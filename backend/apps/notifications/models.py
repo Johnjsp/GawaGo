@@ -36,12 +36,21 @@ class Notification(models.Model):
     ]
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="triggered_notifications",
+        null=True,
+        blank=True,
+    )
     notification_type = models.CharField(max_length=30, choices=TYPE_CHOICES)
     title = models.CharField(max_length=255)
     message = models.TextField()
     related_job_id = models.PositiveIntegerField(null=True, blank=True)
     related_application_id = models.PositiveIntegerField(null=True, blank=True)
     action_type = models.CharField(max_length=40, choices=ACTION_CHOICES, blank=True, default=ACTION_NONE)
+    action_url = models.CharField(max_length=255, blank=True, default="")
+    requires_action = models.BooleanField(default=False)
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

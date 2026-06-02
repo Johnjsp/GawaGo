@@ -308,9 +308,12 @@ class JobApplicationStatusView(APIView):
                     f"{application.job.household.username} wants to hire you for {application.job.title}. "
                     "Please accept or reject this request."
                 ),
+                actor=application.job.household,
                 related_job_id=application.job_id,
                 related_application_id=application.id,
                 action_type=Notification.ACTION_HIRE_REQUEST,
+                action_url=f"/worker/jobs/{application.job_id}",
+                requires_action=True,
             )
         elif application.status == JobApplication.STATUS_REJECTED:
             create_notification(
@@ -362,9 +365,12 @@ class JobHireRequestView(APIView):
             notification_type=Notification.TYPE_HIRING,
             title="Hire request",
             message=f"{job.household.username} wants to hire you for {job.title}. Please accept or reject this request.",
+            actor=job.household,
             related_job_id=job.id,
             related_application_id=application.id,
             action_type=Notification.ACTION_HIRE_REQUEST,
+            action_url=f"/worker/jobs/{job.id}",
+            requires_action=True,
         )
         return Response(JobApplicationSerializer(application).data, status=status.HTTP_201_CREATED)
 

@@ -208,7 +208,7 @@ export default function AppViews({
   const currentWorkerIsVerified = String(currentWorker?.verification || "").toLowerCase() === "verified";
   const workerPendingHireRequests = workerApplications.filter((job) => job.applicationStatus === "Hire Request");
   const workerPendingHireRequestNotifications = workerNotificationsWithReadState.filter(
-    (item) => item.actionType === "hire_request" && item.applicationId,
+    (item) => item.actionType === "hire_request" && item.requiresAction && item.applicationId,
   );
   const workerHireRequestCards =
     workerPendingHireRequestNotifications.length > 0
@@ -225,6 +225,9 @@ export default function AppViews({
             notificationBackendId: notification.backendId,
             notificationMessage: notification.message,
             notificationTitle: notification.title,
+            actorUsername: notification.actorUsername,
+            actionUrl: notification.actionUrl,
+            requiresAction: notification.requiresAction,
             applicationId: notification.applicationId,
             applicationStatus: "Hire Request",
             id: notification.jobId ?? matchingJob.id,
@@ -239,7 +242,7 @@ export default function AppViews({
       ) || workerHireRequestPreview
     : null;
   const hiringNotificationHasRequestCard = (notification) => {
-    if (notification.actionType === "hire_request" && notification.applicationId) {
+    if (notification.actionType === "hire_request" && notification.requiresAction && notification.applicationId) {
       return true;
     }
     if (notification.notificationType !== "hiring") {

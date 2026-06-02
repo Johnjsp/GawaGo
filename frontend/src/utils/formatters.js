@@ -51,7 +51,7 @@ export function formatDistance(distanceKm, fallbackLabel = "") {
 }
 
 export function getWorkerPhoto(worker) {
-  const preview = worker?.profilePhotoPreview || worker?.verificationSubmission?.primaryIdPreview || "";
+  const preview = worker?.profilePhotoPreview || "";
   return /^blob:/i.test(String(preview || "")) ? "" : preview;
 }
 

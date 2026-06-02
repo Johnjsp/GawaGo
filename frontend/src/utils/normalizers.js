@@ -68,11 +68,22 @@ export function normalizeVerificationRequest(request) {
   const source = request.verification_request || request;
   const workerId = source.worker ?? source.workerId ?? source.worker_id ?? null;
   const workerUsername = source.worker_username || source.workerUsername || "";
+  const workerLocation = parseLocationLabel(source.worker_location_label || source.workerLocationLabel || "");
   return {
     id: source.id,
     workerId,
     workerUsername,
     workerName: source.worker_name || source.workerName || workerUsername || "Worker",
+    workerEmail: source.worker_email || source.workerEmail || "",
+    workerPhone: source.worker_phone || source.workerPhone || "",
+    workerLocationLabel: source.worker_location_label || source.workerLocationLabel || "",
+    workerBarangay: workerLocation.barangay,
+    workerStreetAddress: workerLocation.streetAddress,
+    workerSkills: source.worker_skills || source.workerSkills || [],
+    workerHourlyRate: source.worker_hourly_rate ?? source.workerHourlyRate ?? null,
+    workerDailyRate: source.worker_daily_rate ?? source.workerDailyRate ?? null,
+    workerYearsExperience: source.worker_years_experience ?? source.workerYearsExperience ?? 0,
+    workerProfilePhoto: normalizePreviewUrl(source.worker_profile_photo || source.workerProfilePhoto),
     primaryIdName: source.primary_id_name || source.primaryIdName || "",
     secondaryDocName: source.secondary_doc_name || source.secondaryDocName || "",
     primaryIdPreview: normalizePreviewUrl(source.primary_id_preview || source.primaryIdPreview),
@@ -83,6 +94,19 @@ export function normalizeVerificationRequest(request) {
     reviewedAt: source.reviewed_at || source.reviewedAt || "",
     reviewedBy: source.reviewed_by || source.reviewedBy || "",
     reviewNote: source.review_note || source.reviewNote || "",
+  };
+}
+
+export function normalizeAvailabilityWindow(window) {
+  if (!window) {
+    return null;
+  }
+  return {
+    id: window.id || `availability-${Date.now()}`,
+    date: window.date || "",
+    startTime: window.start_time || window.startTime || "",
+    endTime: window.end_time || window.endTime || "",
+    isAvailable: window.is_available ?? window.isAvailable ?? true,
   };
 }
 
@@ -114,6 +138,7 @@ export function normalizeBackendWorker(currentUser) {
     latitude: profile.latitude ?? currentUser.latitude ?? null,
     longitude: profile.longitude ?? currentUser.longitude ?? null,
     profilePhotoPreview: profile.profile_photo_url || profile.profile_photo || currentUser.profilePhotoPreview || "",
+    availabilityWindows: (profile.availability_windows || []).map(normalizeAvailabilityWindow).filter(Boolean),
     avatar: (currentUser.displayName || currentUser.username || "W").slice(0, 1).toUpperCase(),
     receivedReviews: [],
     givenFeedback: [],
@@ -173,6 +198,7 @@ export function normalizeProfileRecord(profile) {
     latitude: profile.latitude,
     longitude: profile.longitude,
     profilePhotoPreview: profile.profile_photo_url || profile.profile_photo || "",
+    availabilityWindows: (profile.availability_windows || []).map(normalizeAvailabilityWindow).filter(Boolean),
     role: profile.role || profile.user_type || "worker",
   };
 }
@@ -208,6 +234,9 @@ function normalizeJobStatus(status) {
   if (normalized === "assigned" || normalized === "found a worker" || normalized === "already found a worker") {
     return "Already found a worker";
   }
+  if (normalized === "completion_requested" || normalized === "completion requested" || normalized === "waiting for household confirmation") {
+    return "Waiting for Household Confirmation";
+  }
   if (normalized === "completed") {
     return "Completed";
   }
@@ -222,11 +251,17 @@ function normalizeJobApplicationStatus(status) {
   if (normalized === "hired") {
     return "Hired";
   }
+  if (normalized === "hire_requested" || normalized === "hire requested") {
+    return "Hire Request";
+  }
   if (normalized === "rejected") {
     return "Rejected";
   }
   if (normalized === "closed") {
     return "Closed";
+  }
+  if (normalized === "completed") {
+    return "Completed";
   }
   return "Pending";
 }
@@ -266,7 +301,7 @@ export function normalizeBackendJob(job) {
     householdName: job.household_name || job.householdName || job.household_username || "Household",
     jobTitle: job.title || job.job_title || job.required_skill || job.jobType || "",
     serviceType: job.required_skill || job.job_type || job.jobType || job.title || "",
-    scheduleType: job.schedule || "One - Time",
+    scheduleType: job.schedule_type || job.scheduleType || job.schedule || "One - Time",
     preferredDate: job.preferred_date || "",
     preferredTime: job.preferred_time || "",
     description: job.description || "",
@@ -285,6 +320,7 @@ export function normalizeBackendJob(job) {
     applications,
     images,
     createdAt: job.created_at || job.createdAt || new Date().toISOString(),
+    completedAt: job.completed_at || job.completedAt || "",
   });
 }
 
@@ -316,6 +352,7 @@ export function normalizeBackendReview(review) {
     targetName: review.target_name || review.targetName || review.target_username || "User",
     rating: review.rating ?? null,
     feedback: review.feedback || "",
+    jobId: review.job || review.job_id || review.jobId || "",
     jobTitle: review.job_title || review.jobTitle || "",
     createdAt: review.created_at || review.createdAt || new Date().toLocaleString("en-PH"),
   });

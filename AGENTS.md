@@ -34,7 +34,7 @@ Build a centralized, responsive web and mobile application platform that helps h
 - Workers can rate households to support fairness on both sides.
 - System sends reminders to submit feedback after job completion.
 - Neutral no-feedback policy:
-  - If no household rating is submitted within 48 to 72 hours, system assigns default 5-star rating to the worker.
+  - If no household rating is submitted within 48 to 72 hours, system assigns default 3.5-star rating to the worker.
 - New users display `No ratings yet` instead of `0` or empty numeric score.
 
 ### B. Price Transparency
@@ -102,7 +102,7 @@ Build a centralized, responsive web and mobile application platform that helps h
 - Web-Based Employment System: A software application that can be accessed through a web browser using an internet connection. In this study, it refers to the proposed platform that allows households, domestic helpers, and skilled workers in Tayabas City to interact, post jobs, apply for work, and manage employment activities online.
 
 ### Non-Technical Terms
-- Default Rating: A system-assigned rating automatically given when a household does not submit a rating within 48 to 72 hours after job completion. In such cases, the system assigns a five-star rating to prevent workers from being penalized due to missing rating and feedback.
+- Default Rating: A system-assigned rating automatically given when a household does not submit a rating within 48 to 72 hours after job completion. In such cases, the system assigns a 3.5-star rating to prevent workers from being unfairly penalized due to missing rating and feedback.
 - Domestic Helper: An individual employed to perform household-related tasks and services within a residence. In this study, it refers to a registered platform user who offers services such as cleaning, cooking, laundry, childcare, and other home-based tasks to households in Tayabas City.
 - Household: A group of individuals living together in a residence. In this study, it refers to a registered user representing a family or individual residing in Tayabas City who can post job requests and hire domestic helpers or skilled workers through the system.
 - Job Posting: An announcement or listing of available work opportunities. In this study, it refers to a job listing created by a household on the platform specifying the type of service needed, required skills, schedule, location, and offered service rate.

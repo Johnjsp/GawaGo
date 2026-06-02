@@ -40,6 +40,9 @@ export function getJobStatusBadgeClass(status) {
   if (status === "Already found a worker") {
     return "gg-status-badge gg-status-filled";
   }
+  if (status === "Waiting for Household Confirmation") {
+    return "gg-status-badge gg-status-pending";
+  }
   if (status === "Completed") {
     return "gg-status-badge gg-status-completed";
   }

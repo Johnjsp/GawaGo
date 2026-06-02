@@ -4,12 +4,25 @@ from apps.jobs.models import JobApplication, JobImage, JobPosting
 
 
 class JobApplicationSerializer(serializers.ModelSerializer):
+    job_id = serializers.IntegerField(source="job.id", read_only=True)
+    job_title = serializers.CharField(source="job.title", read_only=True)
     worker_username = serializers.CharField(source="worker.username", read_only=True)
     worker_name = serializers.SerializerMethodField()
 
     class Meta:
         model = JobApplication
-        fields = ["id", "worker", "worker_username", "worker_name", "status", "applied_at", "updated_at", "note"]
+        fields = [
+            "id",
+            "job_id",
+            "job_title",
+            "worker",
+            "worker_username",
+            "worker_name",
+            "status",
+            "applied_at",
+            "updated_at",
+            "note",
+        ]
         read_only_fields = ["id", "worker_username", "applied_at", "updated_at"]
 
     def get_worker_name(self, obj):
@@ -35,7 +48,7 @@ class JobImageSerializer(serializers.ModelSerializer):
 class JobPostingSerializer(serializers.ModelSerializer):
     household_username = serializers.CharField(source="household.username", read_only=True)
     household_name = serializers.SerializerMethodField()
-    applications = JobApplicationSerializer(many=True, read_only=True)
+    applications = serializers.SerializerMethodField()
     images = JobImageSerializer(many=True, read_only=True)
 
     class Meta:
@@ -48,6 +61,9 @@ class JobPostingSerializer(serializers.ModelSerializer):
             "job_type",
             "required_skill",
             "schedule",
+            "schedule_type",
+            "preferred_date",
+            "preferred_time",
             "description",
             "location_label",
             "latitude",
@@ -56,6 +72,7 @@ class JobPostingSerializer(serializers.ModelSerializer):
             "worker_slots",
             "status",
             "created_at",
+            "completed_at",
             "applications",
             "images",
         ]
@@ -64,6 +81,7 @@ class JobPostingSerializer(serializers.ModelSerializer):
             "household_username",
             "household_name",
             "created_at",
+            "completed_at",
             "applications",
             "images",
         ]
@@ -71,13 +89,31 @@ class JobPostingSerializer(serializers.ModelSerializer):
     def get_household_name(self, obj):
         return obj.household.get_full_name().strip() or obj.household.username
 
+    def get_applications(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return []
+        applications = obj.applications.all()
+        if user.is_staff or obj.household_id == user.id:
+            visible_applications = applications
+        else:
+            profile = getattr(user, "profile", None)
+            if not profile or profile.role != "worker":
+                return []
+            visible_applications = applications.filter(worker=user)
+        return JobApplicationSerializer(visible_applications, many=True, context=self.context).data
+
 
 class JobCreateSerializer(serializers.Serializer):
     household_username = serializers.CharField(required=False, allow_blank=True)
     title = serializers.CharField()
     job_type = serializers.CharField()
     required_skill = serializers.CharField()
-    schedule = serializers.CharField()
+    schedule = serializers.CharField(required=False, allow_blank=True)
+    schedule_type = serializers.CharField(required=False, allow_blank=True, default="")
+    preferred_date = serializers.DateField(required=False, allow_null=True)
+    preferred_time = serializers.TimeField(required=False, allow_null=True)
     description = serializers.CharField(required=False, allow_blank=True, default="")
     location_label = serializers.CharField()
     latitude = serializers.DecimalField(max_digits=10, decimal_places=7)
@@ -85,6 +121,11 @@ class JobCreateSerializer(serializers.Serializer):
     service_rate = serializers.DecimalField(max_digits=10, decimal_places=2)
     worker_slots = serializers.IntegerField(min_value=1, default=1)
     status = serializers.ChoiceField(choices=JobPosting.STATUS_CHOICES, required=False)
+
+    def validate(self, attrs):
+        if not attrs.get("schedule") and not (attrs.get("preferred_date") and attrs.get("preferred_time")):
+            raise serializers.ValidationError({"schedule": "Schedule text or preferred date and time are required."})
+        return attrs
 
 
 class JobApplicationCreateSerializer(serializers.Serializer):

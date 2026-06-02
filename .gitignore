@@ -9,6 +9,10 @@ venv/
 node_modules/
 dist/
 build/
+.expo/
+
+# User uploads
+media/
 
 # Env
 .env

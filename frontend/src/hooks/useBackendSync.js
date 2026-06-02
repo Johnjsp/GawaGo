@@ -43,7 +43,6 @@ export function useBackendSync({
           ? {
               ...item,
               ...backendWorker,
-              password: item.password || backendWorker.password || "",
               receivedReviews:
                 item.receivedReviews?.length ? item.receivedReviews : backendWorker.receivedReviews || [],
               givenFeedback:
@@ -257,6 +256,8 @@ export function useBackendSync({
             dailyRate: existingWorker?.dailyRate || "0.00",
             status: existingWorker?.status || "Available",
             avatar: existingWorker?.avatar || (result.worker_username || "W").slice(0, 1).toUpperCase(),
+            latitude: existingWorker?.latitude ?? result.worker_latitude ?? null,
+            longitude: existingWorker?.longitude ?? result.worker_longitude ?? null,
             distanceKm:
               result.distance_km !== null &&
               result.distance_km !== undefined &&
@@ -266,6 +267,7 @@ export function useBackendSync({
                 : "",
             distanceLabel,
             matchScore: result.match_score,
+            availableAtRequestedTime: result.available_at_requested_time,
           };
         }),
       }));
@@ -275,6 +277,10 @@ export function useBackendSync({
   }
   async function refreshNotificationsFromBackend() {
     if (!currentUser?.username) {
+      setBackendNotifications([]);
+      return;
+    }
+    if (!getAuthToken()) {
       setBackendNotifications([]);
       return;
     }

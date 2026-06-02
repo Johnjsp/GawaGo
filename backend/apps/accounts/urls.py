@@ -10,11 +10,13 @@ from apps.accounts.views import (
     UserProfileListView,
     VerifyResetTokenView,
     VerifySignupView,
+    WorkerAvailabilityView,
 )
 
 
 urlpatterns = [
     path("me/", MeProfileView.as_view(), name="profile-me"),
+    path("me/availability/", WorkerAvailabilityView.as_view(), name="worker-availability"),
     path("profiles/", UserProfileListView.as_view(), name="profile-list"),
     path("register/", RegisterView.as_view(), name="register"),
     path("login/", LoginView.as_view(), name="login"),

@@ -1,0 +1,127 @@
+from decimal import Decimal
+
+from django.contrib.auth.models import User
+from django.test import TestCase
+
+from apps.accounts.models import UserProfile
+from apps.analytics.services import build_dashboard_metrics
+from apps.common.models import VerificationRequest
+from apps.jobs.models import JobApplication, JobPosting
+
+
+class DashboardMetricsServiceTests(TestCase):
+    def setUp(self):
+        self.household = User.objects.create_user(username="household", password="password")
+        UserProfile.objects.create(
+            user=self.household,
+            role=UserProfile.ROLE_HOUSEHOLD,
+            location_label="Demo Street, Alitao, Tayabas City",
+        )
+        self.worker = User.objects.create_user(username="worker", password="password")
+        UserProfile.objects.create(
+            user=self.worker,
+            role=UserProfile.ROLE_WORKER,
+            verification_status="verified",
+            average_rating=Decimal("4.50"),
+            rating_count=2,
+            location_label="Demo Street, Alupay, Tayabas City",
+        )
+        self.pending_worker = User.objects.create_user(username="pending-worker", password="password")
+        UserProfile.objects.create(
+            user=self.pending_worker,
+            role=UserProfile.ROLE_WORKER,
+            verification_status="pending",
+            location_label="Demo Street, Alitao, Tayabas City",
+        )
+        self.rejected_worker = User.objects.create_user(username="rejected-worker", password="password")
+        UserProfile.objects.create(
+            user=self.rejected_worker,
+            role=UserProfile.ROLE_WORKER,
+            verification_status="rejected",
+            location_label="Demo Street, Alupay, Tayabas City",
+        )
+
+        self.open_job = JobPosting.objects.create(
+            household=self.household,
+            title="Clean house",
+            job_type="House Cleaning",
+            required_skill="House Cleaning",
+            schedule="Tomorrow morning",
+            location_label="Demo Street, Alitao, Tayabas City",
+            latitude=Decimal("14.0537324"),
+            longitude=Decimal("121.5336724"),
+            service_rate=Decimal("700.00"),
+            worker_slots=2,
+            status=JobPosting.STATUS_OPEN,
+        )
+        JobPosting.objects.create(
+            household=self.household,
+            title="Fix sink",
+            job_type="Plumbing",
+            required_skill="Plumbing",
+            schedule="Today",
+            location_label="Demo Street, Alupay, Tayabas City",
+            latitude=Decimal("14.0580622"),
+            longitude=Decimal("121.6089431"),
+            service_rate=Decimal("900.00"),
+            status=JobPosting.STATUS_COMPLETED,
+        )
+        JobApplication.objects.create(job=self.open_job, worker=self.worker, status=JobApplication.STATUS_PENDING)
+        VerificationRequest.objects.create(
+            worker=self.pending_worker,
+            primary_id_name="id.png",
+            secondary_doc_name="barangay-clearance.png",
+            status=VerificationRequest.STATUS_PENDING,
+        )
+        VerificationRequest.objects.create(
+            worker=self.rejected_worker,
+            primary_id_name="id.png",
+            secondary_doc_name="barangay-clearance.png",
+            status=VerificationRequest.STATUS_REJECTED,
+        )
+
+    def test_dashboard_metrics_summary_comes_from_backend_models(self):
+        metrics = build_dashboard_metrics()
+
+        self.assertEqual(metrics["open_jobs"], 2)
+        self.assertEqual(metrics["verified_workers"], 1)
+        self.assertEqual(metrics["completed_jobs"], 1)
+        self.assertEqual(metrics["active_applications"], 1)
+        self.assertEqual(metrics["analytics"]["summary"]["totalUsers"], 4)
+        self.assertEqual(metrics["analytics"]["summary"]["totalWorkers"], 3)
+        self.assertEqual(metrics["analytics"]["summary"]["households"], 1)
+        self.assertEqual(metrics["analytics"]["summary"]["totalJobPostings"], 2)
+        self.assertEqual(metrics["analytics"]["summary"]["activeApplications"], 1)
+        self.assertEqual(metrics["analytics"]["summary"]["completedServices"], 1)
+        self.assertEqual(metrics["analytics"]["summary"]["cancelledRequests"], 0)
+        self.assertEqual(metrics["analytics"]["summary"]["ongoingMatches"], 0)
+        self.assertEqual(metrics["analytics"]["summary"]["verifiedUsers"], 1)
+        self.assertEqual(metrics["analytics"]["summary"]["pendingVerifications"], 1)
+        self.assertEqual(metrics["analytics"]["summary"]["rejectedVerifications"], 1)
+        self.assertEqual(metrics["analytics"]["summary"]["averageWorkerRating"], "4.50")
+
+    def test_dashboard_metrics_include_chart_and_table_datasets(self):
+        analytics = build_dashboard_metrics()["analytics"]
+
+        geographic_analytics = analytics["geographicAnalytics"]
+        rate_transparency = analytics["rateTransparency"]
+        alitao_demand = next(item for item in geographic_analytics["barangayDemand"] if item["barangay"] == "Alitao")
+        alupay_workers = next(item for item in geographic_analytics["workerAvailability"] if item["barangay"] == "Alupay")
+        cleaning_rate = next(item for item in rate_transparency["averageRatesByCategory"] if item["skill"] == "House Cleaning")
+        current_pricing_trend = rate_transparency["pricingTrends"][-1]
+        heat_map_alitao = next(item for item in analytics["heatMapData"] if item["barangay"] == "Alitao")
+
+        self.assertEqual(len(analytics["monthlyJobRequests"]), 6)
+        self.assertEqual(len(rate_transparency["pricingTrends"]), 6)
+        self.assertEqual(analytics["barangayJobAnalytics"], geographic_analytics["barangayDemand"])
+        self.assertEqual(analytics["barangayWorkerAnalytics"], geographic_analytics["workerAvailability"])
+        self.assertEqual(analytics["serviceRateSummary"], rate_transparency["averageRatesByCategory"][:5])
+        self.assertEqual(alitao_demand["jobs"], 1)
+        self.assertEqual(alupay_workers["workers"], 2)
+        self.assertEqual(cleaning_rate["count"], 1)
+        self.assertEqual(cleaning_rate["averageRate"], 700.0)
+        self.assertEqual(current_pricing_trend["postings"], 2)
+        self.assertEqual(current_pricing_trend["averageRate"], 800.0)
+        self.assertEqual(heat_map_alitao["jobs"], 1)
+        self.assertEqual(heat_map_alitao["pendingVerifications"], 1)
+        self.assertEqual(analytics["ratingDistribution"][1]["count"], 1)

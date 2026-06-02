@@ -78,16 +78,54 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
+SETTINGS_MODULE = os.environ.get("DJANGO_SETTINGS_MODULE", "")
 USE_SQLITE_FOR_TESTS = os.environ.get("DJANGO_USE_SQLITE_FOR_TESTS", "False") == "True" or "test" in sys.argv
+USE_SQLITE_FOR_DEV = (
+    SETTINGS_MODULE.endswith(".development")
+    and os.environ.get("DJANGO_USE_SQLITE_FOR_DEV", "True") == "True"
+)
+MYSQL_DRIVER = os.environ.get("DJANGO_MYSQL_DRIVER", "auto").strip().lower()
 
-if USE_SQLITE_FOR_TESTS:
+
+def configure_mysql_driver():
+    if MYSQL_DRIVER in {"mysqlclient", "mysqldb"}:
+        return
+    if MYSQL_DRIVER == "pymysql":
+        try:
+            import pymysql
+        except ImportError as exc:
+            raise ImportError(
+                "DJANGO_MYSQL_DRIVER=pymysql requires PyMySQL. "
+                "Install backend dependencies with: pip install -r backend/requirements.txt"
+            ) from exc
+
+        pymysql.install_as_MySQLdb()
+        return
+    if MYSQL_DRIVER == "auto":
+        try:
+            import MySQLdb  # noqa: F401
+        except ImportError:
+            try:
+                import pymysql
+            except ImportError as exc:
+                raise ImportError(
+                    "Neither mysqlclient nor PyMySQL is installed. "
+                    "Install backend dependencies with: pip install -r backend/requirements.txt"
+                ) from exc
+
+            pymysql.install_as_MySQLdb()
+        return
+    raise ValueError("DJANGO_MYSQL_DRIVER must be one of: auto, mysqlclient, pymysql")
+
+if USE_SQLITE_FOR_TESTS or USE_SQLITE_FOR_DEV:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "test-db.sqlite3",
+            "NAME": BASE_DIR / ("test-db.sqlite3" if USE_SQLITE_FOR_TESTS else "dev-db.sqlite3"),
         }
     }
 else:
+    configure_mysql_driver()
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.mysql",

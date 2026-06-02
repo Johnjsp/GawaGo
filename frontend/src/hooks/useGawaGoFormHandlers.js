@@ -44,6 +44,25 @@ export function useGawaGoFormHandlers({
         ...prev,
         barangay,
         streetAddress: barangay && !prev.streetAddress ? `Barangay ${barangay}, Tayabas City` : prev.streetAddress,
+        latitude: null,
+        longitude: null,
+        locationLabel: "",
+        locationSource: "",
+        locationWarning: "",
+        locationAccuracy: "",
+      }));
+      return;
+    }
+    if (name === "streetAddress") {
+      setWorkerForm((prev) => ({
+        ...prev,
+        streetAddress: value,
+        latitude: null,
+        longitude: null,
+        locationLabel: "",
+        locationSource: "",
+        locationWarning: "",
+        locationAccuracy: "",
       }));
       return;
     }
@@ -169,6 +188,19 @@ export function useGawaGoFormHandlers({
         );
       return;
     }
+    if (name === "barangay" || name === "streetAddress") {
+      setWorkerProfileForm((prev) => ({
+        ...prev,
+        [name]: value,
+        latitude: null,
+        longitude: null,
+        locationLabel: "",
+        locationSource: "",
+        locationWarning: "",
+        locationAccuracy: "",
+      }));
+      return;
+    }
     setWorkerProfileForm((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -183,6 +215,7 @@ export function useGawaGoFormHandlers({
         setVerificationForm((prev) => ({
           ...prev,
           primaryIdName: "",
+          primaryIdFile: null,
           primaryIdPreview: "",
         }));
         return;
@@ -190,6 +223,7 @@ export function useGawaGoFormHandlers({
       setVerificationForm((prev) => ({
         ...prev,
         primaryIdName: file.name,
+        primaryIdFile: file,
         primaryIdPreview: "",
       }));
       readFileAsDataUrl(file)
@@ -197,6 +231,7 @@ export function useGawaGoFormHandlers({
           setVerificationForm((prev) => ({
             ...prev,
             primaryIdName: file.name,
+            primaryIdFile: file,
             primaryIdPreview: preview,
           })),
         )
@@ -214,6 +249,7 @@ export function useGawaGoFormHandlers({
         setVerificationForm((prev) => ({
           ...prev,
           secondaryDocName: "",
+          secondaryDocFile: null,
           secondaryDocPreview: "",
         }));
         return;
@@ -221,6 +257,7 @@ export function useGawaGoFormHandlers({
       setVerificationForm((prev) => ({
         ...prev,
         secondaryDocName: file.name,
+        secondaryDocFile: file,
         secondaryDocPreview: "",
       }));
       readFileAsDataUrl(file)
@@ -228,6 +265,7 @@ export function useGawaGoFormHandlers({
           setVerificationForm((prev) => ({
             ...prev,
             secondaryDocName: file.name,
+            secondaryDocFile: file,
             secondaryDocPreview: preview,
           })),
         )

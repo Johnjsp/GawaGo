@@ -22,12 +22,25 @@ class ReviewSerializer(serializers.ModelSerializer):
             "target_username",
             "target_name",
             "target_role",
+            "job",
             "job_title",
             "rating",
             "feedback",
             "created_at",
         ]
         read_only_fields = ["id", "author", "author_username", "target_username", "created_at"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if self.is_anonymous_worker_feedback(instance):
+            data["author"] = None
+            data["author_username"] = ""
+            data["author_name"] = "Anonymous worker"
+        return data
+
+    @staticmethod
+    def is_anonymous_worker_feedback(obj):
+        return obj.author_role == Review.ROLE_WORKER and obj.target_role == Review.ROLE_HOUSEHOLD
 
     def get_author_name(self, obj):
         return obj.author.get_full_name().strip() or obj.author.username
@@ -39,6 +52,7 @@ class ReviewSerializer(serializers.ModelSerializer):
 class ReviewCreateSerializer(serializers.Serializer):
     author_username = serializers.CharField(max_length=150, required=False, allow_blank=True)
     target_username = serializers.CharField(max_length=150)
+    job_id = serializers.IntegerField()
     job_title = serializers.CharField(max_length=255, required=False, allow_blank=True)
     rating = serializers.DecimalField(
         max_digits=2,

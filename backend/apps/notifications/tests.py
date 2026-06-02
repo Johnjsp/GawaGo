@@ -1,0 +1,105 @@
+from django.contrib.auth.models import User
+from django.core import mail
+from django.test import override_settings
+from django.test import TestCase
+from django.urls import reverse
+from rest_framework.test import APIClient
+
+from apps.notifications.models import Notification
+from apps.notifications.services import create_notification
+
+
+class NotificationPermissionTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.recipient = User.objects.create_user(username="notify-recipient", password="password")
+        self.other_user = User.objects.create_user(username="notify-other", password="password")
+        self.notification = Notification.objects.create(
+            recipient=self.recipient,
+            notification_type=Notification.TYPE_APPLICATION,
+            title="Application update",
+            message="A worker applied.",
+        )
+        self.other_notification = Notification.objects.create(
+            recipient=self.other_user,
+            notification_type=Notification.TYPE_REJECTION,
+            title="Other update",
+            message="Private notification.",
+        )
+
+    def test_anonymous_user_cannot_list_notifications_by_username(self):
+        response = self.client.get(
+            reverse("notification-list"),
+            {"username": self.recipient.username},
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_authenticated_user_only_lists_own_notifications(self):
+        self.client.force_authenticate(user=self.recipient)
+
+        response = self.client.get(reverse("notification-list"))
+
+        self.assertEqual(response.status_code, 200)
+        ids = {item["id"] for item in response.json()}
+        self.assertIn(self.notification.id, ids)
+        self.assertNotIn(self.other_notification.id, ids)
+
+    def test_non_recipient_cannot_mark_notification_read(self):
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.patch(
+            reverse("notification-mark-read", args=[self.notification.id]),
+            {},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.notification.refresh_from_db()
+        self.assertFalse(self.notification.is_read)
+
+    def test_staff_user_cannot_mark_another_users_notification_read(self):
+        staff_user = User.objects.create_user(username="notify-admin", password="password", is_staff=True)
+        self.client.force_authenticate(user=staff_user)
+
+        response = self.client.patch(
+            reverse("notification-mark-read", args=[self.notification.id]),
+            {},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.notification.refresh_from_db()
+        self.assertFalse(self.notification.is_read)
+
+    def test_recipient_can_mark_notification_read(self):
+        self.client.force_authenticate(user=self.recipient)
+
+        response = self.client.patch(
+            reverse("notification-mark-read", args=[self.notification.id]),
+            {},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.notification.refresh_from_db()
+        self.assertTrue(self.notification.is_read)
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_create_notification_sends_full_detail_email(self):
+        self.recipient.email = "notify-recipient@example.com"
+        self.recipient.save(update_fields=["email"])
+        detail_message = "This is a longer notification message with schedule, location, and rate details."
+
+        notification = create_notification(
+            recipient=self.recipient,
+            notification_type=Notification.TYPE_ACCOUNT_ACTIVITY,
+            title="Detailed account activity",
+            message=detail_message,
+        )
+
+        self.assertEqual(notification.recipient, self.recipient)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.recipient.email])
+        self.assertEqual(mail.outbox[0].subject, "GawaGo: Detailed account activity")
+        self.assertIn(detail_message, mail.outbox[0].body)

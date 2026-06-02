@@ -4,6 +4,7 @@ import HomeView from "./HomeView";
 import HouseholdJobMapPanel from "./HouseholdJobMapPanel";
 import JobImageUpload from "./JobImageUpload";
 import LocationDistanceMap from "./LocationDistanceMap";
+import WorkerLocationPicker from "./WorkerLocationPicker";
 import { haversineDistanceKm } from "../utils/locationServices";
 import { getBarangayCenter } from "../utils/locationUtils";
 import { getHiringProgressLabel, getPendingApplicationCount, getWorkersNeeded } from "../utils/jobUtils";
@@ -32,6 +33,8 @@ export default function AppViews({
   handleCancelJob,
   handleConfirmJobCompleted,
   handleHireWorker,
+  handleWorkerHireDecision,
+  handleWorkerRequestCompletion,
   handleHouseholdChange,
   handleHouseholdJobChange,
   handleHouseholdJobSubmit,
@@ -63,6 +66,7 @@ export default function AppViews({
   householdProfileForm,
   householdReviewForm,
   householdUnreadCount,
+  isAdminPortalPath,
   loginForm,
   markAllNotificationsRead,
   markNotificationRead,
@@ -109,6 +113,7 @@ export default function AppViews({
   setHouseholdJobMapMode,
   setSelectedJobId,
   setSelectedWorkerId,
+  setWorkerForm,
   setWorkerProfileForm,
   toggleSkill,
   toggleWorkerProfileSkill,
@@ -137,6 +142,7 @@ export default function AppViews({
   const [workerJobTypeFilter, setWorkerJobTypeFilter] = useState("All Types");
   const [workerBarangayFilter, setWorkerBarangayFilter] = useState("");
   const [workerMarketSearch, setWorkerMarketSearch] = useState("");
+  const [householdNotificationPreview, setHouseholdNotificationPreview] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const addWorkerAvailabilityWindow = () => {
     setWorkerProfileForm((prev) => ({
@@ -206,6 +212,10 @@ export default function AppViews({
     );
   };
   const currentWorkerIsVerified = String(currentWorker?.verification || "").toLowerCase() === "verified";
+  const workerPendingHireRequests = workerApplications.filter((job) => job.applicationStatus === "Hire Request");
+  const workerGeneralNotifications = workerNotificationsWithReadState.filter(
+    (item) => item.notificationType !== "hiring",
+  );
   const selectedWorkerApplication =
     selectedJob && selectedWorker
       ? (selectedJob.applications || []).find(
@@ -214,8 +224,55 @@ export default function AppViews({
             item.workerUsername === selectedWorker.username,
         )
       : null;
+  const selectedJobVisibleApplications = (selectedJob?.applications || []).filter(
+    (application) => application.status !== "Rejected" && application.status !== "Closed",
+  );
+  const selectedJobApplicantWorkers = selectedJobVisibleApplications.map((application) => {
+    const existingWorker = registeredWorkers.find(
+      (worker) =>
+        String(worker.id) === String(application.workerId) ||
+        worker.username === application.workerUsername,
+    );
+    return {
+      ...(existingWorker || {}),
+      id: existingWorker?.id || application.workerId,
+      username: existingWorker?.username || application.workerUsername,
+      firstName: existingWorker?.firstName || application.workerName || "",
+      lastName: existingWorker?.lastName || "",
+      skills: existingWorker?.skills || [],
+      verification: existingWorker?.verification || "Not Yet Verified",
+      dailyRate: existingWorker?.dailyRate || "0.00",
+      avatar: existingWorker?.avatar || (application.workerName || application.workerUsername || "W").slice(0, 1).toUpperCase(),
+      applicationStatus: application.status,
+      appliedAt: application.appliedAt,
+    };
+  });
+  const selectedJobApplicantKeys = new Set(
+    selectedJobVisibleApplications.flatMap((application) =>
+      [application.workerId, application.workerUsername]
+        .filter((value) => value !== null && value !== undefined && value !== "")
+        .map((value) => String(value)),
+    ),
+  );
+  const selectedSuggestedWorkers = selectedMatchedWorkers.filter(
+    (worker) =>
+      !selectedJobApplicantKeys.has(String(worker.id)) &&
+      !selectedJobApplicantKeys.has(String(worker.workerId)) &&
+      !selectedJobApplicantKeys.has(String(worker.username)),
+  );
   const canRejectSelectedWorkerApplication =
-    selectedWorkerApplication && !["Hired", "Rejected"].includes(selectedWorkerApplication.status);
+    selectedWorkerApplication && !["Hire Request", "Hired", "Rejected"].includes(selectedWorkerApplication.status);
+  const selectedWorkerHireButtonLabel =
+    selectedWorkerApplication?.status === "Pending"
+      ? "Hire Worker"
+      : selectedWorkerApplication?.status === "Hired"
+        ? "Already Hired"
+        : selectedWorkerApplication?.status === "Hire Request"
+          ? "Hire Request Sent"
+          : "Send Hire Request";
+  const selectedWorkerHireButtonDisabled = ["Hired", "Hire Request", "Completed"].includes(
+    selectedWorkerApplication?.status,
+  );
   const selectedWorkerVerificationRequest =
     selectedWorker
       ? verificationRequests.find((item) => item.id === selectedWorker.verificationRequestId) ||
@@ -274,6 +331,11 @@ export default function AppViews({
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [view]);
+  useEffect(() => {
+    if (view !== "household-notifications" && householdNotificationPreview) {
+      setHouseholdNotificationPreview(null);
+    }
+  }, [householdNotificationPreview, view]);
   useEffect(() => {
     const handleMobileSidebarClick = (event) => {
       const sidebarHead = event.target.closest(".worker-sidebar-head");
@@ -353,6 +415,39 @@ export default function AppViews({
       return notificationDate.toISOString().slice(0, 10) === householdNotificationDateFilter;
     });
   }, [householdNotificationDateFilter, householdNotificationsWithReadState]);
+  const getHouseholdNotificationWorker = (notification) => {
+    if (!notification?.workerId) {
+      return null;
+    }
+    return registeredWorkers.find((worker) => String(worker.id) === String(notification.workerId)) || null;
+  };
+  const getHouseholdNotificationJob = (notification) => {
+    if (!notification?.jobId) {
+      return null;
+    }
+    return householdJobs.find((job) => String(job.id) === String(notification.jobId)) || null;
+  };
+  const openHouseholdNotificationPreview = (notification) => {
+    markNotificationRead(notification.id);
+    setHouseholdNotificationPreview(notification);
+  };
+  const closeHouseholdNotificationPreview = () => {
+    setHouseholdNotificationPreview(null);
+  };
+  const openHouseholdNotificationPreviewDetails = () => {
+    if (!householdNotificationPreview) {
+      return;
+    }
+    const worker = getHouseholdNotificationWorker(householdNotificationPreview);
+    closeHouseholdNotificationPreview();
+    if (worker) {
+      openMatchedWorkerProfile(worker, householdNotificationPreview.jobId);
+      return;
+    }
+    if (householdNotificationPreview.jobId) {
+      openHouseholdJobDetail(householdNotificationPreview.jobId);
+    }
+  };
   const filteredHouseholdWorkerFeedback = useMemo(() => {
     if (!householdFeedbackDateFilter) {
       return householdWorkerFeedback;
@@ -423,14 +518,90 @@ export default function AppViews({
       [draftKey]: { feedback: "", rating: "5" },
     }));
   };
-  const selectedWorkerJobLatitude = selectedJob?.latitude ?? currentHousehold?.latitude ?? null;
-  const selectedWorkerJobLongitude = selectedJob?.longitude ?? currentHousehold?.longitude ?? null;
+  const renderWorkerApplicationAction = (job) => {
+    const isCompleted = job.status === "Completed" || job.applicationStatus === "Completed";
+    const isWaitingForHousehold = job.status === "Waiting for Household Confirmation";
+    const isHired = job.applicationStatus === "Hired";
+
+    if (job.applicationStatus === "Hire Request") {
+      return (
+        <div className="worker-application-actions">
+          <button
+            className="btn btn-success btn-sm"
+            type="button"
+            onClick={() => handleWorkerHireDecision(job.applicationId, "accept")}
+          >
+            Accept
+          </button>
+          <button
+            className="btn btn-outline-danger btn-sm"
+            type="button"
+            onClick={() => handleWorkerHireDecision(job.applicationId, "reject")}
+          >
+            Reject
+          </button>
+        </div>
+      );
+    }
+
+    if (isCompleted) {
+      return (
+        <button className="btn btn-outline-success btn-sm" type="button" onClick={() => openWorkerJobDetail(job.id)}>
+          Completed Work
+        </button>
+      );
+    }
+
+    if (isWaitingForHousehold) {
+      return <span className="worker-application-status-note">Waiting for household</span>;
+    }
+
+    if (isHired) {
+      return (
+        <button
+          className="btn btn-success btn-sm"
+          type="button"
+          onClick={() => handleWorkerRequestCompletion(job.id, "I have completed the service today.")}
+        >
+          Complete
+        </button>
+      );
+    }
+
+    return <span className="worker-application-status-note">None</span>;
+  };
+  const getWorkerApplicationDisplayStatus = (job) => {
+    if (job.status === "Completed" || job.applicationStatus === "Completed") {
+      return "Completed";
+    }
+    if (job.status === "Waiting for Household Confirmation") {
+      return "Waiting for Household Confirmation";
+    }
+    if (job.applicationStatus === "Hired") {
+      return "In Progress";
+    }
+    return job.applicationStatus || "Pending";
+  };
+  const selectedWorkerJobPoint = getDistancePoint({
+    barangay: selectedJob?.barangay || currentHousehold?.barangay,
+    latitude: selectedJob?.latitude ?? currentHousehold?.latitude ?? null,
+    longitude: selectedJob?.longitude ?? currentHousehold?.longitude ?? null,
+  });
+  const selectedWorkerPoint = selectedWorker
+    ? getDistancePoint({
+        barangay: selectedWorker.barangay,
+        latitude: selectedWorker.latitude ?? null,
+        longitude: selectedWorker.longitude ?? null,
+      })
+    : null;
+  const selectedWorkerJobLatitude = selectedWorkerJobPoint?.latitude ?? null;
+  const selectedWorkerJobLongitude = selectedWorkerJobPoint?.longitude ?? null;
   const selectedWorkerCalculatedDistanceKm = selectedWorker
     ? haversineDistanceKm(
         selectedWorkerJobLatitude,
         selectedWorkerJobLongitude,
-        selectedWorker.latitude ?? null,
-        selectedWorker.longitude ?? null,
+        selectedWorkerPoint?.latitude ?? null,
+        selectedWorkerPoint?.longitude ?? null,
       )
     : null;
   const selectedWorkerDistanceKm = selectedWorkerCalculatedDistanceKm ?? selectedWorker?.distanceKm ?? null;
@@ -508,6 +679,17 @@ export default function AppViews({
           return true;
         }
         return !getHouseholdReviewForJobWorker(job, getAssignedWorkerForJob(job));
+      }),
+    [currentHousehold?.givenFeedback, householdJobs, registeredWorkers],
+  );
+  const pendingHouseholdReviewJobs = useMemo(
+    () =>
+      householdJobs.filter((job) => {
+        if (job.status !== "Completed") {
+          return false;
+        }
+        const assignedWorker = getAssignedWorkerForJob(job);
+        return assignedWorker && !getHouseholdReviewForJobWorker(job, assignedWorker);
       }),
     [currentHousehold?.givenFeedback, householdJobs, registeredWorkers],
   );
@@ -628,6 +810,7 @@ export default function AppViews({
         {(view === "home" || view === "login") && (
           <HomeView
             dashboardMetrics={dashboardMetrics}
+            isAdminPortal={isAdminPortalPath}
             initialShowLogin={view === "login"}
             loginForm={loginForm}
             onLoginChange={handleLoginChange}
@@ -744,6 +927,13 @@ export default function AppViews({
                           onChange={handleWorkerChange}
                         />
                         <p className="form-text mb-0">Location coverage: Tayabas City, Quezon only.</p>
+                      </div>
+                      <div className="col-12">
+                        <WorkerLocationPicker
+                          form={workerForm}
+                          setForm={setWorkerForm}
+                          loadLeafletAssets={loadLeafletAssets}
+                        />
                       </div>
                       <div className="col-12">
                         <div className="register-section-label">Worker Profile</div>
@@ -1794,6 +1984,14 @@ export default function AppViews({
                                 onChange={handleWorkerProfileChange}
                               />
                             </div>
+                            <div className="col-12">
+                              <WorkerLocationPicker
+                                form={workerProfileForm}
+                                setForm={setWorkerProfileForm}
+                                loadLeafletAssets={loadLeafletAssets}
+                                compact
+                              />
+                            </div>
                           </div>
                           <h3 className="h6 fw-bold mb-2">Worker Information</h3>
                           <div className="mb-2">
@@ -2114,6 +2312,7 @@ export default function AppViews({
                           <th>Rate</th>
                           <th>Status</th>
                           <th>Applied</th>
+                          <th>Action</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2124,13 +2323,14 @@ export default function AppViews({
                               <td>{job.householdName || "Household"}</td>
                               <td>{formatLocation(job.barangay, job.streetAddress)}</td>
                               <td>{formatRate(job.offeredRate, job.rateType)}</td>
-                              <td>{job.applicationStatus || "Pending"}</td>
+                              <td>{getWorkerApplicationDisplayStatus(job)}</td>
                               <td>{job.appliedAt}</td>
+                              <td>{renderWorkerApplicationAction(job)}</td>
                             </tr>
                           ))
                         ) : (
                           <tr>
-                            <td colSpan="6" className="text-center text-muted py-4">
+                            <td colSpan="7" className="text-center text-muted py-4">
                               {" "}
                               No applications yet.{" "}
                             </td>
@@ -2378,7 +2578,80 @@ export default function AppViews({
                   </div>
                 )}
                 <div className="worker-notifications-list">
-                  {workerNotificationsWithReadState.map((item) => (
+                  {workerPendingHireRequests.map((job) => (
+                    <article
+                      className="notification-card worker-hire-request-card unread"
+                      key={`hire-request-${job.applicationId}`}
+                    >
+                      <div className="worker-hire-request-head">
+                        <div>
+                          <p className="small text-muted mb-1">{job.updatedAt || job.appliedAt || "Recently"}</p>
+                          <h2 className="h6 mb-1">Hire request</h2>
+                          <p className="mb-0">
+                            {job.householdName || "A household"} wants to hire you for{" "}
+                            <strong>{job.jobTitle || job.serviceType}</strong>.
+                          </p>
+                        </div>
+                        <span className="badge text-bg-warning">Needs your response</span>
+                      </div>
+                      <div className="worker-hire-request-details">
+                        <div>
+                          <span>Job type</span>
+                          <strong>{job.serviceType || "Service"}</strong>
+                        </div>
+                        <div>
+                          <span>Schedule</span>
+                          <strong>{formatDateTime(job.preferredDate, job.preferredTime) || job.scheduleType || "Not set"}</strong>
+                        </div>
+                        <div>
+                          <span>Location</span>
+                          <strong>{formatLocation(job.barangay, job.streetAddress) || "Not set"}</strong>
+                        </div>
+                        <div>
+                          <span>Distance</span>
+                          <strong>{getWorkerJobDistanceLabel(job) || "Not available"}</strong>
+                        </div>
+                        <div>
+                          <span>Rate</span>
+                          <strong>{formatRate(job.offeredRate, job.rateType)}</strong>
+                        </div>
+                        <div>
+                          <span>Household</span>
+                          <strong>{job.householdName || job.householdUsername || "Household"}</strong>
+                        </div>
+                      </div>
+                      {job.description && (
+                        <div className="worker-hire-request-description">
+                          <span>Description</span>
+                          <p>{job.description}</p>
+                        </div>
+                      )}
+                      <div className="worker-hire-request-actions">
+                        <button
+                          className="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          onClick={() => openWorkerJobDetail(job.id)}
+                        >
+                          View Full Details
+                        </button>
+                        <button
+                          className="btn btn-success btn-sm"
+                          type="button"
+                          onClick={() => handleWorkerHireDecision(job.applicationId, "accept")}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          className="btn btn-outline-danger btn-sm"
+                          type="button"
+                          onClick={() => handleWorkerHireDecision(job.applicationId, "reject")}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                  {workerGeneralNotifications.map((item) => (
                     <article
                       className={`notification-card ${item.unread ? "unread" : ""}`}
                       key={item.id}
@@ -2388,6 +2661,12 @@ export default function AppViews({
                       <p className="mb-0">{item.message}</p>
                     </article>
                   ))}
+                  {workerPendingHireRequests.length === 0 && workerGeneralNotifications.length === 0 && (
+                    <article className="notification-card">
+                      <h2 className="h6 mb-1">No notifications yet</h2>
+                      <p className="mb-0 text-muted">Hire requests and job updates will appear here.</p>
+                    </article>
+                  )}
                 </div>
               </div>
             </div>
@@ -2699,7 +2978,7 @@ export default function AppViews({
                 <div className="profile-card household-post-job-card">
                   <h1 className="household-post-job-title">Post a New Job</h1>
                   <form className="p-3 p-md-4 household-job-form-shell" onSubmit={handleHouseholdJobSubmit}>
-                    <div className="row g-3">
+                    <div className="row g-3 household-job-fields">
                       <div className="col-12">
                         <label className="form-label fw-semibold">Job Title</label>
                         <input
@@ -2830,18 +3109,18 @@ export default function AppViews({
                           <option>Fixed Rate</option>
                         </select>
                       </div>
-                      <HouseholdJobMapPanel
-                        captureHouseholdJobLocation={captureHouseholdJobLocation}
-                        householdJobCoordinates={householdJobCoordinates}
-                        householdJobLocationPreview={householdJobLocationPreview}
-                        householdJobMapMode={householdJobMapMode}
-                        householdJobMapRef={householdJobMapRef}
-                        householdJobMapViewRef={householdJobMapViewRef}
-                        loadLeafletAssets={loadLeafletAssets}
-                        placeHouseholdJobPin={placeHouseholdJobPin}
-                        setHouseholdJobMapMode={setHouseholdJobMapMode}
-                      />
                     </div>
+                    <HouseholdJobMapPanel
+                      captureHouseholdJobLocation={captureHouseholdJobLocation}
+                      householdJobCoordinates={householdJobCoordinates}
+                      householdJobLocationPreview={householdJobLocationPreview}
+                      householdJobMapMode={householdJobMapMode}
+                      householdJobMapRef={householdJobMapRef}
+                      householdJobMapViewRef={householdJobMapViewRef}
+                      loadLeafletAssets={loadLeafletAssets}
+                      placeHouseholdJobPin={placeHouseholdJobPin}
+                      setHouseholdJobMapMode={setHouseholdJobMapMode}
+                    />
                     <div className="household-reference-images">
                       <label className="form-label fw-semibold">Reference Images</label>
                       <JobImageUpload maxImages={5} maxFileSize={5 * 1024 * 1024} onImagesChange={householdJobImages.onChange} />
@@ -3685,11 +3964,75 @@ export default function AppViews({
                 </section>
 
                 <section className="household-detail-panel profile-card p-3 p-md-4 mt-3">
-                  <h2 className="household-detail-section-title">Applicants / Smart Matched Workers</h2>
-                  <p className="small text-muted mb-3">Review workers profile before hiring</p>
+                  <h2 className="household-detail-section-title">Applicants</h2>
+                  <p className="small text-muted mb-3">Workers who submitted an application for this job.</p>
                   <div className="household-applicant-list d-grid gap-3">
-                    {selectedMatchedWorkers.length > 0 ? (
-                      selectedMatchedWorkers.map((worker) => {
+                    {selectedJobApplicantWorkers.length > 0 ? (
+                      selectedJobApplicantWorkers.map((worker) => {
+                        const workerProfileKey =
+                          [
+                            worker.username ?? worker.workerUsername,
+                            worker.id ?? worker.workerId ?? worker.userId ?? worker.user_id ?? worker.profileId,
+                            getDisplayName(worker.firstName, worker.lastName, worker.username),
+                          ]
+                            .filter((value) => value !== null && value !== undefined && value !== "")
+                            .join(":") || "applicant-worker";
+                        return (
+                          <button
+                            type="button"
+                            className="household-applicant-card d-flex align-items-center gap-3"
+                            key={workerProfileKey}
+                            onClick={() => openMatchedWorkerProfile(worker, selectedJob.id)}
+                          >
+                            <div className="profile-avatar match-avatar">
+                              {(worker.avatar || worker.firstName || worker.username || "W").slice(0, 1).toUpperCase()}
+                            </div>
+                            <div className="household-applicant-main">
+                              <p className="fw-semibold mb-1">
+                                {getDisplayName(worker.firstName, worker.lastName, worker.username)}
+                              </p>
+                              <div className="d-flex gap-2 flex-wrap">
+                                <span className="badge text-bg-primary">{worker.applicationStatus || "Pending"}</span>
+                                {(worker.skills || []).slice(0, 2).map((skill) => (
+                                  <span className="badge text-bg-light border text-dark" key={`${worker.id}-${skill}`}>
+                                    {skill}
+                                  </span>
+                                ))}
+                                <span
+                                  className={`badge ${worker.verification === "Verified" ? "text-bg-success" : "text-bg-warning"}`}
+                                >
+                                  {worker.verification || "Not Yet Verified"}
+                                </span>
+                                {worker.availableAtRequestedTime === false && (
+                                  <span className="badge text-bg-light border text-dark">Availability not set</span>
+                                )}
+                                <span className="badge text-bg-light border text-dark">
+                                  {formatCurrency(worker.dailyRate)}/day
+                                </span>
+                              </div>
+                            </div>
+                            <span className="household-applicant-distance ms-auto">
+                              {worker.distanceLabel ||
+                                formatDistance(worker.distanceKm, worker.distanceLabel) ||
+                                "Distance unavailable"}
+                            </span>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="household-applicant-empty">No worker applications yet.</div>
+                    )}
+                  </div>
+                </section>
+
+                <section className="household-detail-panel profile-card p-3 p-md-4 mt-3">
+                  <h2 className="household-detail-section-title">Smart Matched Workers</h2>
+                  <p className="small text-muted mb-3">
+                    Suggested workers ranked by skill, availability, verification, and distance.
+                  </p>
+                  <div className="household-applicant-list d-grid gap-3">
+                    {selectedSuggestedWorkers.length > 0 ? (
+                      selectedSuggestedWorkers.map((worker) => {
                         const workerProfileKey =
                           [
                             worker.username ?? worker.workerUsername,
@@ -3699,43 +4042,45 @@ export default function AppViews({
                             .filter((value) => value !== null && value !== undefined && value !== "")
                             .join(":") || "matched-worker";
                         return (
-                        <button
-                          type="button"
-                          className="household-applicant-card d-flex align-items-center gap-3"
-                          key={workerProfileKey}
-                          onClick={() => openMatchedWorkerProfile(worker, selectedJob.id)}
-                        >
-                          <div className="profile-avatar match-avatar">
-                            {(worker.avatar || worker.firstName || worker.username || "W").slice(0, 1).toUpperCase()}
-                          </div>
-                          <div className="household-applicant-main">
-                            <p className="fw-semibold mb-1">
-                              {getDisplayName(worker.firstName, worker.lastName, worker.username)}
-                            </p>
-                            <div className="d-flex gap-2 flex-wrap">
-                              {(worker.skills || []).slice(0, 2).map((skill) => (
-                                <span className="badge text-bg-primary" key={`${worker.id}-${skill}`}>
-                                  {skill}
-                                </span>
-                              ))}
-                              <span className={`badge ${worker.verification === "Verified" ? "text-bg-success" : "text-bg-warning"}`}>
-                                {worker.verification || "Not Yet Verified"}
-                              </span>
-                              <span className="badge text-bg-light border text-dark">
-                                {formatCurrency(worker.dailyRate)}/day
-                              </span>
+                          <button
+                            type="button"
+                            className="household-applicant-card d-flex align-items-center gap-3"
+                            key={workerProfileKey}
+                            onClick={() => openMatchedWorkerProfile(worker, selectedJob.id)}
+                          >
+                            <div className="profile-avatar match-avatar">
+                              {(worker.avatar || worker.firstName || worker.username || "W").slice(0, 1).toUpperCase()}
                             </div>
-                          </div>
-                          <span className="household-applicant-distance ms-auto">
-                            {worker.distanceLabel ||
-                              formatDistance(worker.distanceKm, worker.distanceLabel) ||
-                              "Distance unavailable"}
-                          </span>
-                        </button>
-                      );
-                    })
+                            <div className="household-applicant-main">
+                              <p className="fw-semibold mb-1">
+                                {getDisplayName(worker.firstName, worker.lastName, worker.username)}
+                              </p>
+                              <div className="d-flex gap-2 flex-wrap">
+                                {(worker.skills || []).slice(0, 2).map((skill) => (
+                                  <span className="badge text-bg-primary" key={`${worker.id}-${skill}`}>
+                                    {skill}
+                                  </span>
+                                ))}
+                                <span
+                                  className={`badge ${worker.verification === "Verified" ? "text-bg-success" : "text-bg-warning"}`}
+                                >
+                                  {worker.verification || "Not Yet Verified"}
+                                </span>
+                                <span className="badge text-bg-light border text-dark">
+                                  {formatCurrency(worker.dailyRate)}/day
+                                </span>
+                              </div>
+                            </div>
+                            <span className="household-applicant-distance ms-auto">
+                              {worker.distanceLabel ||
+                                formatDistance(worker.distanceKm, worker.distanceLabel) ||
+                                "Distance unavailable"}
+                            </span>
+                          </button>
+                        );
+                      })
                     ) : (
-                      <div className="household-applicant-empty">No matched workers yet.</div>
+                      <div className="household-applicant-empty">No smart matched workers yet.</div>
                     )}
                   </div>
                 </section>
@@ -3886,9 +4231,13 @@ export default function AppViews({
                           <span>Daily Rate</span>
                           <strong>{formatCurrency(selectedWorker.dailyRate)}</strong>
                         </p>
-                        <button className="btn btn-primary w-100 mb-2" type="button" onClick={handleHireWorker}>
-                          {" "}
-                          Hire This Worker{" "}
+                        <button
+                          className="btn btn-primary w-100 mb-2"
+                          type="button"
+                          disabled={selectedWorkerHireButtonDisabled}
+                          onClick={handleHireWorker}
+                        >
+                          {selectedWorkerHireButtonLabel}
                         </button>
                         {canRejectSelectedWorkerApplication && (
                           <button
@@ -3924,8 +4273,8 @@ export default function AppViews({
                         <LocationDistanceMap
                           userLatitude={selectedWorkerJobLatitude}
                           userLongitude={selectedWorkerJobLongitude}
-                          targetLatitude={selectedWorker.latitude ?? null}
-                          targetLongitude={selectedWorker.longitude ?? null}
+                          targetLatitude={selectedWorkerPoint?.latitude ?? null}
+                          targetLongitude={selectedWorkerPoint?.longitude ?? null}
                           userLocation={formatLocation(
                             currentHousehold?.barangay || selectedJob?.barangay,
                             currentHousehold?.streetAddress || selectedJob?.streetAddress,
@@ -4170,8 +4519,17 @@ export default function AppViews({
                       {filteredHouseholdNotifications.length > 0 ? (
                         filteredHouseholdNotifications.map((item) => (
                           <article
-                            className={`notification-card household-notification-item ${item.unread ? "unread" : ""}`}
+                            className={`notification-card household-notification-item household-notification-clickable ${item.unread ? "unread" : ""}`}
                             key={item.id}
+                            onClick={() => openHouseholdNotificationPreview(item)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                openHouseholdNotificationPreview(item);
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
                           >
                             <div>
                               <p className="small text-muted mb-1">{item.date}</p>
@@ -4194,6 +4552,100 @@ export default function AppViews({
                       )}
                     </div>
                   </section>
+                  {householdNotificationPreview &&
+                    (() => {
+                      const previewWorker = getHouseholdNotificationWorker(householdNotificationPreview);
+                      const previewJob = getHouseholdNotificationJob(householdNotificationPreview);
+                      return (
+                        <div className="household-notification-modal-backdrop" role="presentation">
+                          <section
+                            aria-labelledby="household-notification-preview-title"
+                            aria-modal="true"
+                            className="household-notification-modal"
+                            role="dialog"
+                          >
+                            <div className="household-notification-modal-head">
+                              <div>
+                                <p className="household-notification-modal-kicker">Notification Details</p>
+                                <h2 id="household-notification-preview-title">
+                                  {householdNotificationPreview.title || "Notification"}
+                                </h2>
+                              </div>
+                              <button
+                                className="btn btn-outline-secondary btn-sm"
+                                type="button"
+                                onClick={closeHouseholdNotificationPreview}
+                              >
+                                Close
+                              </button>
+                            </div>
+                            <div className="household-notification-modal-body">
+                              <p className="household-notification-message">{householdNotificationPreview.message}</p>
+                              {previewWorker ? (
+                                <div className="household-notification-worker-preview">
+                                  <div className="profile-avatar match-avatar">
+                                    {(previewWorker.avatar || previewWorker.firstName || previewWorker.username || "W")
+                                      .slice(0, 1)
+                                      .toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <h3>{getDisplayName(previewWorker.firstName, previewWorker.lastName, previewWorker.username)}</h3>
+                                    <p>{previewWorker.bio || "Worker profile summary is available in full details."}</p>
+                                    <div className="household-notification-worker-facts">
+                                      <span>{previewWorker.verification || "Not Yet Verified"}</span>
+                                      <span>{previewWorker.rating || "No ratings yet"}</span>
+                                      <span>{formatCurrency(previewWorker.dailyRate)}/day</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="household-notification-worker-preview empty">
+                                  <p className="mb-0">No worker profile is attached to this notification.</p>
+                                </div>
+                              )}
+                              <dl className="household-notification-job-preview">
+                                <div>
+                                  <dt>Job</dt>
+                                  <dd>{previewJob?.jobTitle || previewJob?.serviceType || "Not available"}</dd>
+                                </div>
+                                <div>
+                                  <dt>Location</dt>
+                                  <dd>
+                                    {previewJob
+                                      ? formatLocation(previewJob.barangay, previewJob.streetAddress)
+                                      : "Not available"}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt>Rate</dt>
+                                  <dd>{previewJob ? formatRate(previewJob.offeredRate, previewJob.rateType) : "Not available"}</dd>
+                                </div>
+                                <div>
+                                  <dt>Date</dt>
+                                  <dd>{householdNotificationPreview.date || "Recently"}</dd>
+                                </div>
+                              </dl>
+                            </div>
+                            <div className="household-notification-modal-actions">
+                              <button
+                                className="btn btn-outline-secondary"
+                                type="button"
+                                onClick={closeHouseholdNotificationPreview}
+                              >
+                                Close
+                              </button>
+                              <button
+                                className="btn btn-primary"
+                                type="button"
+                                onClick={openHouseholdNotificationPreviewDetails}
+                              >
+                                View Details
+                              </button>
+                            </div>
+                          </section>
+                        </div>
+                      );
+                    })()}
                 </main>
               </div>
             </div>
@@ -4266,6 +4718,23 @@ export default function AppViews({
                   </div>
                 </div>
 
+                {pendingHouseholdReviewJobs.length > 0 && (
+                  <section className="household-dashboard-review-reminder" aria-live="polite">
+                    <div>
+                      <strong>
+                        {pendingHouseholdReviewJobs.length === 1
+                          ? "Review reminder"
+                          : `${pendingHouseholdReviewJobs.length} review reminders`}
+                      </strong>
+                      <p>
+                        {pendingHouseholdReviewJobs.length === 1
+                          ? `${pendingHouseholdReviewJobs[0].serviceType} service is completed and waiting for your feedback.`
+                          : "Some completed services are waiting for household feedback."}
+                      </p>
+                    </div>
+                  </section>
+                )}
+
                 <section className="household-dashboard-table-card">
                     <div className="household-dashboard-table-head">
                       <h2>Recent Post Jobs</h2>
@@ -4327,102 +4796,108 @@ export default function AppViews({
                       : ""
                     }`}
                   >
-                    <div className="household-dashboard-completion-box">
-                      <aside className="household-dashboard-worker-panel">
-                        <div className="household-dashboard-worker-avatar">
-                          {String(
-                            householdDashboardDetailWorker
-                              ? getDisplayName(
-                                  householdDashboardDetailWorker.firstName,
-                                  householdDashboardDetailWorker.lastName,
-                                  householdDashboardDetailWorker.username,
-                                )
-                              : (householdDashboardDetailJob.applications || [])[0]?.workerName || "W",
-                          )
-                            .slice(0, 2)
-                            .toUpperCase()}
-                        </div>
+                    <div className="household-dashboard-completion-box household-dashboard-review-window">
+                      <div className="household-review-window-header">
                         <div>
-                          <h3>
-                            {householdDashboardDetailWorker
-                              ? getDisplayName(
-                                  householdDashboardDetailWorker.firstName,
-                                  householdDashboardDetailWorker.lastName,
-                                  householdDashboardDetailWorker.username,
-                                )
-                              : (householdDashboardDetailJob.applications || [])[0]?.workerName || "No worker selected"}
-                          </h3>
-                          <p>
-                            {householdDashboardDetailWorker?.bio ||
-                              "Worker profile summary for this selected household job."}
-                          </p>
+                          <p className="household-review-window-kicker">Service Review</p>
+                          <h2>{householdDashboardDetailJob.jobTitle || householdDashboardDetailJob.serviceType}</h2>
                         </div>
-                        <div className="household-dashboard-worker-facts">
-                          <div>
-                            <strong>Verification</strong>
-                            <span>{householdDashboardDetailWorker?.verification || "Not available"}</span>
-                          </div>
-                          <div>
-                            <strong>Rating</strong>
-                            <span>{householdDashboardDetailWorker?.rating || "No ratings yet"}</span>
-                          </div>
-                          <div>
-                            <strong>Skills</strong>
-                            <span>{(householdDashboardDetailWorker?.skills || [householdDashboardDetailJob.serviceType]).join(", ")}</span>
-                          </div>
-                          <div>
-                            <strong>Location</strong>
-                            <span>
-                              {formatLocation(
-                                householdDashboardDetailWorker?.barangay || householdDashboardDetailJob.barangay,
-                                householdDashboardDetailWorker?.streetAddress || "",
-                              )}
-                            </span>
-                          </div>
-                          <div>
-                            <strong>Rate</strong>
-                            <span>
-                              {householdDashboardDetailWorker
-                                ? formatRate(
-                                    householdDashboardDetailWorker.dailyRate || householdDashboardDetailJob.offeredRate,
-                                    householdDashboardDetailJob.rateType,
+                        <button
+                          className="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          onClick={closeHouseholdDashboardJobPanel}
+                        >
+                          Close
+                        </button>
+                      </div>
+                      <div className="household-review-window-body">
+                        <aside className="household-dashboard-worker-panel household-review-worker-card">
+                          <div className="household-dashboard-worker-avatar">
+                            {String(
+                              householdDashboardDetailWorker
+                                ? getDisplayName(
+                                    householdDashboardDetailWorker.firstName,
+                                    householdDashboardDetailWorker.lastName,
+                                    householdDashboardDetailWorker.username,
                                   )
-                                : formatRate(householdDashboardDetailJob.offeredRate, householdDashboardDetailJob.rateType)}
-                            </span>
+                                : (householdDashboardDetailJob.applications || [])[0]?.workerName || "W",
+                            )
+                              .slice(0, 2)
+                              .toUpperCase()}
                           </div>
-                        </div>
-                      </aside>
-                      <div className="household-dashboard-completion-panel">
-                        <div className="profile-card">
-                          <div className="profile-card-head">Household View</div>
-                          <div className="p-3 d-grid gap-3">
-                            <div className="household-dashboard-job-summary">
-                              <h3>{householdDashboardDetailJob.jobTitle || householdDashboardDetailJob.serviceType}</h3>
-                              <div className="household-dashboard-job-meta">
-                                <span>
-                                  <strong>Worker</strong>
-                                  {householdDashboardDetailWorker
-                                    ? getDisplayName(
-                                        householdDashboardDetailWorker.firstName,
-                                        householdDashboardDetailWorker.lastName,
-                                        householdDashboardDetailWorker.username,
-                                      )
-                                    : (householdDashboardDetailJob.applications || [])[0]?.workerName || "No worker selected"}
-                                </span>
-                                <span>
-                                  <strong>Rate</strong>
-                                  {formatRate(householdDashboardDetailJob.offeredRate, householdDashboardDetailJob.rateType)}
-                                </span>
-                                <span>
-                                  <strong>Schedule</strong>
-                                  {formatDateTime(householdDashboardDetailJob.preferredDate, householdDashboardDetailJob.preferredTime)}
-                                </span>
-                                <span>
-                                  <strong>Status</strong>
-                                  {householdDashboardDetailJob.status}
-                                </span>
-                              </div>
+                          <div>
+                            <h3>
+                              {householdDashboardDetailWorker
+                                ? getDisplayName(
+                                    householdDashboardDetailWorker.firstName,
+                                    householdDashboardDetailWorker.lastName,
+                                    householdDashboardDetailWorker.username,
+                                  )
+                                : (householdDashboardDetailJob.applications || [])[0]?.workerName || "No worker selected"}
+                            </h3>
+                            <p>
+                              {householdDashboardDetailWorker?.bio ||
+                                "Worker profile summary for this selected household job."}
+                            </p>
+                          </div>
+                          <div className="household-dashboard-worker-facts">
+                            <div>
+                              <strong>Verification</strong>
+                              <span>{householdDashboardDetailWorker?.verification || "Not available"}</span>
                             </div>
+                            <div>
+                              <strong>Rating</strong>
+                              <span>{householdDashboardDetailWorker?.rating || "No ratings yet"}</span>
+                            </div>
+                            <div>
+                              <strong>Skills</strong>
+                              <span>{(householdDashboardDetailWorker?.skills || [householdDashboardDetailJob.serviceType]).join(", ")}</span>
+                            </div>
+                            <div>
+                              <strong>Location</strong>
+                              <span>
+                                {formatLocation(
+                                  householdDashboardDetailWorker?.barangay || householdDashboardDetailJob.barangay,
+                                  householdDashboardDetailWorker?.streetAddress || "",
+                                )}
+                              </span>
+                            </div>
+                            <div>
+                              <strong>Worker Rate</strong>
+                              <span>
+                                {householdDashboardDetailWorker
+                                  ? formatRate(
+                                      householdDashboardDetailWorker.dailyRate || householdDashboardDetailJob.offeredRate,
+                                      householdDashboardDetailJob.rateType,
+                                    )
+                                  : formatRate(householdDashboardDetailJob.offeredRate, householdDashboardDetailJob.rateType)}
+                              </span>
+                            </div>
+                          </div>
+                        </aside>
+                        <div className="household-dashboard-completion-panel household-review-main-panel">
+                          <div className="household-dashboard-job-summary">
+                            <h3>Job Details</h3>
+                            <div className="household-dashboard-job-meta">
+                              <span>
+                                <strong>Service</strong>
+                                {householdDashboardDetailJob.serviceType}
+                              </span>
+                              <span>
+                                <strong>Rate</strong>
+                                {formatRate(householdDashboardDetailJob.offeredRate, householdDashboardDetailJob.rateType)}
+                              </span>
+                              <span>
+                                <strong>Schedule</strong>
+                                {formatDateTime(householdDashboardDetailJob.preferredDate, householdDashboardDetailJob.preferredTime)}
+                              </span>
+                              <span>
+                                <strong>Status</strong>
+                                {householdDashboardDetailJob.status}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="household-review-action-card">
                             <div className="household-dashboard-completion-notice">
                               {householdDashboardDetailJob.status === "Cancelled"
                                 ? "This is the previous job post you cancelled. Worker profile details are hidden because no completed service happened."

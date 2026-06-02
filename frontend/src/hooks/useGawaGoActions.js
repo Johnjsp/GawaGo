@@ -177,38 +177,51 @@ export function useGawaGoActions({
       return;
     }
     const existingApplication = findJobApplicationForWorker(selectedJob, selectedWorker);
-    if (!existingApplication) {
-      window.alert("Only workers who applied to this job can be hired.");
-      return;
-    }
     if (existingApplication?.status === "Hired") {
       window.alert("This worker is already hired for this job.");
       return;
     }
-    if (!isNumericIdentifier(existingApplication.id)) {
+    if (existingApplication?.status === "Hire Request") {
+      window.alert("A hire request was already sent to this worker.");
+      return;
+    }
+    if (existingApplication && !isNumericIdentifier(existingApplication.id)) {
       window.alert("This application is not synced with the backend yet. Please refresh jobs and try again.");
       refreshJobsFromBackend();
       return;
     }
     (async () => {
-      const hiredAt = new Date().toLocaleString("en-PH");
+      const requestedAt = new Date().toLocaleString("en-PH");
+      const isDirectApplicantHire = existingApplication?.status === "Pending";
       const applicationRecord = {
         ...existingApplication,
-        status: "Hired",
-        hiredAt,
+        id: existingApplication?.id || `hire-request-${selectedJob.id}-${selectedWorker.id}-${Date.now()}`,
+        workerId: selectedWorker.id,
+        workerName: getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username),
+        workerUsername: selectedWorker.username,
+        status: isDirectApplicantHire ? "Hired" : "Hire Request",
+        requestedAt,
       };
-      const applicationStatusTargetId = existingApplication.id;
       try {
-        const response = await apiRequest(`jobs/applications/${applicationStatusTargetId}/status/`, {
-          method: "PATCH",
-          auth: true,
-          body: {
-            status: "hired",
-          },
-        });
+        const response = existingApplication
+          ? await apiRequest(`jobs/applications/${existingApplication.id}/status/`, {
+              method: "PATCH",
+              auth: true,
+              body: {
+                status: isDirectApplicantHire ? "hired" : "hire_requested",
+              },
+            })
+          : await apiRequest(`jobs/${selectedJob.id}/hire-request/`, {
+              method: "POST",
+              auth: true,
+              body: {
+                worker_id: selectedWorker.id,
+                worker_username: selectedWorker.username,
+              },
+            });
         const data = await readResponseData(response);
         if (!response.ok) {
-          throw new Error(getApiErrorMessage(data, "Unable to hire worker."));
+          throw new Error(getApiErrorMessage(data, "Unable to send hire request."));
         }
         const normalizedApplication = normalizeBackendApplication(data);
         setPostedJobs((prev) =>
@@ -217,42 +230,37 @@ export function useGawaGoActions({
               return job;
             }
             const nextApplication = normalizedApplication || applicationRecord;
-            const applications = (job.applications || []).map((application) => {
+            const previousApplications = job.applications || [];
+            const hasExistingApplication = previousApplications.some((application) => {
               const matchesWorkerId =
                 application.workerId != null && String(application.workerId) === String(selectedWorker.id);
               const matchesWorkerUsername =
                 application.workerUsername &&
                 selectedWorker.username &&
                 application.workerUsername === selectedWorker.username;
-              return matchesWorkerId || matchesWorkerUsername ? nextApplication : application;
+              return matchesWorkerId || matchesWorkerUsername;
             });
+            const applications = hasExistingApplication
+              ? previousApplications.map((application) => {
+                  const matchesWorkerId =
+                    application.workerId != null && String(application.workerId) === String(selectedWorker.id);
+                  const matchesWorkerUsername =
+                    application.workerUsername &&
+                    selectedWorker.username &&
+                    application.workerUsername === selectedWorker.username;
+                  return matchesWorkerId || matchesWorkerUsername ? nextApplication : application;
+                })
+              : [...previousApplications, nextApplication];
             const nextJob = {
               ...job,
               cancellationReason: "",
-              selectedWorkerId: selectedWorker.id,
-              selectedWorkerName: getDisplayName(
-                selectedWorker.firstName,
-                selectedWorker.lastName,
-                selectedWorker.username,
-              ),
-              hiredAt,
               applications,
+              status: isDirectApplicantHire ? "Already found a worker" : job.status,
+              matchedWorkerIds: isDirectApplicantHire
+                ? [...new Set([...(job.matchedWorkerIds || []), selectedWorker.id])]
+                : job.matchedWorkerIds,
             };
-            const isFilled = getHiredWorkerCount(nextJob) >= getWorkersNeeded(nextJob);
-            return {
-              ...nextJob,
-              status: isFilled ? "Already found a worker" : "Open",
-              applications: isFilled
-                ? applications.map((application) =>
-                    application.status === "Pending"
-                      ? {
-                          ...application,
-                          status: "Closed",
-                        }
-                      : application,
-                  )
-                : applications,
-            };
+            return nextJob;
           }),
         );
         setRegisteredWorkers((prev) =>
@@ -260,16 +268,17 @@ export function useGawaGoActions({
             worker.id === selectedWorker.id
               ? {
                   ...worker,
-                  status: "Hired",
-                  hiredBy: currentHousehold.username,
-                  hiredJobId: selectedJob.id,
                   applicationNotifications: [
                     ...(worker.applicationNotifications || []),
                     {
-                      id: `hired-${selectedJob.id}-${selectedWorker.id}-${Date.now()}`,
-                      title: "You were hired",
-                      message: `${getDisplayName(currentHousehold.firstName, currentHousehold.lastName, currentHousehold.username)} hired you for ${selectedJob.jobTitle || selectedJob.serviceType}.`,
-                      date: hiredAt,
+                      id: `hire-request-${selectedJob.id}-${selectedWorker.id}-${Date.now()}`,
+                      applicationId: normalizedApplication?.id || applicationRecord.id,
+                      jobId: selectedJob.id,
+                      title: isDirectApplicantHire ? "Application accepted" : "Hire request",
+                      message: isDirectApplicantHire
+                        ? `Your application for ${selectedJob.jobTitle || selectedJob.serviceType} was accepted.`
+                        : `${getDisplayName(currentHousehold.firstName, currentHousehold.lastName, currentHousehold.username)} wants to hire you for ${selectedJob.jobTitle || selectedJob.serviceType}.`,
+                      date: requestedAt,
                       unread: true,
                     },
                   ],
@@ -280,13 +289,114 @@ export function useGawaGoActions({
         await refreshJobsFromBackend();
         await refreshNotificationsFromBackend();
         window.alert(
-          `${getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username)} has been hired for ${selectedJob.jobTitle || selectedJob.serviceType}.`,
+          isDirectApplicantHire
+            ? `${getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username)} has been hired.`
+            : `Hire request sent to ${getDisplayName(selectedWorker.firstName, selectedWorker.lastName, selectedWorker.username)}. They can accept or reject it from Notifications.`,
         );
         setView("household-my-jobs");
       } catch (error) {
         await refreshJobsFromBackend();
         await refreshNotificationsFromBackend();
-        window.alert(error.message || "Unable to hire worker.");
+        window.alert(error.message || (isDirectApplicantHire ? "Unable to hire this worker." : "Unable to send hire request."));
+      }
+    })();
+  }
+  function handleWorkerHireDecision(applicationId, decision) {
+    if (!currentWorker) {
+      window.alert("Please login as a worker first.");
+      return;
+    }
+    if (!isNumericIdentifier(applicationId)) {
+      window.alert("This hire request is not synced with the backend yet. Please refresh and try again.");
+      refreshJobsFromBackend();
+      return;
+    }
+    const normalizedDecision = decision === "accept" ? "accept" : "reject";
+    (async () => {
+      try {
+        const response = await apiRequest(`jobs/applications/${applicationId}/decision/`, {
+          method: "PATCH",
+          auth: true,
+          body: {
+            decision: normalizedDecision,
+          },
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to respond to hire request."));
+        }
+        const normalizedApplication = normalizeBackendApplication(data);
+        if (normalizedApplication) {
+          setPostedJobs((prev) =>
+            prev.map((job) => ({
+              ...job,
+              applications: (job.applications || []).map((application) =>
+                String(application.id) === String(applicationId) ? normalizedApplication : application,
+              ),
+            })),
+          );
+        }
+        await refreshJobsFromBackend();
+        await refreshNotificationsFromBackend();
+        window.alert(normalizedDecision === "accept" ? "Hire request accepted." : "Hire request rejected.");
+        setView("worker-applications");
+      } catch (error) {
+        await refreshJobsFromBackend();
+        await refreshNotificationsFromBackend();
+        window.alert(error.message || "Unable to respond to hire request.");
+      }
+    })();
+  }
+  function handleWorkerRequestCompletion(jobId, note = "") {
+    if (!currentWorker) {
+      window.alert("Please login as a worker first.");
+      return;
+    }
+    const job = postedJobs.find((item) => String(item.id) === String(jobId));
+    if (!job) {
+      window.alert("Job not found.");
+      return;
+    }
+    const application = (job.applications || []).find(
+      (item) =>
+        item.status === "Hired" &&
+        (String(item.workerId) === String(currentWorker.id) || item.workerUsername === currentWorker.username),
+    );
+    if (!application) {
+      window.alert("Only the hired worker can request completion for this job.");
+      return;
+    }
+    if (!isNumericIdentifier(job.id)) {
+      window.alert("This job is not synced with the backend yet. Please refresh jobs and try again.");
+      refreshJobsFromBackend();
+      return;
+    }
+    (async () => {
+      try {
+        const response = await apiRequest(`jobs/${job.id}/request-completion/`, {
+          method: "POST",
+          auth: true,
+          body: {
+            note: String(note || "").trim(),
+          },
+        });
+        const data = await readResponseData(response);
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(data, "Unable to request completion."));
+        }
+        const normalizedJob = normalizeBackendJob(data);
+        if (normalizedJob) {
+          setPostedJobs((prev) =>
+            prev.map((item) => (String(item.id) === String(normalizedJob.id) ? normalizedJob : item)),
+          );
+        }
+        await refreshJobsFromBackend();
+        await refreshNotificationsFromBackend();
+        window.alert("Completion request sent to the household.");
+      } catch (error) {
+        await refreshJobsFromBackend();
+        await refreshNotificationsFromBackend();
+        window.alert(error.message || "Unable to request completion. Please try again.");
       }
     })();
   }
@@ -405,7 +515,7 @@ export function useGawaGoActions({
           throw loginError;
         }
         setAuthToken(data?.access || "");
-        const resolvedRole = data?.role || loginForm.role || "worker";
+        const resolvedRole = data?.role || data?.profile?.role || (data?.is_staff ? "superadmin" : "worker");
         setCurrentUser({
           id: data?.id || data?.user_id || username,
           role: resolvedRole,
@@ -498,8 +608,12 @@ export function useGawaGoActions({
         }
         const normalizedBarangay = normalizeBarangayName(workerForm.barangay);
         const barangayCoordinates = getBarangayCenterCoordinates(normalizedBarangay);
-        const workerLatitude = resolvedLocation?.latitude ?? barangayCoordinates.latitude;
-        const workerLongitude = resolvedLocation?.longitude ?? barangayCoordinates.longitude;
+        const workerLatitude = workerForm.latitude ?? resolvedLocation?.latitude ?? barangayCoordinates.latitude;
+        const workerLongitude = workerForm.longitude ?? resolvedLocation?.longitude ?? barangayCoordinates.longitude;
+        const workerLocationLabel =
+          workerForm.locationLabel ||
+          resolvedLocation?.locationLabel ||
+          formatLocation(workerForm.barangay, workerForm.streetAddress);
         const response = await apiRequest("accounts/register/", {
           method: "POST",
           auth: false,
@@ -521,8 +635,7 @@ export function useGawaGoActions({
             ),
             hourly_rate: workerForm.hourlyRate,
             daily_rate: workerForm.dailyRate,
-            location_label:
-              resolvedLocation?.locationLabel || formatLocation(workerForm.barangay, workerForm.streetAddress),
+            location_label: workerLocationLabel,
             latitude: workerLatitude,
             longitude: workerLongitude,
           },
@@ -551,6 +664,8 @@ export function useGawaGoActions({
           status: "Available",
           distanceKm: "0.00",
           barangay: normalizedBarangay,
+          streetAddress: workerForm.streetAddress,
+          locationLabel: workerLocationLabel,
           latitude: workerLatitude,
           longitude: workerLongitude,
           avatar: (workerForm.firstName || workerForm.username || "W").slice(0, 1).toUpperCase(),
@@ -691,8 +806,12 @@ export function useGawaGoActions({
       }
       const normalizedBarangay = normalizeBarangayName(workerProfileForm.barangay);
       const barangayCoordinates = getBarangayCenterCoordinates(normalizedBarangay);
-      const workerLatitude = resolvedLocation?.latitude ?? barangayCoordinates.latitude;
-      const workerLongitude = resolvedLocation?.longitude ?? barangayCoordinates.longitude;
+      const workerLatitude = workerProfileForm.latitude ?? resolvedLocation?.latitude ?? barangayCoordinates.latitude;
+      const workerLongitude = workerProfileForm.longitude ?? resolvedLocation?.longitude ?? barangayCoordinates.longitude;
+      const workerLocationLabel =
+        workerProfileForm.locationLabel ||
+        resolvedLocation?.locationLabel ||
+        formatLocation(workerProfileForm.barangay, workerProfileForm.streetAddress);
       const nextWorkerPatch = {
         firstName: workerProfileForm.firstName,
         lastName: workerProfileForm.lastName,
@@ -706,6 +825,7 @@ export function useGawaGoActions({
         yearsExperience: workerProfileForm.yearsExperience,
         skills: workerProfileForm.skills,
         availabilityWindows: workerProfileForm.availabilityWindows || [],
+        locationLabel: workerLocationLabel,
         latitude: workerLatitude,
         longitude: workerLongitude,
       };
@@ -727,9 +847,7 @@ export function useGawaGoActions({
             skills: workerProfileForm.skills,
             hourly_rate: workerProfileForm.hourlyRate,
             daily_rate: workerProfileForm.dailyRate,
-            location_label:
-              resolvedLocation?.locationLabel ||
-              formatLocation(workerProfileForm.barangay, workerProfileForm.streetAddress),
+            location_label: workerLocationLabel,
             latitude: nextWorkerPatch.latitude,
             longitude: nextWorkerPatch.longitude,
           };
@@ -788,6 +906,8 @@ export function useGawaGoActions({
             mergeBackendWorkerIntoState({
               ...backendWorker,
               barangay: workerProfileForm.barangay,
+              streetAddress: workerProfileForm.streetAddress,
+              locationLabel: workerLocationLabel,
               latitude: nextWorkerPatch.latitude,
               longitude: nextWorkerPatch.longitude,
                 profilePhotoPreview: savedProfilePhoto,
@@ -829,9 +949,7 @@ export function useGawaGoActions({
                   hourly_rate: workerProfileForm.hourlyRate,
                   daily_rate: workerProfileForm.dailyRate,
                   availability_windows: nextWorkerPatch.availabilityWindows,
-                  location_label:
-                    resolvedLocation?.locationLabel ||
-                    formatLocation(workerProfileForm.barangay, workerProfileForm.streetAddress),
+                  location_label: workerLocationLabel,
                   latitude: nextWorkerPatch.latitude,
                   longitude: nextWorkerPatch.longitude,
                   profile_photo_url: nextWorkerPatch.profilePhotoPreview || prev.profile.profile_photo_url || "",
@@ -1533,6 +1651,8 @@ export function useGawaGoActions({
   return {
     handleApplyToJob,
     handleHireWorker,
+    handleWorkerRequestCompletion,
+    handleWorkerHireDecision,
     handleRejectApplication,
     handleLoginSubmit,
     handleWorkerRegisterSubmit,

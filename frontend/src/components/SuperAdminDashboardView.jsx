@@ -15,23 +15,14 @@ import { DashboardSidebar, MetricCard } from "./DashboardLayout";
 import SuperAdminHeatMap from "./SuperAdminHeatMap";
 import {
   ANALYTICS_CHART_COLORS,
-  BARANGAYS,
   PHILIPPINES_MAP_CENTER,
-  SKILLS,
 } from "../constants/appConstants";
-import {
-  buildBarangayAnalytics,
-  buildBarangayHeatMapData,
-  buildMonthlyJobRequests,
-  buildRatingDistribution,
-  buildServiceAnalytics,
-  getWorkerRatingValue,
-} from "../utils/analyticsUtils";
 import { formatCurrency, getDisplayName, isImagePreviewUrl } from "../utils/formatters";
 import { loadLeafletAssets } from "../utils/mapAssets";
 
 export default function SuperAdminDashboardView({
   currentUser,
+  dashboardMetrics,
   handleAdminApproveVerification,
   handleAdminRejectVerification,
   handleLogout,
@@ -50,8 +41,14 @@ export default function SuperAdminDashboardView({
   verificationRequests,
 }) {
   const [verificationModalRequestId, setVerificationModalRequestId] = React.useState(null);
-  const totalApplications = postedJobs.reduce((sum, job) => sum + (job.applications || []).length, 0);
-  const activeApplications = postedJobs.reduce(
+  const analytics = dashboardMetrics?.analytics || {};
+  const analyticsSummary = analytics.summary || {};
+  const totalUsers = analyticsSummary.totalUsers ?? registeredWorkers.length + registeredHouseholds.length;
+  const totalWorkers = analyticsSummary.totalWorkers ?? registeredWorkers.length;
+  const householdCount = analyticsSummary.households ?? registeredHouseholds.length;
+  const totalJobPostings = analyticsSummary.totalJobPostings ?? postedJobs.length;
+  const activeJobs = analyticsSummary.activeJobs ?? postedJobs.filter((job) => job.status === "Open").length;
+  const activeApplications = analyticsSummary.activeApplications ?? postedJobs.reduce(
     (sum, job) =>
       sum +
       (job.applications || []).filter(
@@ -59,47 +56,28 @@ export default function SuperAdminDashboardView({
       ).length,
     0,
   );
-  const ongoingMatches = postedJobs.filter((job) =>
+  const completedServices = analyticsSummary.completedServices ?? postedJobs.filter((job) => job.status === "Completed").length;
+  const cancelledRequests = analyticsSummary.cancelledRequests ?? postedJobs.filter((job) => job.status === "Cancelled").length;
+  const ongoingMatches = analyticsSummary.ongoingMatches ?? postedJobs.filter((job) =>
     (job.applications || []).some((application) => application.status === "Hired"),
   ).length;
-  const cancelledRequests = postedJobs.filter((job) => job.status === "Cancelled").length;
-  const completedServices = postedJobs.filter((job) => job.status === "Completed").length;
-  const verifiedWorkers = registeredWorkers.filter((worker) => worker.verification === "Verified").length;
-  const totalUsers = registeredWorkers.length + registeredHouseholds.length;
-  const verifiedPercent = registeredWorkers.length ? Math.round((verifiedWorkers / registeredWorkers.length) * 100) : 0;
-  const barangayDemand = BARANGAYS.map((barangay) => ({
-    barangay,
-    jobs: postedJobs.filter((job) => job.barangay === barangay).length,
-    workers: registeredWorkers.filter((worker) => worker.barangay === barangay).length,
-  }))
-    .filter((item) => item.jobs || item.workers)
-    .sort((a, b) => b.jobs - a.jobs)
-    .slice(0, 6);
-  const jobCategories = SKILLS.map((skill) => {
-    const categoryJobs = postedJobs.filter((job) => job.serviceType === skill);
-    const averageRate = categoryJobs.length
-      ? categoryJobs.reduce((sum, job) => sum + Number(job.offeredRate || 0), 0) / categoryJobs.length
-      : 0;
-    return {
-      skill,
-      count: categoryJobs.length,
-      averageRate,
-    };
-  })
-    .filter((item) => item.count)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
-  const activeJobs = postedJobs.filter((job) => job.status === "Open").length;
-  const monthlyJobRequests = buildMonthlyJobRequests(postedJobs);
-  const serviceAnalytics = buildServiceAnalytics(postedJobs);
-  const barangayJobAnalytics = buildBarangayAnalytics(postedJobs, (job) => job.barangay, "jobs");
-  const barangayWorkerAnalytics = buildBarangayAnalytics(registeredWorkers, (worker) => worker.barangay, "workers");
-  const workerRatingValues = registeredWorkers.map(getWorkerRatingValue).filter((rating) => rating != null);
-  const averageWorkerRating = workerRatingValues.length
-    ? (workerRatingValues.reduce((sum, rating) => sum + rating, 0) / workerRatingValues.length).toFixed(2)
-    : "No ratings yet";
-  const ratingDistribution = buildRatingDistribution(registeredWorkers);
-  const rejectedWorkerVerifications = registeredWorkers.filter((worker) => worker.verification === "Rejected").length;
+  const verifiedUsers = analyticsSummary.verifiedUsers ?? analyticsSummary.verifiedWorkers ?? registeredWorkers.filter((worker) => worker.verification === "Verified").length;
+  const verifiedWorkers = analyticsSummary.verifiedWorkers ?? registeredWorkers.filter((worker) => worker.verification === "Verified").length;
+  const verifiedPercent = analyticsSummary.verifiedPercent ?? (registeredWorkers.length ? Math.round((verifiedWorkers / registeredWorkers.length) * 100) : 0);
+  const pendingVerificationCount = analyticsSummary.pendingVerifications ?? pendingVerificationRequests.length;
+  const rejectedVerificationCount = analyticsSummary.rejectedVerifications ?? rejectedVerificationRequests.length;
+  const rejectedWorkerVerifications = analyticsSummary.rejectedWorkers ?? registeredWorkers.filter((worker) => worker.verification === "Rejected").length;
+  const monthlyJobRequests = analytics.monthlyJobRequests || [];
+  const serviceAnalytics = analytics.serviceAnalytics || [];
+  const geographicAnalytics = analytics.geographicAnalytics || {};
+  const barangayJobAnalytics = geographicAnalytics.barangayDemand || analytics.barangayJobAnalytics || [];
+  const barangayWorkerAnalytics = geographicAnalytics.workerAvailability || analytics.barangayWorkerAnalytics || [];
+  const ratingDistribution = analytics.ratingDistribution || [];
+  const rateTransparency = analytics.rateTransparency || {};
+  const jobCategories = rateTransparency.averageRatesByCategory || analytics.serviceRateSummary || [];
+  const pricingTrends = rateTransparency.pricingTrends || [];
+  const averageWorkerRating = analyticsSummary.averageWorkerRating || "No ratings yet";
+  const ratedWorkerCount = analyticsSummary.ratedWorkerCount ?? 0;
   const heatMapOptions = [
     {
       id: "jobs",
@@ -119,12 +97,50 @@ export default function SuperAdminDashboardView({
     },
   ];
   const selectedHeatMapOption = heatMapOptions.find((option) => option.id === heatMapMetric) || heatMapOptions[0];
-  const heatMapData = buildBarangayHeatMapData(
-    postedJobs,
-    registeredWorkers,
-    verificationRequests,
-    selectedHeatMapOption.id,
-  );
+  const heatMapData = (analytics.heatMapData || []).map((item) => ({
+    ...item,
+    value:
+      selectedHeatMapOption.id === "workers"
+        ? item.workers
+        : selectedHeatMapOption.id === "completed"
+          ? item.completed
+          : selectedHeatMapOption.id === "verification"
+            ? item.pendingVerifications
+            : item.jobs,
+  }));
+  const analyticsOverviewGroups = [
+    {
+      title: "Account Overview",
+      note: "Registered users by role",
+      items: [
+        { label: "Total Users", value: totalUsers },
+        { label: "Workers", value: totalWorkers },
+        { label: "Households", value: householdCount },
+      ],
+    },
+    {
+      title: "Employment Activity",
+      note: "Posting, application, and service status",
+      items: [
+        { label: "Total Postings", value: totalJobPostings },
+        { label: "Active Jobs", value: activeJobs },
+        { label: "Active Applications", value: activeApplications },
+        { label: "Ongoing Matches", value: ongoingMatches },
+        { label: "Completed Services", value: completedServices },
+        { label: "Cancelled Requests", value: cancelledRequests },
+      ],
+    },
+    {
+      title: "Trust and Verification",
+      note: "Worker verification and reputation",
+      items: [
+        { label: "Verified Users", value: verifiedUsers },
+        { label: "Pending", value: pendingVerificationCount, tone: pendingVerificationCount > 0 ? "warning" : "neutral" },
+        { label: "Rejected", value: rejectedVerificationCount, tone: rejectedVerificationCount > 0 ? "danger" : "neutral" },
+        { label: "Average Rating", value: averageWorkerRating, wide: true },
+      ],
+    },
+  ];
   const recentAuditLogs = [
     ...verificationRequests.slice(0, 6).map((request) => ({
       id: `verification-${request.id}`,
@@ -181,6 +197,31 @@ export default function SuperAdminDashboardView({
         worker.username === verificationModalRequest.workerUsername ||
         getDisplayName(worker.firstName, worker.lastName, worker.username) === verificationModalRequest.workerName,
     );
+  const verificationModalWorkerDetails = verificationModalRequest
+    ? {
+        id: verificationModalWorker?.id || verificationModalRequest.workerId,
+        username: verificationModalWorker?.username || verificationModalRequest.workerUsername,
+        firstName: verificationModalWorker?.firstName || "",
+        lastName: verificationModalWorker?.lastName || "",
+        displayName:
+          verificationModalWorker?.displayName ||
+          (verificationModalWorker
+            ? getDisplayName(
+                verificationModalWorker.firstName,
+                verificationModalWorker.lastName,
+                verificationModalWorker.username,
+              )
+            : verificationModalRequest.workerName || verificationModalRequest.workerUsername || "Worker"),
+        phone: verificationModalWorker?.phone || verificationModalRequest.workerPhone || "",
+        email: verificationModalWorker?.email || verificationModalRequest.workerEmail || "",
+        barangay: verificationModalWorker?.barangay || verificationModalRequest.workerBarangay || "",
+        streetAddress: verificationModalWorker?.streetAddress || verificationModalRequest.workerStreetAddress || "",
+        skills: verificationModalWorker?.skills?.length ? verificationModalWorker.skills : verificationModalRequest.workerSkills || [],
+        dailyRate: verificationModalWorker?.dailyRate ?? verificationModalRequest.workerDailyRate,
+        yearsExperience:
+          verificationModalWorker?.yearsExperience ?? verificationModalRequest.workerYearsExperience ?? 0,
+      }
+    : null;
   const openVerificationModal = (request) => {
     openVerificationRequest(request.id);
     setVerificationModalRequestId(request.id);
@@ -214,54 +255,6 @@ export default function SuperAdminDashboardView({
               }}
             />
             <div className="worker-content">
-              <div className="row g-3 mt-1">
-                <div className="col-md-6 col-xl">
-                  <MetricCard
-                    label="Pending Verifications"
-                    value={pendingVerificationRequests.length}
-                    note="Queue needing admin review"
-                    className="superadmin-stat-danger"
-                  />
-                </div>
-                <div className="col-md-6 col-xl">
-                  <MetricCard
-                    label="Verified Workers"
-                    value={verifiedWorkers}
-                    note={`${verifiedPercent}% of worker accounts`}
-                    className="superadmin-stat-success"
-                  />
-                </div>
-                <div className="col-md-6 col-xl">
-                  <MetricCard
-                    label="Rejected Workers"
-                    value={Math.max(rejectedVerificationRequests.length, rejectedWorkerVerifications)}
-                    note="Verification requests rejected"
-                    className="superadmin-stat-danger"
-                  />
-                </div>
-                <div className="col-md-6 col-xl">
-                  <MetricCard
-                    label="Total Users"
-                    value={totalUsers}
-                    note={`${registeredHouseholds.length} households, ${registeredWorkers.length} workers`}
-                    className="superadmin-stat-warning"
-                  />
-                </div>
-              </div>
-
-              <div className="superadmin-tabs mt-3">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    className={`superadmin-tab ${superAdminSection === tab.id ? "active" : ""}`}
-                    onClick={() => setSuperAdminSection(tab.id)}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
               {superAdminSection === "verification" && (
                 <div className="profile-card mt-3">
                   <div className="profile-card-head d-flex justify-content-between align-items-center gap-3 flex-wrap">
@@ -328,8 +321,8 @@ export default function SuperAdminDashboardView({
                         role="dialog"
                         onClick={(event) => event.stopPropagation()}
                       >
-                        <div className="superadmin-verification-modal-body">
-                          <div className="superadmin-verification-worker-profile">
+                        <header className="superadmin-verification-modal-header">
+                          <div className="superadmin-verification-identity">
                             <div className="superadmin-verification-avatar">
                               {String(verificationModalRequest.workerName || verificationModalRequest.workerUsername || "W")
                                 .slice(0, 2)
@@ -342,54 +335,52 @@ export default function SuperAdminDashboardView({
                               </div>
                               <p>@{verificationModalRequest.workerUsername || "worker"}</p>
                             </div>
+                          </div>
+                          <p className="superadmin-verification-submitted">
+                            <span>Submitted:</span> {verificationModalRequest.submittedAt || "Recently"}
+                          </p>
+                        </header>
+                        <div className="superadmin-verification-modal-body">
+                          <div className="superadmin-verification-worker-profile">
+                            <h4>Worker Details</h4>
                             <div className="superadmin-verification-profile-facts">
-                              <div>
-                                <strong>Submitted Date</strong>
-                                <span>{verificationModalRequest.submittedAt || "Recently"}</span>
-                              </div>
                               <div>
                                 <strong>Full Name</strong>
                                 <span>
-                                  {verificationModalWorker
-                                    ? getDisplayName(
-                                        verificationModalWorker.firstName,
-                                        verificationModalWorker.lastName,
-                                        verificationModalWorker.username,
-                                      )
-                                    : verificationModalRequest.workerName || "Not available"}
+                                  {verificationModalWorkerDetails?.displayName || "Not available"}
                                 </span>
                               </div>
                               <div>
                                 <strong>Phone</strong>
-                                <span>{verificationModalWorker?.phone || "Not set"}</span>
+                                <span>{verificationModalWorkerDetails?.phone || "Not set"}</span>
                               </div>
                               <div>
                                 <strong>Email</strong>
-                                <span>{verificationModalWorker?.email || "Not set"}</span>
+                                <span>{verificationModalWorkerDetails?.email || "Not set"}</span>
                               </div>
                               <div>
                                 <strong>Barangay</strong>
-                                <span>{verificationModalWorker?.barangay || "Not set"}</span>
+                                <span>{verificationModalWorkerDetails?.barangay || "Not set"}</span>
                               </div>
                               <div>
                                 <strong>Address</strong>
-                                <span>{verificationModalWorker?.streetAddress || "Not set"}</span>
+                                <span>{verificationModalWorkerDetails?.streetAddress || "Not set"}</span>
                               </div>
                               <div>
                                 <strong>Skills</strong>
-                                <span>{(verificationModalWorker?.skills || []).join(", ") || "No skills listed"}</span>
+                                <span>{(verificationModalWorkerDetails?.skills || []).join(", ") || "No skills listed"}</span>
                               </div>
                               <div>
                                 <strong>Rate</strong>
                                 <span>
-                                  {verificationModalWorker
-                                    ? `${formatCurrency(verificationModalWorker.dailyRate)}/day`
+                                  {verificationModalWorkerDetails?.dailyRate
+                                    ? `${formatCurrency(verificationModalWorkerDetails.dailyRate)}/day`
                                     : "Not set"}
                                 </span>
                               </div>
                               <div>
                                 <strong>Experience</strong>
-                                <span>{verificationModalWorker?.yearsExperience || 0} yr(s)</span>
+                                <span>{verificationModalWorkerDetails?.yearsExperience || 0} yr(s)</span>
                               </div>
                               <div>
                                 <strong>Worker Notes</strong>
@@ -401,8 +392,8 @@ export default function SuperAdminDashboardView({
                               </div>
                             </div>
                           </div>
-                          <div className="verification-document-card superadmin-verification-documents h-100">
-                            <h3>Submitted Documents</h3>
+                          <div className="superadmin-verification-documents h-100">
+                            <h4>Submitted Documents</h4>
                             {[
                               {
                                 label: "Primary ID",
@@ -430,7 +421,7 @@ export default function SuperAdminDashboardView({
                                   ) : (
                                     <button
                                       type="button"
-                                      className="btn btn-outline-primary btn-sm"
+                                      className="btn btn-outline-secondary btn-sm superadmin-document-open"
                                       onClick={() => openFilePreview(documentItem.preview)}
                                     >
                                       Open Document
@@ -447,21 +438,24 @@ export default function SuperAdminDashboardView({
                         </div>
 
                         <div className="superadmin-verification-modal-actions">
+                          <p className="superadmin-verification-review-note">
+                            Review the submitted documents before approving.
+                          </p>
                           {!["Approved", "Rejected"].includes(verificationModalRequest.status) ? (
                             <>
-                              <button
-                                className="btn btn-success"
-                                type="button"
-                                onClick={() => approveVerificationRequest(verificationModalRequest.id)}
-                              >
-                                Approve
-                              </button>
                               <button
                                 className="btn btn-outline-danger"
                                 type="button"
                                 onClick={() => rejectVerificationRequest(verificationModalRequest.id)}
                               >
                                 Reject
+                              </button>
+                              <button
+                                className="btn btn-success"
+                                type="button"
+                                onClick={() => approveVerificationRequest(verificationModalRequest.id)}
+                              >
+                                Approve
                               </button>
                             </>
                           ) : (
@@ -479,42 +473,41 @@ export default function SuperAdminDashboardView({
               {superAdminSection === "analytics" && (
                 <>
                   <div className="superadmin-analytics mt-3">
-                    <div className="row g-3 mt-1">
-                      <div className="col-md-6 col-xl-2">
-                        <MetricCard label="Total Users" value={totalUsers} className="analytics-summary-card" />
+                    <section className="analytics-overview" aria-label="Analytics overview">
+                      <div className="analytics-overview-head">
+                        <div>
+                          <span>Platform Analytics</span>
+                          <h2>Operational snapshot</h2>
+                        </div>
+                        <p>
+                          Monitor account growth, employment activity, verification status, and worker reputation.
+                        </p>
                       </div>
-                      <div className="col-md-6 col-xl-2">
-                        <MetricCard
-                          label="Total Workers"
-                          value={registeredWorkers.length}
-                          className="analytics-summary-card"
-                        />
+
+                      <div className="analytics-overview-grid">
+                        {analyticsOverviewGroups.map((group) => (
+                          <article className="analytics-overview-panel" key={group.title}>
+                            <div className="analytics-overview-panel-head">
+                              <h3>{group.title}</h3>
+                              <p>{group.note}</p>
+                            </div>
+                            <div className="analytics-overview-metrics">
+                              {group.items.map((item) => (
+                                <div
+                                  className={`analytics-overview-metric ${
+                                    item.wide ? "wide" : ""
+                                  } ${item.tone ? `tone-${item.tone}` : ""}`}
+                                  key={`${group.title}-${item.label}`}
+                                >
+                                  <span>{item.label}</span>
+                                  <strong>{item.value}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          </article>
+                        ))}
                       </div>
-                      <div className="col-md-6 col-xl-2">
-                        <MetricCard
-                          label="Households"
-                          value={registeredHouseholds.length}
-                          className="analytics-summary-card"
-                        />
-                      </div>
-                      <div className="col-md-6 col-xl-2">
-                        <MetricCard label="Active Jobs" value={activeJobs} className="analytics-summary-card" />
-                      </div>
-                      <div className="col-md-6 col-xl-2">
-                        <MetricCard
-                          label="Completed Jobs"
-                          value={completedServices}
-                          className="analytics-summary-card"
-                        />
-                      </div>
-                      <div className="col-md-6 col-xl-2">
-                        <MetricCard
-                          label="Pending Verifications"
-                          value={pendingVerificationRequests.length}
-                          className="analytics-summary-card"
-                        />
-                      </div>
-                    </div>
+                    </section>
 
                     <div className="profile-card analytics-card">
                       <div className="profile-card-head analytics-heatmap-head">
@@ -637,9 +630,11 @@ export default function SuperAdminDashboardView({
                       </div>
                     </div>
 
-                    <div className="row g-3 mt-1">
+                    <div className="profile-card analytics-card analytics-geographic-card mt-3">
+                      <div className="profile-card-head analytics-section-title">Geographic Analytics</div>
+                      <div className="row g-3">
                       <div className="col-xl-6">
-                        <div className="profile-card analytics-card h-100">
+                        <div className="analytics-subcard h-100">
                           <div className="profile-card-head">Barangays with High Job Demand</div>
                           <div className="table-responsive">
                             <table className="table align-middle mb-0 analytics-table">
@@ -680,7 +675,7 @@ export default function SuperAdminDashboardView({
                         </div>
                       </div>
                       <div className="col-xl-6">
-                        <div className="profile-card analytics-card h-100">
+                        <div className="analytics-subcard h-100">
                           <div className="profile-card-head">Barangays with Worker Availability</div>
                           <div className="table-responsive">
                             <table className="table align-middle mb-0 analytics-table">
@@ -720,6 +715,7 @@ export default function SuperAdminDashboardView({
                           </div>
                         </div>
                       </div>
+                      </div>
                     </div>
 
                     <div className="row g-3 mt-1">
@@ -728,7 +724,7 @@ export default function SuperAdminDashboardView({
                           <div className="profile-card-head">Average Worker Rating</div>
                           <div className="analytics-rating-summary">
                             <p className="analytics-rating-value mb-1">{averageWorkerRating}</p>
-                            <p className="small text-muted mb-0">{workerRatingValues.length} rated worker profile(s)</p>
+                            <p className="small text-muted mb-0">{ratedWorkerCount} rated worker profile(s)</p>
                           </div>
                         </div>
                       </div>
@@ -770,7 +766,7 @@ export default function SuperAdminDashboardView({
                       </div>
                       <div className="col-xl-4">
                         <div className="profile-card analytics-card h-100">
-                          <div className="profile-card-head">Service Rate Transparency</div>
+                          <div className="profile-card-head">Average Rates by Category</div>
                           <div className="table-responsive">
                             <table className="table align-middle mb-0 analytics-table">
                               <thead>
@@ -800,6 +796,57 @@ export default function SuperAdminDashboardView({
                             </table>
                           </div>
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="profile-card analytics-card analytics-pricing-card mt-3">
+                      <div className="profile-card-head">Pricing Trends</div>
+                      <div className="analytics-chart-wrap">
+                        <ResponsiveContainer width="100%" height={260}>
+                          <LineChart
+                            data={pricingTrends}
+                            margin={{
+                              top: 16,
+                              right: 18,
+                              left: 0,
+                              bottom: 4,
+                            }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ff" />
+                            <XAxis
+                              dataKey="month"
+                              tick={{
+                                fill: "#5f6b7b",
+                                fontSize: 12,
+                              }}
+                            />
+                            <YAxis
+                              tick={{
+                                fill: "#5f6b7b",
+                                fontSize: 12,
+                              }}
+                              tickFormatter={(value) => formatCurrency(value)}
+                            />
+                            <Tooltip
+                              formatter={(value, name) => [
+                                name === "averageRate" ? formatCurrency(value) : value,
+                                name === "averageRate" ? "Average Rate" : "Postings",
+                              ]}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="averageRate"
+                              stroke="#28a745"
+                              strokeWidth={3}
+                              dot={{
+                                r: 4,
+                              }}
+                              activeDot={{
+                                r: 6,
+                              }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
                       </div>
                     </div>
                   </div>

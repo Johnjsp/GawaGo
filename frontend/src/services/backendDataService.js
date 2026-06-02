@@ -6,8 +6,10 @@ import {
   normalizeBackendNotification,
   normalizeBackendReview,
   normalizeBackendWorker,
+  normalizeAvailabilityWindow,
   normalizeProfileRecord,
   normalizeVerificationRequest,
+  getApiErrorMessage,
 } from "../utils/normalizers";
 
 function unwrapRecords(data) {
@@ -16,7 +18,7 @@ function unwrapRecords(data) {
 
 export async function fetchVerificationRequests() {
   const response = await apiRequest("common/verification-requests/", {
-    auth: false,
+    auth: true,
     suppressUnauthorized: true,
   });
   if (!response.ok) {
@@ -54,9 +56,29 @@ export async function fetchCurrentAccount(currentUser) {
   };
 }
 
+export async function updateWorkerAvailability(availabilityWindows) {
+  const response = await apiRequest("accounts/me/availability/", {
+    method: "PUT",
+    auth: true,
+    body: {
+      availability_windows: (availabilityWindows || []).map((window) => ({
+        date: window.date,
+        start_time: window.startTime,
+        end_time: window.endTime,
+        is_available: window.isAvailable !== false,
+      })),
+    },
+  });
+  const data = await readResponseData(response);
+  if (!response.ok) {
+    throw new Error(getApiErrorMessage(data, "Unable to update availability."));
+  }
+  return unwrapRecords(data).map(normalizeAvailabilityWindow).filter(Boolean);
+}
+
 export async function fetchJobs() {
   const response = await apiRequest("jobs/", {
-    auth: false,
+    auth: true,
     suppressUnauthorized: true,
   });
   if (!response.ok) {
@@ -68,7 +90,7 @@ export async function fetchJobs() {
 
 export async function fetchProfiles() {
   const response = await apiRequest("accounts/profiles/", {
-    auth: false,
+    auth: true,
     suppressUnauthorized: true,
   });
   if (!response.ok) {
@@ -85,7 +107,7 @@ export async function fetchProfiles() {
 
 export async function fetchRecommendedWorkers(jobId) {
   const response = await apiRequest(`matching/recommended-workers/?job_id=${encodeURIComponent(jobId)}`, {
-    auth: false,
+    auth: true,
     suppressUnauthorized: true,
   });
   if (response.status === 404) {
@@ -99,8 +121,8 @@ export async function fetchRecommendedWorkers(jobId) {
 }
 
 export async function fetchNotifications(username) {
-  const response = await apiRequest(`notifications/?username=${encodeURIComponent(username)}`, {
-    auth: false,
+  const response = await apiRequest("notifications/", {
+    auth: true,
     suppressUnauthorized: true,
   });
   if (!response.ok) {
@@ -113,7 +135,7 @@ export async function fetchNotifications(username) {
 export async function fetchReviews({ username, role, selectedWorkerUsername = "" }) {
   const requests = [
     apiRequest(`reviews/?username=${encodeURIComponent(username)}`, { auth: false, suppressUnauthorized: true }),
-    apiRequest(`reviews/?author_username=${encodeURIComponent(username)}`, { auth: false, suppressUnauthorized: true }),
+    apiRequest(`reviews/?author_username=${encodeURIComponent(username)}`, { auth: true, suppressUnauthorized: true }),
   ];
   if (role === "household" && selectedWorkerUsername) {
     requests.push(apiRequest(`reviews/?username=${encodeURIComponent(selectedWorkerUsername)}`, { auth: false, suppressUnauthorized: true }));
@@ -139,15 +161,14 @@ export async function fetchDashboardMetrics() {
   return readResponseData(response);
 }
 
-export async function markBackendNotificationRead(backendId, username) {
-  if (!backendId || !username) {
+export async function markBackendNotificationRead(backendId) {
+  if (!backendId) {
     return false;
   }
   const response = await apiRequest(`notifications/${backendId}/read/`, {
     method: "PATCH",
-    auth: false,
+    auth: true,
     suppressUnauthorized: true,
-    body: { username },
   });
   return response.ok;
 }

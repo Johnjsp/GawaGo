@@ -11,11 +11,13 @@ def job_image_path(instance, filename):
 class JobPosting(models.Model):
     STATUS_OPEN = "open"
     STATUS_ASSIGNED = "assigned"
+    STATUS_COMPLETION_REQUESTED = "completion_requested"
     STATUS_COMPLETED = "completed"
     STATUS_CANCELLED = "cancelled"
     STATUS_CHOICES = [
         (STATUS_OPEN, "Open"),
         (STATUS_ASSIGNED, "Assigned"),
+        (STATUS_COMPLETION_REQUESTED, "Completion Requested"),
         (STATUS_COMPLETED, "Completed"),
         (STATUS_CANCELLED, "Cancelled"),
     ]
@@ -25,6 +27,9 @@ class JobPosting(models.Model):
     job_type = models.CharField(max_length=120)
     required_skill = models.CharField(max_length=120)
     schedule = models.CharField(max_length=255)
+    schedule_type = models.CharField(max_length=80, blank=True, default="")
+    preferred_date = models.DateField(null=True, blank=True)
+    preferred_time = models.TimeField(null=True, blank=True)
     description = models.TextField(blank=True, default="")
     location_label = models.CharField(max_length=255)
     latitude = models.DecimalField(max_digits=10, decimal_places=7)
@@ -33,6 +38,7 @@ class JobPosting(models.Model):
     worker_slots = models.PositiveIntegerField(default=1)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN)
     created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self) -> str:
         return self.title
@@ -53,14 +59,18 @@ class JobImage(models.Model):
 
 class JobApplication(models.Model):
     STATUS_PENDING = "pending"
+    STATUS_HIRE_REQUESTED = "hire_requested"
     STATUS_HIRED = "hired"
     STATUS_REJECTED = "rejected"
     STATUS_CLOSED = "closed"
+    STATUS_COMPLETED = "completed"
     STATUS_CHOICES = [
         (STATUS_PENDING, "Pending"),
+        (STATUS_HIRE_REQUESTED, "Hire Requested"),
         (STATUS_HIRED, "Hired"),
         (STATUS_REJECTED, "Rejected"),
         (STATUS_CLOSED, "Closed"),
+        (STATUS_COMPLETED, "Completed"),
     ]
 
     job = models.ForeignKey(JobPosting, on_delete=models.CASCADE, related_name="applications")

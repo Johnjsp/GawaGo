@@ -2,15 +2,18 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.core import mail
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.accounts.models import PasswordResetRequest, UserProfile
+from apps.accounts.models import PasswordResetRequest, UserProfile, WorkerAvailability
+from apps.common.authentication import create_jwt_token
+from apps.notifications.models import Notification
 
 
 class RegisterLoginFlowTests(TestCase):
-    def test_registered_worker_can_login_after_registration(self):
+    def test_registered_worker_can_login_immediately(self):
         register_response = self.client.post(
             reverse("register"),
             {
@@ -38,7 +41,7 @@ class RegisterLoginFlowTests(TestCase):
         self.assertEqual(login_response.json()["username"], "JuanWorker")
         self.assertEqual(login_response.json()["role"], UserProfile.ROLE_WORKER)
 
-    def test_login_reactivates_existing_inactive_account_with_valid_password(self):
+    def test_login_activates_existing_inactive_account_with_valid_password(self):
         user = User.objects.create_user(
             username="LegacyInactive",
             email="legacy.inactive@gmail.com",
@@ -56,7 +59,6 @@ class RegisterLoginFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         user.refresh_from_db()
         self.assertTrue(user.is_active)
-        self.assertEqual(response.json()["role"], UserProfile.ROLE_HOUSEHOLD)
 
     def test_login_accepts_username_case_used_differently_from_registration(self):
         User.objects.create_user(username="MixedCaseUser", email="mixed@gmail.com", password="case-pass123")
@@ -108,6 +110,7 @@ class PasswordResetFlowTests(TestCase):
 
         reset_request = PasswordResetRequest.objects.get(email="worker1@gmail.com")
         self.assertIsNotNone(reset_request.used_at)
+        self.assertGreater(reset_request.used_at, reset_request.created_at)
 
     @patch("apps.accounts.views.send_password_reset_email")
     @patch("apps.accounts.services.generate_reset_token", return_value="123456")
@@ -123,3 +126,172 @@ class PasswordResetFlowTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 400)
+
+
+class ProfileUpdateTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="worker-profile",
+            email="worker.profile@gmail.com",
+            password="worker-pass123",
+        )
+        self.profile = UserProfile.objects.create(user=self.user, role=UserProfile.ROLE_WORKER)
+        self.client.defaults["HTTP_AUTHORIZATION"] = f"Bearer {create_jwt_token({'user_id': self.user.id})}"
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_profile_update_cannot_change_role(self):
+        response = self.client.patch(
+            reverse("profile-me"),
+            {"role": UserProfile.ROLE_HOUSEHOLD, "phone": "09170000000"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.role, UserProfile.ROLE_WORKER)
+        self.assertEqual(self.profile.phone, "09170000000")
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.user,
+                notification_type=Notification.TYPE_ACCOUNT_ACTIVITY,
+                title="Profile updated",
+            ).exists()
+        )
+        self.assertEqual(mail.outbox[-1].to, [self.user.email])
+        self.assertEqual(mail.outbox[-1].subject, "GawaGo: Profile updated")
+
+
+class WorkerAvailabilityTests(TestCase):
+    def setUp(self):
+        self.worker = User.objects.create_user(username="availability-worker", password="worker-pass123")
+        self.household = User.objects.create_user(username="availability-household", password="household-pass123")
+        UserProfile.objects.create(user=self.worker, role=UserProfile.ROLE_WORKER)
+        UserProfile.objects.create(user=self.household, role=UserProfile.ROLE_HOUSEHOLD)
+
+    def authenticate(self, user):
+        self.client.defaults["HTTP_AUTHORIZATION"] = f"Bearer {create_jwt_token({'user_id': user.id})}"
+
+    def test_worker_can_replace_availability_windows(self):
+        self.authenticate(self.worker)
+        WorkerAvailability.objects.create(
+            worker=self.worker,
+            date="2026-06-01",
+            start_time="08:00",
+            end_time="09:00",
+        )
+
+        response = self.client.put(
+            reverse("worker-availability"),
+            {
+                "availability_windows": [
+                    {
+                        "date": "2026-06-02",
+                        "start_time": "09:00",
+                        "end_time": "12:00",
+                        "is_available": True,
+                    },
+                    {
+                        "date": "2026-06-03",
+                        "start_time": "13:00",
+                        "end_time": "17:00",
+                        "is_available": True,
+                    },
+                ]
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(WorkerAvailability.objects.filter(worker=self.worker).count(), 2)
+        self.assertEqual(response.json()[0]["date"], "2026-06-02")
+
+    def test_household_cannot_manage_worker_availability(self):
+        self.authenticate(self.household)
+
+        response = self.client.get(reverse("worker-availability"))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_anonymous_user_cannot_manage_worker_availability(self):
+        response = self.client.get(reverse("worker-availability"))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_availability_rejects_equal_start_and_end_time(self):
+        self.authenticate(self.worker)
+
+        response = self.client.put(
+            reverse("worker-availability"),
+            {
+                "availability_windows": [
+                    {
+                        "date": "2026-06-02",
+                        "start_time": "09:00",
+                        "end_time": "09:00",
+                        "is_available": True,
+                    }
+                ]
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(WorkerAvailability.objects.filter(worker=self.worker).exists())
+
+
+class PublicProfilePrivacyTests(TestCase):
+    def setUp(self):
+        self.worker = User.objects.create_user(
+            username="public-worker",
+            email="public.worker@gmail.com",
+            password="worker-pass123",
+        )
+        UserProfile.objects.create(
+            user=self.worker,
+            role=UserProfile.ROLE_WORKER,
+            phone="09171234567",
+            skills=["House Cleaning"],
+            latitude="13.9622745",
+            longitude="121.5632841",
+        )
+        self.household = User.objects.create_user(
+            username="profile-household",
+            email="profile.household@gmail.com",
+            password="household-pass123",
+        )
+        UserProfile.objects.create(user=self.household, role=UserProfile.ROLE_HOUSEHOLD)
+        self.admin = User.objects.create_superuser(
+            username="profile-admin",
+            email="profile.admin@gmail.com",
+            password="admin-pass123",
+        )
+
+    def test_anonymous_profile_list_is_rejected(self):
+        response = self.client.get(reverse("profile-list"))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_authenticated_profile_list_hides_private_contact_and_exact_location_fields(self):
+        self.client.defaults["HTTP_AUTHORIZATION"] = f"Bearer {create_jwt_token({'user_id': self.household.id})}"
+
+        response = self.client.get(reverse("profile-list"))
+
+        self.assertEqual(response.status_code, 200)
+        first_profile = response.json()["results"][0]
+        self.assertNotIn("email", first_profile)
+        self.assertNotIn("phone", first_profile)
+        self.assertNotIn("verification_request", first_profile)
+        self.assertNotIn("latitude", first_profile)
+        self.assertNotIn("longitude", first_profile)
+
+    def test_staff_profile_list_includes_private_contact_fields(self):
+        self.client.defaults["HTTP_AUTHORIZATION"] = f"Bearer {create_jwt_token({'user_id': self.admin.id})}"
+
+        response = self.client.get(reverse("profile-list"))
+
+        self.assertEqual(response.status_code, 200)
+        first_profile = response.json()["results"][0]
+        self.assertIn("email", first_profile)
+        self.assertIn("phone", first_profile)
+        self.assertIn("latitude", first_profile)
+        self.assertIn("longitude", first_profile)

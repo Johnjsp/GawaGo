@@ -67,7 +67,11 @@ import {
   getWorkersNeeded,
   isJobOpenForApplications,
 } from "./utils/jobUtils";
-import { getHouseholdNotifications, getVerificationNotifications } from "./utils/notificationUtils";
+import {
+  getHouseholdNotifications,
+  getHouseholdReviewReminderNotifications,
+  getVerificationNotifications,
+} from "./utils/notificationUtils";
 import { getHouseholdReviewSummary, getWorkerReviewSummary } from "./utils/reviewUtils";
 import {
   ensureDemoVersion,
@@ -109,11 +113,13 @@ function App() {
   if (IS_DEMO_MODE) {
     ensureDemoVersion();
   }
-  const [view, setView] = useState("home");
+  const isAdminPortalPath =
+    typeof window !== "undefined" && window.location.pathname.replace(/\/+$/, "") === "/admin";
+  const [view, setView] = useState(isAdminPortalPath ? "login" : "home");
   const [loginForm, setLoginForm] = useState({
     username: "",
     password: "",
-    role: "worker",
+    role: isAdminPortalPath ? "admin" : "",
   });
   const [forgotPasswordStep, setForgotPasswordStep] = useState("email");
   const [forgotPasswordForm, setForgotPasswordForm] = useState({
@@ -190,6 +196,12 @@ function App() {
     phone: "",
     barangay: "",
     streetAddress: "",
+    latitude: null,
+    longitude: null,
+    locationLabel: "",
+    locationSource: "",
+    locationWarning: "",
+    locationAccuracy: "",
     bio: "",
     hourlyRate: "0.00",
     dailyRate: "0.00",
@@ -260,28 +272,31 @@ function App() {
           backendCurrentWorker?.verification ||
           localCurrentWorker?.verification,
       );
-  const currentWorkerBase = backendCurrentWorker
-    ? {
-        ...localCurrentWorker,
-        ...backendCurrentWorker,
-        verificationNotifications: [
-          ...(localCurrentWorker?.verificationNotifications || []),
-          ...(backendCurrentWorker?.verificationNotifications || []),
-        ],
-        applicationNotifications: [
-          ...(localCurrentWorker?.applicationNotifications || []),
-          ...(backendCurrentWorker?.applicationNotifications || []),
-        ],
-        receivedReviews:
-          localCurrentWorker?.receivedReviews?.length
-            ? localCurrentWorker.receivedReviews
-            : backendCurrentWorker.receivedReviews || [],
-        givenFeedback:
-          localCurrentWorker?.givenFeedback?.length
-            ? localCurrentWorker.givenFeedback
-            : backendCurrentWorker.givenFeedback || [],
-      }
-    : localCurrentWorker || null;
+  const currentWorkerBase =
+    currentUser?.role === "worker"
+      ? backendCurrentWorker
+        ? {
+            ...localCurrentWorker,
+            ...backendCurrentWorker,
+            verificationNotifications: [
+              ...(localCurrentWorker?.verificationNotifications || []),
+              ...(backendCurrentWorker?.verificationNotifications || []),
+            ],
+            applicationNotifications: [
+              ...(localCurrentWorker?.applicationNotifications || []),
+              ...(backendCurrentWorker?.applicationNotifications || []),
+            ],
+            receivedReviews:
+              localCurrentWorker?.receivedReviews?.length
+                ? localCurrentWorker.receivedReviews
+                : backendCurrentWorker.receivedReviews || [],
+            givenFeedback:
+              localCurrentWorker?.givenFeedback?.length
+                ? localCurrentWorker.givenFeedback
+                : backendCurrentWorker.givenFeedback || [],
+          }
+        : localCurrentWorker || null
+      : null;
   const currentWorker = currentWorkerBase
     ? {
         ...currentWorkerBase,
@@ -457,8 +472,12 @@ function App() {
   const workerMiniPhoto = getWorkerPhoto(currentWorker);
   const householdNotifications = dedupeNotifications([
     ...getHouseholdNotifications(householdJobs, registeredWorkers),
+    ...getHouseholdReviewReminderNotifications(householdJobs, registeredWorkers, currentHousehold),
     ...backendNotifications.filter(
-      (item) => item.notificationType === "application" || item.title === "New feedback received",
+      (item) =>
+        item.notificationType === "application" ||
+        item.notificationType === "completion" ||
+        item.title === "New feedback received",
     ),
   ]);
   const verificationNotifications = getVerificationNotifications(verificationRequests, registeredWorkers);
@@ -486,6 +505,7 @@ function App() {
           .map((application) => ({
             ...job,
             appliedAt: application.appliedAt,
+            updatedAt: application.updatedAt,
             applicationStatus: application.status,
             applicationId: application.id,
           })),
@@ -653,6 +673,8 @@ function App() {
   const {
     handleApplyToJob,
     handleHireWorker,
+    handleWorkerRequestCompletion,
+    handleWorkerHireDecision,
     handleRejectApplication,
     handleLoginSubmit,
     handleWorkerRegisterSubmit,
@@ -793,6 +815,7 @@ function App() {
           currentWorkerJobHousehold={currentWorkerJobHousehold}
           handleApplyToJob={handleApplyToJob}
           handleLogout={handleLogout}
+          handleWorkerRequestCompletion={handleWorkerRequestCompletion}
           openWorkerApplications={openWorkerApplications}
           openWorkerDashboard={openWorkerDashboard}
           openWorkerFindJobs={openWorkerFindJobs}
@@ -862,6 +885,7 @@ function App() {
       currentUser={currentUser}
       currentWorker={currentWorker}
       dashboardMetrics={dashboardMetrics}
+      isAdminPortalPath={isAdminPortalPath}
       formatCurrency={formatCurrency}
       formatDateTime={formatDateTime}
       formatDistance={formatDistance}
@@ -877,6 +901,8 @@ function App() {
       handleCancelJob={handleCancelJob}
       handleConfirmJobCompleted={handleConfirmJobCompleted}
       handleHireWorker={handleHireWorker}
+      handleWorkerHireDecision={handleWorkerHireDecision}
+      handleWorkerRequestCompletion={handleWorkerRequestCompletion}
       handleHouseholdChange={handleHouseholdChange}
       handleHouseholdJobChange={handleHouseholdJobChange}
       handleHouseholdJobSubmit={handleHouseholdJobSubmit}
@@ -954,6 +980,7 @@ function App() {
       setHouseholdJobMapMode={setHouseholdJobMapMode}
       setSelectedJobId={setSelectedJobId}
       setSelectedWorkerId={setSelectedWorkerId}
+      setWorkerForm={setWorkerForm}
       setWorkerProfileForm={setWorkerProfileForm}
       toggleSkill={toggleSkill}
       toggleWorkerProfileSkill={toggleWorkerProfileSkill}

@@ -48,6 +48,26 @@ class UserProfile(models.Model):
         return f"{self.average_rating:.2f}"
 
 
+class WorkerAvailability(models.Model):
+    worker = models.ForeignKey(User, on_delete=models.CASCADE, related_name="availability_windows")
+    date = models.DateField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    is_available = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["date", "start_time"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["worker", "date", "start_time", "end_time"],
+                name="unique_worker_availability_window",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.worker.username} available {self.date} {self.start_time}-{self.end_time}"
+
+
 class PasswordResetRequest(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="password_reset_requests")
     email = models.EmailField()

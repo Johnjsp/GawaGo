@@ -12,6 +12,7 @@ export default function WorkerJobDetailView({
   currentWorkerJobHousehold,
   handleApplyToJob,
   handleLogout,
+  handleWorkerRequestCompletion,
   openWorkerApplications,
   openWorkerDashboard,
   openWorkerFindJobs,
@@ -36,14 +37,28 @@ export default function WorkerJobDetailView({
             application.workerUsername === currentWorker.username,
         )
       : false;
+  const currentWorkerApplication =
+    job && currentWorker
+      ? (job.applications || []).find(
+          (application) =>
+            String(application.workerId) === String(currentWorker.id) ||
+            application.workerUsername === currentWorker.username,
+        )
+      : null;
   const jobLatitude = job?.latitude ?? household?.latitude ?? null;
   const jobLongitude = job?.longitude ?? household?.longitude ?? null;
   const workerLatitude = currentWorker?.latitude ?? null;
   const workerLongitude = currentWorker?.longitude ?? null;
   const jobDistanceKm = haversineDistanceKm(workerLatitude, workerLongitude, jobLatitude, jobLongitude);
   const [routeDistanceKm, setRouteDistanceKm] = useState(null);
+  const [completionNote, setCompletionNote] = useState("I have completed the service today.");
   const distanceLabel = formatDistance(routeDistanceKm ?? jobDistanceKm);
   const canApply = currentWorker?.verification === "Verified";
+  const isHiredForJob = currentWorkerApplication?.status === "Hired";
+  const isAssignedWorker = ["Hired", "Completed"].includes(currentWorkerApplication?.status);
+  const isCompletionRequested = job?.status === "Waiting for Household Confirmation";
+  const isCompletedJob = job?.status === "Completed";
+  const canRequestCompletion = isHiredForJob && !isCompletionRequested && !isCompletedJob;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   useEffect(() => {
     setRouteDistanceKm(null);
@@ -210,6 +225,46 @@ export default function WorkerJobDetailView({
                           <p className="small text-muted fw-semibold mb-1">Descriptions</p>
                           <p className="mb-0">{job.description || "No description provided."}</p>
                         </div>
+                        {isAssignedWorker && (
+                          <div className="worker-completion-request-card">
+                            <div>
+                              <p className="small text-muted fw-semibold mb-1">Completion Request</p>
+                              <p className="mb-0">
+                                {isCompletionRequested
+                                  ? "Completion request sent. The household has been notified to confirm the service."
+                                  : isCompletedJob
+                                    ? "This job is already completed."
+                                    : "When the service is done, notify the household so they can confirm completion."}
+                              </p>
+                            </div>
+                            {!isCompletionRequested && !isCompletedJob && (
+                              <>
+                                <label className="form-label fw-semibold" htmlFor="worker-completion-note">
+                                  Completion note
+                                </label>
+                                <textarea
+                                  className="form-control"
+                                  id="worker-completion-note"
+                                  rows="3"
+                                  value={completionNote}
+                                  onChange={(event) => setCompletionNote(event.target.value)}
+                                />
+                              </>
+                            )}
+                            <button
+                              className="btn btn-success btn-sm"
+                              type="button"
+                              disabled={!canRequestCompletion}
+                              onClick={() => handleWorkerRequestCompletion(job.id, completionNote)}
+                            >
+                              {isCompletionRequested
+                                ? "Waiting for Household Confirmation"
+                                : isCompletedJob
+                                  ? "Job Completed"
+                                  : "Request Completion"}
+                            </button>
+                          </div>
+                        )}
                         <div className="worker-job-actions">
                           <button className="btn btn-outline-secondary btn-sm" type="button" onClick={openWorkerFindJobs}>
                             Back to Find Jobs

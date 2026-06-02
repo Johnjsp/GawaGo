@@ -1,5 +1,54 @@
 from math import asin, cos, radians, sin, sqrt
 
+from django.db import models
+
+
+SKILL_ALIASES = {
+    "aircon": "aircon_repair",
+    "aircon cleaning": "aircon_repair",
+    "aircon repair": "aircon_repair",
+    "aircon repair cleaning": "aircon_repair",
+    "aircon repair/cleaning": "aircon_repair",
+    "babysitting": "childcare",
+    "baby sitting": "childcare",
+    "carpenter": "carpentry",
+    "cleaning": "house_cleaning",
+    "cooking": "cooking",
+    "cook": "cooking",
+    "domestic helper": "house_cleaning",
+    "driver": "driving",
+    "driving": "driving",
+    "elder care": "elder_care",
+    "eldercare": "elder_care",
+    "electrical": "electrical_work",
+    "electrical work": "electrical_work",
+    "electrician": "electrical_work",
+    "garden cleanup": "gardening",
+    "gardener": "gardening",
+    "gardening": "gardening",
+    "house cleaning": "house_cleaning",
+    "housekeeping": "house_cleaning",
+    "laundry": "laundry",
+    "painting": "painting",
+    "painter": "painting",
+    "plumber": "plumbing",
+    "plumbing": "plumbing",
+    "welding": "welding",
+    "welder": "welding",
+}
+
+
+def normalize_skill_label(value):
+    normalized = " ".join(str(value or "").strip().lower().replace("&", " and ").replace("-", " ").split())
+    normalized = normalized.replace(" / ", "/").replace(" /", "/").replace("/ ", "/")
+    return SKILL_ALIASES.get(normalized, normalized.replace("/", " ").replace(" ", "_"))
+
+
+def skill_matches(required_skill, worker_skills):
+    required_key = normalize_skill_label(required_skill)
+    worker_keys = {normalize_skill_label(skill) for skill in worker_skills or []}
+    return required_key in worker_keys
+
 
 def haversine_km(lat1, lon1, lat2, lon2):
     if None in (lat1, lon1, lat2, lon2):
@@ -13,17 +62,94 @@ def haversine_km(lat1, lon1, lat2, lon2):
     return 2 * r * asin(sqrt(a))
 
 
+def time_in_window(target_time, start_time, end_time):
+    if start_time <= end_time:
+        return start_time <= target_time <= end_time
+    return target_time >= start_time or target_time <= end_time
+
+
+def is_worker_available_for_job(profile, job):
+    if not job.preferred_date or not job.preferred_time:
+        return True
+    return profile.user.availability_windows.filter(
+        date=job.preferred_date,
+        is_available=True,
+    ).filter(
+        start_time__lte=job.preferred_time,
+        end_time__gte=job.preferred_time,
+    ).exists() or any(
+        time_in_window(job.preferred_time, window.start_time, window.end_time)
+        for window in profile.user.availability_windows.filter(
+            date=job.preferred_date,
+            is_available=True,
+            start_time__gt=models.F("end_time"),
+        )
+    )
+
+
+def has_worker_availability_for_job_date(profile, job):
+    if not job.preferred_date or not job.preferred_time:
+        return True
+    return profile.user.availability_windows.filter(date=job.preferred_date, is_available=True).exists()
+
+
+def get_worker_rate(profile):
+    return profile.daily_rate or profile.hourly_rate
+
+
+def calculate_rate_score(job, profile):
+    worker_rate = get_worker_rate(profile)
+    if worker_rate is None or job.service_rate is None:
+        return 0
+    offered_rate = float(job.service_rate)
+    if offered_rate <= 0:
+        return 0
+    ratio = float(worker_rate) / offered_rate
+    if ratio <= 1:
+        return 1.0
+    if ratio <= 1.2:
+        return 0.5
+    return 0
+
+
+def calculate_distance_score(distance_km):
+    if distance_km is None:
+        return 0
+    return max(0, 10 - distance_km) / 10
+
+
+def calculate_match_score(matches_skill, available, verified, distance_km, rating, rate_score):
+    return (
+        (50 if matches_skill else 0)
+        + (20 if available else 0)
+        + (12 if verified else 0)
+        + (calculate_distance_score(distance_km) * 8)
+        + (min(float(rating or 0), 5) * 1.5)
+        + (rate_score * 2.5)
+    )
+
+
 def build_match_results(job, worker_profiles):
     results = []
     for profile in worker_profiles:
+        available = is_worker_available_for_job(profile, job)
+        has_schedule_for_date = has_worker_availability_for_job_date(profile, job)
+        if has_schedule_for_date and not available:
+            continue
         skills = profile.skills or []
-        matches_skill = job.required_skill in skills
+        matches_skill = skill_matches(job.required_skill, skills)
         distance_km = haversine_km(job.latitude, job.longitude, profile.latitude, profile.longitude)
-        verification_score = 1 if profile.verification_status == "verified" else 0
-        skill_score = 2 if matches_skill else 0
-        distance_score = max(0, 10 - distance_km) if distance_km is not None else 0
+        is_verified = profile.verification_status == "verified"
         rating_score = float(profile.average_rating or 0)
-        match_score = skill_score + verification_score + distance_score + rating_score
+        rate_score = calculate_rate_score(job, profile)
+        match_score = calculate_match_score(
+            matches_skill=matches_skill,
+            available=available,
+            verified=is_verified,
+            distance_km=distance_km,
+            rating=rating_score,
+            rate_score=rate_score,
+        )
         results.append(
             {
                 "worker_id": profile.user_id,
@@ -31,19 +157,28 @@ def build_match_results(job, worker_profiles):
                 "skills": skills,
                 "matches_skill": matches_skill,
                 "verification_status": profile.verification_status,
+                "worker_latitude": float(profile.latitude) if profile.latitude is not None else None,
+                "worker_longitude": float(profile.longitude) if profile.longitude is not None else None,
                 "distance_km": round(distance_km, 2) if distance_km is not None else None,
                 "distance_label": f"{round(distance_km, 2)} km away" if distance_km is not None else "Distance not available",
                 "match_score": round(match_score, 2),
                 "rating_label": profile.display_rating,
+                "rating_score": round(rating_score, 2),
+                "available_at_requested_time": available,
+                "rate_score": round(rate_score, 2),
+                "worker_rate": str(get_worker_rate(profile) or ""),
             }
         )
     return sorted(
         results,
         key=lambda item: (
             0 if item["matches_skill"] else 1,
+            0 if item["available_at_requested_time"] else 1,
+            0 if item["verification_status"] == "verified" else 1,
             0 if item["distance_km"] is not None else 1,
             item["distance_km"] if item["distance_km"] is not None else float("inf"),
-            0 if item["verification_status"] == "verified" else 1,
+            -item["rating_score"],
+            -item["rate_score"],
             -item["match_score"],
         ),
     )

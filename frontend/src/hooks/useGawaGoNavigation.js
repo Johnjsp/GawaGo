@@ -1,4 +1,4 @@
-import { clearAuthToken } from "../api/apiClient";
+import { apiRequest, clearAuthToken, getApiBaseUrl } from "../api/apiClient";
 import { EMPTY_HOUSEHOLD_FORM, EMPTY_WORKER_FORM } from "../constants/appConstants";
 import { getSavedHouseholdLocation } from "../utils/locationServices";
 import { markBackendNotificationRead } from "../services/backendDataService";
@@ -61,7 +61,7 @@ export function useGawaGoNavigation({
     setLoginForm({
       username: "",
       password: "",
-      role: "worker",
+      role: "",
     });
     setView("home");
   }
@@ -120,12 +120,19 @@ export function useGawaGoNavigation({
         phone: currentWorker.phone || "",
         barangay: currentWorker.barangay || "",
         streetAddress: currentWorker.streetAddress || "",
+        latitude: currentWorker.latitude ?? null,
+        longitude: currentWorker.longitude ?? null,
+        locationLabel: currentWorker.locationLabel || "",
+        locationSource: currentWorker.latitude && currentWorker.longitude ? "saved" : "",
+        locationWarning: "",
+        locationAccuracy: "",
         bio: currentWorker.bio || "",
         hourlyRate: currentWorker.hourlyRate || "0.00",
         dailyRate: currentWorker.dailyRate || "0.00",
         yearsExperience: currentWorker.yearsExperience || "0",
         skills: currentWorker.skills || [],
         availability: true,
+        availabilityWindows: currentWorker.availabilityWindows || [],
         profilePhotoFile: null,
         profilePhotoPreview:
           currentWorker.profilePhotoPreview || currentWorker.verificationSubmission?.primaryIdPreview || "",
@@ -201,7 +208,6 @@ export function useGawaGoNavigation({
   }
 
   function openHouseholdNotifications() {
-    markAllNotificationsRead(householdNotificationsWithReadState);
     setView("household-notifications");
   }
 
@@ -233,7 +239,7 @@ export function useGawaGoNavigation({
     );
     const backendNotification = backendNotifications.find((item) => item.id === notificationId);
     if (backendNotification?.backendId && currentUser?.username) {
-      markBackendNotificationRead(backendNotification.backendId, currentUser.username)
+      markBackendNotificationRead(backendNotification.backendId)
         .then(async (wasMarked) => {
           if (wasMarked) {
             await refreshNotificationsFromBackend();
@@ -261,7 +267,7 @@ export function useGawaGoNavigation({
     });
     notifications.forEach((notification) => {
       if (notification.backendId && currentUser?.username) {
-        markBackendNotificationRead(notification.backendId, currentUser.username).catch(() => {
+        markBackendNotificationRead(notification.backendId).catch(() => {
           return;
         });
       }
@@ -295,9 +301,32 @@ export function useGawaGoNavigation({
     });
   }
 
-  function openFilePreview(fileUrl) {
+  async function openFilePreview(fileUrl) {
     if (!fileUrl) return;
-    window.open(fileUrl, "_blank", "noopener,noreferrer");
+    const normalizedUrl = String(fileUrl);
+    const apiBaseUrl = getApiBaseUrl();
+    const apiIndex = normalizedUrl.indexOf("/api/");
+    const isProtectedApiDocument = normalizedUrl.startsWith("/api/") || normalizedUrl.startsWith(apiBaseUrl);
+    if (!isProtectedApiDocument && apiIndex === -1) {
+      window.open(normalizedUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const apiPath = normalizedUrl.startsWith(apiBaseUrl)
+      ? normalizedUrl.slice(apiBaseUrl.length).replace(/^\/+/, "")
+      : normalizedUrl.slice(apiIndex + "/api/".length);
+    try {
+      const response = await apiRequest(apiPath, { auth: true });
+      if (!response.ok) {
+        window.alert("You are not allowed to view this document, or it is no longer available.");
+        return;
+      }
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (error) {
+      window.alert("Unable to open this document right now.");
+    }
   }
 
   function openHouseholdNotificationWorker(notification) {

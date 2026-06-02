@@ -624,6 +624,11 @@ export default function AppViews({
       )
     : null;
   const selectedWorkerDistanceKm = selectedWorkerCalculatedDistanceKm ?? selectedWorker?.distanceKm ?? null;
+  const selectedWorkerStraightLineLabel = formatDistance(selectedWorkerDistanceKm);
+  const selectedWorkerRouteLabel =
+    selectedWorkerRouteDistanceKm !== null && selectedWorkerRouteDistanceKm !== undefined
+      ? formatDistance(selectedWorkerRouteDistanceKm)
+      : "";
   const selectedWorkerReviews = selectedWorker?.receivedReviews || [];
   const selectedWorkerRatings = selectedWorkerReviews.filter((review) => review.rating != null);
   const selectedWorkerRatingCounts = [5, 4, 3, 2, 1].map((rating) => ({
@@ -4078,6 +4083,7 @@ export default function AppViews({
                               {worker.distanceLabel ||
                                 formatDistance(worker.distanceKm, worker.distanceLabel) ||
                                 "Distance unavailable"}
+                              <small className="d-block">Straight-line</small>
                             </span>
                           </button>
                         );
@@ -4138,6 +4144,7 @@ export default function AppViews({
                               {worker.distanceLabel ||
                                 formatDistance(worker.distanceKm, worker.distanceLabel) ||
                                 "Distance unavailable"}
+                              <small className="d-block">Straight-line</small>
                             </span>
                           </button>
                         );
@@ -4279,13 +4286,15 @@ export default function AppViews({
                           <strong>{selectedWorker.status || "Available"}</strong>
                         </p>
                         <p className="mb-1 small d-flex justify-content-between">
-                          <span>Distance</span>
-                          <strong>
-                            {selectedWorker.distanceLabel ||
-                              formatDistance(selectedWorker.distanceKm, selectedWorker.distanceLabel) ||
-                              "Distance unavailable"}
-                          </strong>
+                          <span>Straight-line</span>
+                          <strong>{selectedWorkerStraightLineLabel || "Distance unavailable"}</strong>
                         </p>
+                        {selectedWorkerRouteLabel && (
+                          <p className="mb-1 small d-flex justify-content-between">
+                            <span>Road Route</span>
+                            <strong>{selectedWorkerRouteLabel}</strong>
+                          </p>
+                        )}
                         <p className="mb-1 small d-flex justify-content-between">
                           <span>Hourly Rate</span>
                           <strong>{formatCurrency(selectedWorker.hourlyRate)}</strong>
@@ -4329,7 +4338,7 @@ export default function AppViews({
                       <div className="profile-card-head d-flex justify-content-between align-items-center gap-3">
                         <span>Distance & Location</span>
                         <span className="badge text-bg-light">
-                          {formatDistance(selectedWorkerRouteDistanceKm ?? selectedWorkerDistanceKm)}
+                          {selectedWorkerRouteLabel || selectedWorkerStraightLineLabel}
                         </span>
                       </div>
                       <div className="p-3">

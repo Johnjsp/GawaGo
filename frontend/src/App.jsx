@@ -847,6 +847,7 @@ function App() {
           currentWorkerJobHousehold={currentWorkerJobHousehold}
           handleApplyToJob={handleApplyToJob}
           handleLogout={handleLogout}
+          handleWorkerHireDecision={handleWorkerHireDecision}
           handleWorkerRequestCompletion={handleWorkerRequestCompletion}
           openWorkerApplications={openWorkerApplications}
           openWorkerDashboard={openWorkerDashboard}

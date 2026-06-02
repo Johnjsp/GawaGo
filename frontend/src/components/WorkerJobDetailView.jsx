@@ -11,6 +11,7 @@ export default function WorkerJobDetailView({
   currentWorkerJobHousehold,
   handleApplyToJob,
   handleLogout,
+  handleWorkerHireDecision,
   handleWorkerRequestCompletion,
   openWorkerApplications,
   openWorkerDashboard,
@@ -53,8 +54,12 @@ export default function WorkerJobDetailView({
   const [completionNote, setCompletionNote] = useState("I have completed the service today.");
   const distanceLabel = formatDistance(routeDistanceKm ?? jobDistanceKm);
   const canApply = currentWorker?.verification === "Verified";
-  const isHiredForJob = currentWorkerApplication?.status === "Hired";
-  const isAssignedWorker = ["Hired", "Completed"].includes(currentWorkerApplication?.status);
+  const currentWorkerApplicationStatus = job?.applicationStatus || currentWorkerApplication?.status || "";
+  const currentWorkerApplicationId = job?.applicationId || currentWorkerApplication?.id || null;
+  const hasHireRequest = currentWorkerApplicationStatus === "Hire Request";
+  const hasRejectedHireRequest = currentWorkerApplicationStatus === "Rejected";
+  const isHiredForJob = currentWorkerApplicationStatus === "Hired";
+  const isAssignedWorker = ["Hired", "Completed"].includes(currentWorkerApplicationStatus);
   const isCompletionRequested = job?.status === "Waiting for Household Confirmation";
   const isCompletedJob = job?.status === "Completed";
   const canRequestCompletion = isHiredForJob && !isCompletionRequested && !isCompletedJob;
@@ -268,15 +273,45 @@ export default function WorkerJobDetailView({
                           <button className="btn btn-outline-secondary btn-sm" type="button" onClick={openWorkerFindJobs}>
                             Back to Find Jobs
                           </button>
-                          <button
-                            className="btn btn-primary btn-sm"
-                            type="button"
-                            disabled={alreadyApplied || !canApply}
-                            onClick={() => handleApplyToJob(job.id)}
-                          >
-                            {alreadyApplied ? "Already Applied" : "Apply Now"}
-                          </button>
+                          {hasHireRequest ? (
+                            <>
+                              <button
+                                className="btn btn-success btn-sm"
+                                type="button"
+                                disabled={!currentWorkerApplicationId}
+                                onClick={() => handleWorkerHireDecision(currentWorkerApplicationId, "accept")}
+                              >
+                                Accept Request
+                              </button>
+                              <button
+                                className="btn btn-outline-danger btn-sm"
+                                type="button"
+                                disabled={!currentWorkerApplicationId}
+                                onClick={() => handleWorkerHireDecision(currentWorkerApplicationId, "reject")}
+                              >
+                                Reject Request
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              className="btn btn-primary btn-sm"
+                              type="button"
+                              disabled={alreadyApplied || !canApply}
+                              onClick={() => handleApplyToJob(job.id)}
+                            >
+                              {alreadyApplied
+                                ? hasRejectedHireRequest
+                                  ? "Request Rejected"
+                                  : "Already Applied"
+                                : "Apply Now"}
+                            </button>
+                          )}
                         </div>
+                        {hasHireRequest && (
+                          <div className="alert alert-info mt-3 mb-0 py-2">
+                            This household sent you a hire request. Review the job details before accepting or rejecting.
+                          </div>
+                        )}
                         {!canApply && !alreadyApplied && (
                           <div className="alert alert-warning mt-3 mb-0 py-2">
                             You cannot apply yet. Please complete your verification first to unlock job applications.

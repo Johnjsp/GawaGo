@@ -2810,28 +2810,6 @@ export default function AppViews({
                         >
                           View Details
                         </button>
-                        <button
-                          className="btn btn-success btn-sm"
-                          type="button"
-                          onClick={() => {
-                            const applicationId = workerHireRequestPreviewJob.applicationId;
-                            setWorkerHireRequestPreview(null);
-                            handleWorkerHireDecision(applicationId, "accept");
-                          }}
-                        >
-                          Accept
-                        </button>
-                        <button
-                          className="btn btn-outline-danger btn-sm"
-                          type="button"
-                          onClick={() => {
-                            const applicationId = workerHireRequestPreviewJob.applicationId;
-                            setWorkerHireRequestPreview(null);
-                            handleWorkerHireDecision(applicationId, "reject");
-                          }}
-                        >
-                          Reject
-                        </button>
                       </div>
                     </section>
                   </div>

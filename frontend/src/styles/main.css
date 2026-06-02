@@ -3560,16 +3560,18 @@ body {
 .worker-job-image-strip {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  min-height: 46px;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-height: 64px;
 }
 
 .worker-job-image-strip img {
-  width: 46px;
-  height: 46px;
+  width: 64px;
+  height: 64px;
   border: 1px solid rgba(173, 197, 255, 0.82);
   border-radius: 8px;
-  object-fit: cover;
+  background: #ffffff;
+  object-fit: contain;
 }
 
 .worker-job-image-count {
@@ -4887,8 +4889,8 @@ body {
 
 .job-image-gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
 }
 
 .job-image-gallery-item {
@@ -4901,10 +4903,11 @@ body {
 
 .job-image-gallery-item img {
   width: 100%;
-  height: 140px;
+  height: 220px;
   border-radius: 12px;
-  object-fit: cover;
+  object-fit: contain;
   border: 1px solid #e2e8f0;
+  background: #f8f5ee;
 }
 
 .job-image-gallery-date {
@@ -4943,8 +4946,9 @@ body {
 .job-image-lightbox-content img {
   width: 100%;
   border-radius: 12px;
-  max-height: 420px;
-  object-fit: cover;
+  max-height: 70vh;
+  object-fit: contain;
+  background: #f8f5ee;
 }
 
 .job-image-lightbox-controls {
@@ -5591,11 +5595,11 @@ body {
 }
 
 .worker-job-photos-card .job-image-gallery-grid {
-  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
 }
 
 .worker-job-photos-card .job-image-gallery-item img {
-  height: 150px;
+  height: 230px;
   border-radius: 0.65rem;
 }
 

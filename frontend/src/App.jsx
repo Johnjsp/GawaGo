@@ -514,8 +514,18 @@ function App() {
     : [];
   const selectedWorkerJob =
     selectedJobId == null ? null : postedJobs.find((item) => String(item.id) === String(selectedJobId));
+  const selectedWorkerApplicationJob =
+    selectedJobId == null ? null : workerApplications.find((item) => String(item.id) === String(selectedJobId));
+  const selectedWorkerVisibleJob =
+    selectedJobId == null ? null : workerVisibleJobs.find((item) => String(item.id) === String(selectedJobId));
   const currentWorkerJobDetail =
-    workerVisibleJobs.find((item) => String(item.id) === String(selectedJobId)) ||
+    selectedWorkerApplicationJob ||
+    (selectedWorkerVisibleJob && selectedWorkerJob
+      ? {
+          ...selectedWorkerVisibleJob,
+          applications: selectedWorkerJob.applications || [],
+        }
+      : null) ||
     selectedWorkerJob ||
     workerVisibleJobs[0] ||
     null;
@@ -542,7 +552,14 @@ function App() {
           return;
         }
         setPostedJobs((prev) =>
-          prev.map((job) => (String(job.id) === String(normalizedJob.id) ? normalizedJob : job)),
+          prev.map((job) =>
+            String(job.id) === String(normalizedJob.id)
+              ? {
+                  ...normalizedJob,
+                  applications: normalizedJob.applications?.length ? normalizedJob.applications : job.applications || [],
+                }
+              : job,
+          ),
         );
       } catch (error) {
         return;

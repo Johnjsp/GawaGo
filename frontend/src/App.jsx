@@ -177,6 +177,7 @@ function App() {
   const [householdJobForm, setHouseholdJobForm] = useState({
     jobTitle: "",
     serviceType: "",
+    customServiceType: "",
     scheduleType: "One - Time",
     preferredDate: "",
     preferredTime: "",

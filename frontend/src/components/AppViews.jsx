@@ -403,6 +403,25 @@ export default function AppViews({
     setWorkerBarangayFilter("");
     openWorkerFindJobs();
   };
+  const renderWorkerJobImages = (job) => {
+    const images = Array.isArray(job.images) ? job.images : [];
+    if (images.length === 0) {
+      return <span className="text-muted">None</span>;
+    }
+    return (
+      <div className="worker-job-image-strip">
+        {images.slice(0, 4).map((image, index) => (
+          <img key={image.id || image.image || index} src={image.image} alt={`Reference ${index + 1}`} />
+        ))}
+        {images.length > 4 && <span className="worker-job-image-count">+{images.length - 4}</span>}
+      </div>
+    );
+  };
+  const formatWorkerJobPesoRate = (job) => {
+    const amount = Number(job?.offeredRate || 0);
+    const safeAmount = Number.isFinite(amount) ? amount : 0;
+    return `₱${safeAmount.toFixed(2)}${job?.rateType ? ` / ${job.rateType}` : ""}`;
+  };
   const filteredHouseholdNotifications = useMemo(() => {
     if (!householdNotificationDateFilter) {
       return householdNotificationsWithReadState;
@@ -1436,9 +1455,32 @@ export default function AppViews({
                               {job.matchesSkill ? "Matches Your Skills" : "Suggested"}
                             </span>
                           </div>
-                          <p className="mb-1">{formatLocation(job.barangay, job.streetAddress)}</p>
-                          <p className="mb-1">{formatDateTime(job.preferredDate, job.preferredTime)}</p>
-                          <p className="mb-1 text-primary">{formatRate(job.offeredRate, job.rateType)}</p>
+                          <dl className="worker-job-card-details">
+                            <div>
+                              <dt>Service Type</dt>
+                              <dd>{job.serviceType || "Not set"}</dd>
+                            </div>
+                            <div>
+                              <dt>Schedule Type</dt>
+                              <dd>{formatScheduleLabel(job.scheduleType) || "Not set"}</dd>
+                            </div>
+                            <div>
+                              <dt>Preferred Date & Time</dt>
+                              <dd>{formatDateTime(job.preferredDate, job.preferredTime)}</dd>
+                            </div>
+                            <div>
+                              <dt>Offered Rate</dt>
+                              <dd className="text-primary">{formatWorkerJobPesoRate(job)}</dd>
+                            </div>
+                            <div>
+                              <dt>Location</dt>
+                              <dd>{formatLocation(job.barangay, job.streetAddress)}</dd>
+                            </div>
+                            <div>
+                              <dt>Reference Images</dt>
+                              <dd>{renderWorkerJobImages(job)}</dd>
+                            </div>
+                          </dl>
                           <p className="mb-3">{job.householdName || "Household"}</p>
                           <div className="worker-job-distance-badge mb-3">{getWorkerJobDistanceLabel(job)}</div>
                           <div className="d-flex gap-2">
@@ -3005,6 +3047,27 @@ export default function AppViews({
                             </option>
                           ))}
                         </select>
+                        {householdJobForm.serviceType === "Other" && (
+                          <div className="mt-2">
+                            <label className="form-label fw-semibold" htmlFor="customServiceType">
+                              Specify Service Type
+                            </label>
+                            <input
+                              id="customServiceType"
+                              type="text"
+                              name="customServiceType"
+                              className="form-control"
+                              placeholder="e.g. Pet Grooming, Massage, etc."
+                              maxLength={100}
+                              required
+                              value={householdJobForm.customServiceType || ""}
+                              onChange={handleHouseholdJobChange}
+                            />
+                            <div className="form-text text-end">
+                              {(householdJobForm.customServiceType || "").length}/100
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="col-md-6">
                         <label className="form-label fw-semibold">Schedule Type</label>

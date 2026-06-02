@@ -3528,6 +3528,63 @@ body {
   box-shadow: 0 12px 28px rgba(31, 72, 221, 0.07);
 }
 
+.worker-job-card-details {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.9rem 0;
+}
+
+.worker-job-card-details div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.42fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.worker-job-card-details dt {
+  color: #4f5672;
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.worker-job-card-details dd {
+  color: #10224d;
+  font-weight: 700;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.worker-job-image-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 46px;
+}
+
+.worker-job-image-strip img {
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(173, 197, 255, 0.82);
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.worker-job-image-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(173, 197, 255, 0.82);
+  border-radius: 8px;
+  background: #eef4ff;
+  color: #0d6efd;
+  font-weight: 800;
+}
+
 .profile-card {
   background: linear-gradient(180deg, #ffffff 0%, #f5f8ff 100%);
   border: 1px solid rgba(173, 197, 255, 0.82);
@@ -6525,6 +6582,11 @@ body {
   }
 
   .worker-job-detail-list div {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+
+  .worker-job-card-details div {
     grid-template-columns: 1fr;
     gap: 0.2rem;
   }

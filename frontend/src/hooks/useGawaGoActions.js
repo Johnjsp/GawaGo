@@ -1377,8 +1377,11 @@ export function useGawaGoActions({
       window.alert("Please login as a household account first.");
       return;
     }
+    const serviceType = householdJobForm.serviceType === "Other"
+      ? (householdJobForm.customServiceType || "").trim()
+      : householdJobForm.serviceType;
     if (
-      !householdJobForm.serviceType ||
+      !serviceType ||
       !householdJobForm.preferredDate ||
       !householdJobForm.preferredTime ||
       getWorkersNeeded(householdJobForm) < 1
@@ -1417,9 +1420,9 @@ export function useGawaGoActions({
         });
       }
       const payload = {
-        title: householdJobForm.jobTitle.trim() || householdJobForm.serviceType,
-        job_type: householdJobForm.serviceType,
-        required_skill: householdJobForm.serviceType,
+        title: householdJobForm.jobTitle.trim() || serviceType,
+        job_type: serviceType,
+        required_skill: serviceType,
         schedule: scheduledLabel,
         schedule_type: householdJobForm.scheduleType,
         preferred_date: householdJobForm.preferredDate,
@@ -1474,6 +1477,7 @@ export function useGawaGoActions({
           setHouseholdJobForm({
             jobTitle: "",
             serviceType: "",
+            customServiceType: "",
             scheduleType: "One - Time",
             preferredDate: "",
             preferredTime: "",

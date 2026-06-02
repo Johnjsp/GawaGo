@@ -131,6 +131,21 @@ export function useGawaGoFormHandlers({
 
   function handleHouseholdJobChange(event) {
     const { name, value } = event.target;
+    if (name === "serviceType") {
+      setHouseholdJobForm((prev) => ({
+        ...prev,
+        serviceType: value,
+        customServiceType: value === "Other" ? prev.customServiceType : "",
+      }));
+      return;
+    }
+    if (name === "customServiceType") {
+      setHouseholdJobForm((prev) => ({
+        ...prev,
+        customServiceType: value.slice(0, 100),
+      }));
+      return;
+    }
     if (name === "barangay") {
       setHouseholdJobForm((prev) => ({
         ...prev,

@@ -139,13 +139,19 @@ async function fetchDrivingRoute(userPoint, targetPoint) {
   }
 }
 
-function createMapIcon(L, label, markerType) {
-  const safeLabel = String(label || "").replace(/[<>&"]/g, "");
+function createPinIcon(L, label, color, markerType) {
   return L.divIcon({
-    className: `location-distance-marker location-distance-marker-${markerType}`,
-    html: safeLabel ? `<span>${safeLabel}</span>` : "<span></span>",
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
+    className: `location-distance-pin location-distance-pin-${markerType}`,
+    html: `
+      <svg width="36" height="44" viewBox="0 0 36 44" role="img" aria-label="${label} location marker" xmlns="http://www.w3.org/2000/svg">
+        <path d="M18 2C10.268 2 4 8.268 4 16c0 10 14 26 14 26S32 26 32 16C32 8.268 25.732 2 18 2z" fill="${color}"/>
+        <circle cx="18" cy="16" r="8.5" fill="#fff"/>
+        <text x="18" y="19.5" text-anchor="middle" font-size="11" font-weight="800" fill="${color}" font-family="Arial, Helvetica, sans-serif">${label}</text>
+      </svg>
+    `,
+    iconSize: [36, 44],
+    iconAnchor: [18, 44],
+    popupAnchor: [0, -44],
   });
 }
 
@@ -275,10 +281,12 @@ export default function LocationDistanceMap({
         const userPoint = [resolvedPoints.user.latitude, resolvedPoints.user.longitude];
         const targetPoint = [resolvedPoints.target.latitude, resolvedPoints.target.longitude];
         const routePoints = routeInfo?.points?.length > 1 ? routeInfo.points : [userPoint, targetPoint];
-        L.marker(userPoint, { icon: createMapIcon(L, "", "household") })
+        const householdIcon = createPinIcon(L, "H", "#1565C0", "household");
+        const workerIcon = createPinIcon(L, "W", "#E85D04", "worker");
+        L.marker(userPoint, { icon: householdIcon })
           .addTo(map)
           .bindPopup(userLocation || "User location");
-        L.marker(targetPoint, { icon: createMapIcon(L, "", "worker") })
+        L.marker(targetPoint, { icon: workerIcon })
           .addTo(map)
           .bindPopup(targetLocation || "Target location");
         L.polyline(routePoints, {

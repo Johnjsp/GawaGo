@@ -290,7 +290,9 @@ export function normalizeBackendJob(job) {
   const currentWorkerApplication = normalizeBackendApplication(
     job.current_worker_application || job.currentWorkerApplication || null,
   );
-  const hiredApplications = applications.filter((application) => application.status === "Hired");
+  const hiredApplications = applications.filter((application) => ["Hired", "Completed"].includes(application.status));
+  const hiredCount = Number(job.hired_count ?? job.hiredCount ?? hiredApplications.length ?? 0);
+  const workersNeeded = Number(job.workers_needed ?? job.workersNeeded ?? job.worker_slots ?? 1);
   const parsedLocation = parseLocationLabel(job.location_label || job.locationLabel || job.barangay || "");
   const images = (job.images || []).map((image) => ({
     id: image.id,
@@ -316,7 +318,8 @@ export function normalizeBackendJob(job) {
     routePoints: job.route_points || job.routePoints || [],
     offeredRate: String(job.service_rate ?? "0.00"),
     rateType: "Per Day",
-    workersNeeded: Number(job.worker_slots || 1),
+    workersNeeded,
+    hiredCount,
     status: normalizeJobStatus(job.status),
     matchedWorkerIds: hiredApplications.map((application) => application.workerId).filter(Boolean),
     selectedWorkerId: hiredApplications[0]?.workerId || null,
@@ -327,6 +330,10 @@ export function normalizeBackendJob(job) {
     appliedAt: currentWorkerApplication?.appliedAt || "",
     updatedAt: currentWorkerApplication?.updatedAt || "",
     currentWorkerApplication,
+    canApply: Boolean(job.can_apply ?? job.canApply ?? false),
+    canAcceptHireRequest: Boolean(job.can_accept_hire_request ?? job.canAcceptHireRequest ?? false),
+    canRequestCompletion: Boolean(job.can_request_completion ?? job.canRequestCompletion ?? false),
+    canReview: Boolean(job.can_review ?? job.canReview ?? false),
     applications,
     images,
     createdAt: job.created_at || job.createdAt || new Date().toISOString(),

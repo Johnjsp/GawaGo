@@ -54,7 +54,6 @@ export default function WorkerJobDetailView({
   const [routeDistanceKm, setRouteDistanceKm] = useState(null);
   const [completionNote, setCompletionNote] = useState("I have completed the service today.");
   const distanceLabel = formatDistance(routeDistanceKm ?? jobDistanceKm);
-  const canApply = currentWorker?.verification === "Verified";
   const currentWorkerApplicationStatus = job?.applicationStatus || currentWorkerApplication?.status || "";
   const currentWorkerApplicationId = job?.applicationId || currentWorkerApplication?.id || null;
   const hasHireRequest = currentWorkerApplicationStatus === "Hire Request";
@@ -63,7 +62,10 @@ export default function WorkerJobDetailView({
   const isAssignedWorker = ["Hired", "Completed"].includes(currentWorkerApplicationStatus);
   const isCompletionRequested = job?.status === "Waiting for Household Confirmation";
   const isCompletedJob = job?.status === "Completed";
-  const canRequestCompletion = isHiredForJob && !isCompletionRequested && !isCompletedJob;
+  const canApply = job?.canApply ?? (currentWorker?.verification === "Verified" && !alreadyApplied);
+  const canAcceptHireRequest = job?.canAcceptHireRequest ?? hasHireRequest;
+  const canRequestCompletion =
+    job?.canRequestCompletion ?? (isHiredForJob && !isCompletionRequested && !isCompletedJob);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   useEffect(() => {
     setRouteDistanceKm(null);
@@ -274,11 +276,11 @@ export default function WorkerJobDetailView({
                           <button
                             className="btn btn-outline-secondary btn-sm"
                             type="button"
-                            onClick={hasHireRequest ? openWorkerNotifications : openWorkerFindJobs}
+                            onClick={canAcceptHireRequest ? openWorkerNotifications : openWorkerFindJobs}
                           >
-                            {hasHireRequest ? "Back to Notifications" : "Back to Find Jobs"}
+                            {canAcceptHireRequest ? "Back to Notifications" : "Back to Find Jobs"}
                           </button>
-                          {hasHireRequest ? (
+                          {canAcceptHireRequest ? (
                             <>
                               <button
                                 className="btn btn-success btn-sm"
@@ -312,7 +314,7 @@ export default function WorkerJobDetailView({
                             </button>
                           )}
                         </div>
-                        {hasHireRequest && (
+                        {canAcceptHireRequest && (
                           <div className="alert alert-info mt-3 mb-0 py-2">
                             This household sent you a hire request. Review the job details before accepting or rejecting.
                           </div>

@@ -72,6 +72,12 @@ class JobPermissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["applications"], [])
         self.assertIsNone(response.data["current_worker_application"])
+        self.assertEqual(response.data["hired_count"], 0)
+        self.assertEqual(response.data["workers_needed"], 1)
+        self.assertFalse(response.data["can_apply"])
+        self.assertFalse(response.data["can_accept_hire_request"])
+        self.assertFalse(response.data["can_request_completion"])
+        self.assertFalse(response.data["can_review"])
 
     def test_anonymous_job_list_hides_applications(self):
         response = self.client.get(reverse("job-list"))
@@ -126,6 +132,94 @@ class JobPermissionTests(TestCase):
         self.assertEqual(response.data["applications"][0]["worker_username"], self.worker.username)
         self.assertEqual(response.data["current_worker_application"]["id"], self.application.id)
         self.assertEqual(response.data["current_worker_application"]["status"], JobApplication.STATUS_PENDING)
+        self.assertFalse(response.data["can_apply"])
+        self.assertFalse(response.data["can_accept_hire_request"])
+        self.assertFalse(response.data["can_request_completion"])
+
+    def test_verified_worker_without_application_can_apply_to_open_job(self):
+        available_worker = User.objects.create_user(username="worker-can-apply", password="password")
+        UserProfile.objects.create(
+            user=available_worker,
+            role=UserProfile.ROLE_WORKER,
+            verification_status="verified",
+        )
+        self.client.force_authenticate(user=available_worker)
+
+        response = self.client.get(reverse("job-detail", args=[self.job.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["can_apply"])
+        self.assertIsNone(response.data["current_worker_application"])
+
+    def test_hire_request_flag_is_backend_owned(self):
+        self.application.status = JobApplication.STATUS_HIRE_REQUESTED
+        self.application.save(update_fields=["status"])
+        self.client.force_authenticate(user=self.worker)
+
+        response = self.client.get(reverse("job-detail", args=[self.job.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["can_apply"])
+        self.assertTrue(response.data["can_accept_hire_request"])
+        self.assertFalse(response.data["can_request_completion"])
+
+    def test_hired_worker_can_request_completion_on_assigned_job(self):
+        self.job.status = JobPosting.STATUS_ASSIGNED
+        self.job.save(update_fields=["status"])
+        self.application.status = JobApplication.STATUS_HIRED
+        self.application.save(update_fields=["status"])
+        self.client.force_authenticate(user=self.worker)
+
+        response = self.client.get(reverse("job-detail", args=[self.job.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["hired_count"], 1)
+        self.assertFalse(response.data["can_apply"])
+        self.assertFalse(response.data["can_accept_hire_request"])
+        self.assertTrue(response.data["can_request_completion"])
+
+    def test_completed_job_review_flags_clear_after_review(self):
+        self.job.status = JobPosting.STATUS_COMPLETED
+        self.job.save(update_fields=["status"])
+        self.application.status = JobApplication.STATUS_COMPLETED
+        self.application.save(update_fields=["status"])
+
+        self.client.force_authenticate(user=self.household)
+        household_response = self.client.get(reverse("job-detail", args=[self.job.id]))
+        self.client.force_authenticate(user=self.worker)
+        worker_response = self.client.get(reverse("job-detail", args=[self.job.id]))
+
+        self.assertTrue(household_response.data["can_review"])
+        self.assertTrue(worker_response.data["can_review"])
+
+        Review.objects.create(
+            author=self.household,
+            target=self.worker,
+            author_role=Review.ROLE_HOUSEHOLD,
+            target_role=Review.ROLE_WORKER,
+            job=self.job,
+            job_title=self.job.title,
+            rating="5.0",
+            feedback="Great work",
+        )
+        Review.objects.create(
+            author=self.worker,
+            target=self.household,
+            author_role=Review.ROLE_WORKER,
+            target_role=Review.ROLE_HOUSEHOLD,
+            job=self.job,
+            job_title=self.job.title,
+            rating="5.0",
+            feedback="Great household",
+        )
+
+        self.client.force_authenticate(user=self.household)
+        household_reviewed_response = self.client.get(reverse("job-detail", args=[self.job.id]))
+        self.client.force_authenticate(user=self.worker)
+        worker_reviewed_response = self.client.get(reverse("job-detail", args=[self.job.id]))
+
+        self.assertFalse(household_reviewed_response.data["can_review"])
+        self.assertFalse(worker_reviewed_response.data["can_review"])
 
     def test_unrelated_household_cannot_see_applications(self):
         self.client.force_authenticate(user=self.other_household)

@@ -7,6 +7,10 @@ export function getWorkersNeeded(job) {
 }
 
 export function getHiredWorkerCount(job) {
+  if (job?.hiredCount !== undefined && job?.hiredCount !== null) {
+    const hiredCount = Number(job.hiredCount);
+    return Number.isFinite(hiredCount) && hiredCount >= 0 ? hiredCount : 0;
+  }
   return (job?.applications || []).filter((application) => application.status === "Hired").length;
 }
 

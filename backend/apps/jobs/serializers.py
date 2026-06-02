@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from apps.jobs.models import JobApplication, JobImage, JobPosting
 from apps.matching.services import get_road_route_for_match
+from apps.reviews.models import Review
 
 
 class JobApplicationSerializer(serializers.ModelSerializer):
@@ -51,6 +52,12 @@ class JobPostingSerializer(serializers.ModelSerializer):
     household_name = serializers.SerializerMethodField()
     applications = serializers.SerializerMethodField()
     current_worker_application = serializers.SerializerMethodField()
+    hired_count = serializers.SerializerMethodField()
+    workers_needed = serializers.IntegerField(source="worker_slots", read_only=True)
+    can_apply = serializers.SerializerMethodField()
+    can_accept_hire_request = serializers.SerializerMethodField()
+    can_request_completion = serializers.SerializerMethodField()
+    can_review = serializers.SerializerMethodField()
     images = JobImageSerializer(many=True, read_only=True)
     route_distance_km = serializers.SerializerMethodField()
     route_points = serializers.SerializerMethodField()
@@ -75,6 +82,12 @@ class JobPostingSerializer(serializers.ModelSerializer):
             "service_rate",
             "worker_slots",
             "status",
+            "hired_count",
+            "workers_needed",
+            "can_apply",
+            "can_accept_hire_request",
+            "can_request_completion",
+            "can_review",
             "created_at",
             "completed_at",
             "applications",
@@ -115,15 +128,94 @@ class JobPostingSerializer(serializers.ModelSerializer):
         return JobApplicationSerializer(visible_applications, many=True, context=self.context).data
 
     def get_current_worker_application(self, obj):
+        application = self.get_current_worker_application_obj(obj)
+        if not application:
+            return None
+        return JobApplicationSerializer(application, context=self.context).data
+
+    def get_current_worker_application_obj(self, obj):
         request = self.context.get("request")
         user = getattr(request, "user", None)
         profile = getattr(user, "profile", None)
         if not user or not user.is_authenticated or not profile or profile.role != "worker":
             return None
-        application = obj.applications.filter(worker=user).first()
-        if not application:
-            return None
-        return JobApplicationSerializer(application, context=self.context).data
+        cache_key = f"current_worker_application:{obj.pk}:{user.pk}"
+        if not hasattr(self, "_current_worker_application_cache"):
+            self._current_worker_application_cache = {}
+        if cache_key not in self._current_worker_application_cache:
+            self._current_worker_application_cache[cache_key] = obj.applications.filter(worker=user).first()
+        return self._current_worker_application_cache[cache_key]
+
+    def get_hired_count(self, obj):
+        return obj.applications.filter(status__in=[JobApplication.STATUS_HIRED, JobApplication.STATUS_COMPLETED]).count()
+
+    def is_authenticated_worker(self):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        profile = getattr(user, "profile", None)
+        if not user or not user.is_authenticated or not profile or profile.role != "worker":
+            return False, None, None
+        return True, user, profile
+
+    def get_can_apply(self, obj):
+        is_worker, user, profile = self.is_authenticated_worker()
+        if not is_worker:
+            return False
+        if profile.verification_status != "verified":
+            return False
+        if obj.status != JobPosting.STATUS_OPEN:
+            return False
+        if self.get_hired_count(obj) >= obj.worker_slots:
+            return False
+        return not obj.applications.filter(worker=user).exists()
+
+    def get_can_accept_hire_request(self, obj):
+        application = self.get_current_worker_application_obj(obj)
+        if not application or application.status != JobApplication.STATUS_HIRE_REQUESTED:
+            return False
+        if obj.status in [JobPosting.STATUS_COMPLETED, JobPosting.STATUS_CANCELLED]:
+            return False
+        return self.get_hired_count(obj) < obj.worker_slots
+
+    def get_can_request_completion(self, obj):
+        application = self.get_current_worker_application_obj(obj)
+        if not application or application.status != JobApplication.STATUS_HIRED:
+            return False
+        return obj.status == JobPosting.STATUS_ASSIGNED
+
+    def get_can_review(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        profile = getattr(user, "profile", None)
+        if not user or not user.is_authenticated or obj.status != JobPosting.STATUS_COMPLETED:
+            return False
+        if user.is_staff:
+            return False
+        if obj.household_id == user.id:
+            completed_applications = obj.applications.filter(
+                status=JobApplication.STATUS_COMPLETED,
+            )
+            completed_worker_ids = completed_applications.values_list("worker_id", flat=True)
+            reviewed_worker_ids = Review.objects.filter(
+                job=obj,
+                author=user,
+                target_id__in=completed_worker_ids,
+                author_role=Review.ROLE_HOUSEHOLD,
+                target_role=Review.ROLE_WORKER,
+            ).values_list("target_id", flat=True)
+            return completed_applications.exclude(worker_id__in=reviewed_worker_ids).exists()
+        if not profile or profile.role != "worker":
+            return False
+        application = self.get_current_worker_application_obj(obj)
+        if not application or application.status != JobApplication.STATUS_COMPLETED:
+            return False
+        return not Review.objects.filter(
+            job=obj,
+            author=user,
+            target=obj.household,
+            author_role=Review.ROLE_WORKER,
+            target_role=Review.ROLE_HOUSEHOLD,
+        ).exists()
 
     def get_worker_route(self, obj):
         request = self.context.get("request")

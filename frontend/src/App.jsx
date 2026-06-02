@@ -522,6 +522,37 @@ function App() {
   const currentWorkerJobHousehold = currentWorkerJobDetail
     ? registeredHouseholds.find((item) => item.username === currentWorkerJobDetail.householdUsername)
     : null;
+  useEffect(() => {
+    if (view !== "worker-job-detail" || currentUser?.role !== "worker" || !selectedJobId || !getAuthToken()) {
+      return;
+    }
+    let cancelled = false;
+    async function refreshSelectedWorkerJob() {
+      try {
+        const response = await apiRequest(`jobs/${selectedJobId}/`, {
+          auth: true,
+          suppressUnauthorized: true,
+        });
+        const data = await readResponseData(response);
+        if (!response.ok || cancelled) {
+          return;
+        }
+        const normalizedJob = normalizeBackendJob(data);
+        if (!normalizedJob) {
+          return;
+        }
+        setPostedJobs((prev) =>
+          prev.map((job) => (String(job.id) === String(normalizedJob.id) ? normalizedJob : job)),
+        );
+      } catch (error) {
+        return;
+      }
+    }
+    refreshSelectedWorkerJob();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.role, selectedJobId, view]);
   const adminVisibleWorkers = registeredWorkers.filter((worker) => Boolean(worker.verificationSubmission));
   const pendingVerificationRequests = verificationRequests.filter(
     (item) => item.status === "Pending" || item.status === "Under Review",

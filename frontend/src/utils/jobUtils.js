@@ -11,7 +11,7 @@ export function getHiredWorkerCount(job) {
     const hiredCount = Number(job.hiredCount);
     return Number.isFinite(hiredCount) && hiredCount >= 0 ? hiredCount : 0;
   }
-  return (job?.applications || []).filter((application) => application.status === "Hired").length;
+  return (job?.applications || []).filter((application) => ["Hired", "Completed"].includes(application.status)).length;
 }
 
 export function getPendingApplicationCount(job) {
@@ -23,6 +23,9 @@ export function getHiringProgressLabel(job) {
 }
 
 export function isJobOpenForApplications(job) {
+  if (job?.canApply !== undefined && job?.canApply !== null) {
+    return Boolean(job.canApply);
+  }
   return job?.status === "Open" && getHiredWorkerCount(job) < getWorkersNeeded(job);
 }
 
@@ -54,7 +57,9 @@ export function getJobStatusBadgeClass(status) {
 }
 
 export function buildMatchedWorkersForJob(job, workers) {
-  const applicantIds = (job.applications || []).filter((application) => application.status !== "Rejected").map((application) => application.workerId);
+  const applicantIds = (job.applications || [])
+    .filter((application) => ["Hired", "Completed"].includes(application.status))
+    .map((application) => application.workerId);
   const matchedWorkerIds = [...new Set([...(job.matchedWorkerIds || []), ...applicantIds])];
   return matchedWorkerIds.map((workerId) => workers.find((worker) => String(worker.id) === String(workerId))).filter(Boolean);
 }

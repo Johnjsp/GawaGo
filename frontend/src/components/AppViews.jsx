@@ -701,9 +701,7 @@ export default function AppViews({
       return null;
     }
     const acceptedApplication =
-      (job.applications || []).find((application) => ["Completed", "Hired"].includes(application.status)) ||
-      (job.applications || []).find((application) => application.status !== "Rejected") ||
-      null;
+      (job.applications || []).find((application) => ["Completed", "Hired"].includes(application.status)) || null;
     const matchedWorker =
       acceptedApplication &&
       registeredWorkers.find(
@@ -4068,10 +4066,7 @@ export default function AppViews({
                     <div className="col-md-4">
                     <div className="household-detail-info-card h-100">
                       <p>Hiring Status</p>
-                      <strong>
-                        {(selectedJob.applications || []).filter((application) => application.status === "Hired").length}/
-                        {selectedJob.workersNeeded || selectedJob.workerSlots || 1} Hired
-                      </strong>
+                      <strong>{getHiringProgressLabel(selectedJob)} Hired</strong>
                     </div>
                     </div>
                   </div>

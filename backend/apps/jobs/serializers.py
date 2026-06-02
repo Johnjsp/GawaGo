@@ -50,6 +50,7 @@ class JobPostingSerializer(serializers.ModelSerializer):
     household_username = serializers.CharField(source="household.username", read_only=True)
     household_name = serializers.SerializerMethodField()
     applications = serializers.SerializerMethodField()
+    current_worker_application = serializers.SerializerMethodField()
     images = JobImageSerializer(many=True, read_only=True)
     route_distance_km = serializers.SerializerMethodField()
     route_points = serializers.SerializerMethodField()
@@ -77,6 +78,7 @@ class JobPostingSerializer(serializers.ModelSerializer):
             "created_at",
             "completed_at",
             "applications",
+            "current_worker_application",
             "images",
             "route_distance_km",
             "route_points",
@@ -88,6 +90,7 @@ class JobPostingSerializer(serializers.ModelSerializer):
             "created_at",
             "completed_at",
             "applications",
+            "current_worker_application",
             "images",
             "route_distance_km",
             "route_points",
@@ -110,6 +113,17 @@ class JobPostingSerializer(serializers.ModelSerializer):
                 return []
             visible_applications = applications.filter(worker=user)
         return JobApplicationSerializer(visible_applications, many=True, context=self.context).data
+
+    def get_current_worker_application(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        profile = getattr(user, "profile", None)
+        if not user or not user.is_authenticated or not profile or profile.role != "worker":
+            return None
+        application = obj.applications.filter(worker=user).first()
+        if not application:
+            return None
+        return JobApplicationSerializer(application, context=self.context).data
 
     def get_worker_route(self, obj):
         request = self.context.get("request")

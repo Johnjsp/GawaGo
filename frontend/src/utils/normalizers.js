@@ -287,6 +287,9 @@ export function normalizeBackendJob(job) {
     return null;
   }
   const applications = (job.applications || []).map(normalizeBackendApplication).filter(Boolean);
+  const currentWorkerApplication = normalizeBackendApplication(
+    job.current_worker_application || job.currentWorkerApplication || null,
+  );
   const hiredApplications = applications.filter((application) => application.status === "Hired");
   const parsedLocation = parseLocationLabel(job.location_label || job.locationLabel || job.barangay || "");
   const images = (job.images || []).map((image) => ({
@@ -319,6 +322,11 @@ export function normalizeBackendJob(job) {
     selectedWorkerId: hiredApplications[0]?.workerId || null,
     selectedWorkerName: hiredApplications[0]?.workerName || "",
     hiredAt: hiredApplications[0]?.appliedAt || "",
+    applicationStatus: currentWorkerApplication?.status || "",
+    applicationId: currentWorkerApplication?.id || null,
+    appliedAt: currentWorkerApplication?.appliedAt || "",
+    updatedAt: currentWorkerApplication?.updatedAt || "",
+    currentWorkerApplication,
     applications,
     images,
     createdAt: job.created_at || job.createdAt || new Date().toISOString(),

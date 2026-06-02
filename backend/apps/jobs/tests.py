@@ -71,6 +71,7 @@ class JobPermissionTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["applications"], [])
+        self.assertIsNone(response.data["current_worker_application"])
 
     def test_anonymous_job_list_hides_applications(self):
         response = self.client.get(reverse("job-list"))
@@ -87,6 +88,7 @@ class JobPermissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["applications"]), 1)
         self.assertEqual(response.data["applications"][0]["worker_username"], self.worker.username)
+        self.assertIsNone(response.data["current_worker_application"])
 
     def test_worker_job_payload_uses_cached_road_route_distance(self):
         self.worker.profile.latitude = "13.9800000"
@@ -122,6 +124,8 @@ class JobPermissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["applications"]), 1)
         self.assertEqual(response.data["applications"][0]["worker_username"], self.worker.username)
+        self.assertEqual(response.data["current_worker_application"]["id"], self.application.id)
+        self.assertEqual(response.data["current_worker_application"]["status"], JobApplication.STATUS_PENDING)
 
     def test_unrelated_household_cannot_see_applications(self):
         self.client.force_authenticate(user=self.other_household)

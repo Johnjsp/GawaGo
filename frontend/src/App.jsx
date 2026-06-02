@@ -553,12 +553,7 @@ function App() {
         }
         setPostedJobs((prev) =>
           prev.map((job) =>
-            String(job.id) === String(normalizedJob.id)
-              ? {
-                  ...normalizedJob,
-                  applications: normalizedJob.applications?.length ? normalizedJob.applications : job.applications || [],
-                }
-              : job,
+            String(job.id) === String(normalizedJob.id) ? normalizedJob : job,
           ),
         );
       } catch (error) {

@@ -38,13 +38,14 @@ export default function WorkerJobDetailView({
         )
       : false;
   const currentWorkerApplication =
-    job && currentWorker
+    job?.currentWorkerApplication ||
+    (job && currentWorker
       ? (job.applications || []).find(
           (application) =>
             String(application.workerId) === String(currentWorker.id) ||
             application.workerUsername === currentWorker.username,
         )
-      : null;
+      : null);
   const jobLatitude = job?.latitude ?? household?.latitude ?? null;
   const jobLongitude = job?.longitude ?? household?.longitude ?? null;
   const workerLatitude = currentWorker?.latitude ?? null;

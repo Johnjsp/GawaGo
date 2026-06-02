@@ -178,6 +178,7 @@ export default function AppViews({
   const [householdDashboardReviewOpen, setHouseholdDashboardReviewOpen] = useState(false);
   const [householdProfileEditing, setHouseholdProfileEditing] = useState(false);
   const [selectedWorkerRouteDistanceKm, setSelectedWorkerRouteDistanceKm] = useState(null);
+  const [workerHireRequestPreview, setWorkerHireRequestPreview] = useState(null);
   const navIcon = (name) => <SidebarIcon name={name} />;
   const getDistancePoint = (record) => {
     const latitude = record?.latitude ?? null;
@@ -206,6 +207,11 @@ export default function AppViews({
   };
   const currentWorkerIsVerified = String(currentWorker?.verification || "").toLowerCase() === "verified";
   const workerPendingHireRequests = workerApplications.filter((job) => job.applicationStatus === "Hire Request");
+  const workerHireRequestPreviewJob = workerHireRequestPreview
+    ? workerPendingHireRequests.find(
+        (job) => String(job.applicationId) === String(workerHireRequestPreview.applicationId),
+      ) || workerHireRequestPreview
+    : null;
   const hiringNotificationHasRequestCard = (notification) => {
     if (notification.notificationType !== "hiring") {
       return false;
@@ -2632,8 +2638,17 @@ export default function AppViews({
                 <div className="worker-notifications-list">
                   {workerPendingHireRequests.map((job) => (
                     <article
-                      className="notification-card worker-hire-request-card unread"
+                      className="notification-card worker-hire-request-card worker-hire-request-clickable unread"
                       key={`hire-request-${job.applicationId}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setWorkerHireRequestPreview(job)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setWorkerHireRequestPreview(job);
+                        }
+                      }}
                     >
                       <div className="worker-hire-request-head">
                         <div>
@@ -2678,29 +2693,6 @@ export default function AppViews({
                           <p>{job.description}</p>
                         </div>
                       )}
-                      <div className="worker-hire-request-actions">
-                        <button
-                          className="btn btn-outline-secondary btn-sm"
-                          type="button"
-                          onClick={() => openWorkerJobDetail(job.id)}
-                        >
-                          View Full Details
-                        </button>
-                        <button
-                          className="btn btn-success btn-sm"
-                          type="button"
-                          onClick={() => handleWorkerHireDecision(job.applicationId, "accept")}
-                        >
-                          Accept
-                        </button>
-                        <button
-                          className="btn btn-outline-danger btn-sm"
-                          type="button"
-                          onClick={() => handleWorkerHireDecision(job.applicationId, "reject")}
-                        >
-                          Reject
-                        </button>
-                      </div>
                     </article>
                   ))}
                   {workerGeneralNotifications.map((item) => (
@@ -2711,17 +2703,6 @@ export default function AppViews({
                       <p className="small text-muted mb-1">{item.date}</p>
                       <h2 className="h6 mb-1">{item.title}</h2>
                       <p className="mb-0">{item.message}</p>
-                      {item.notificationType === "hiring" && (
-                        <div className="worker-hire-request-actions mt-3">
-                          <button
-                            className="btn btn-outline-secondary btn-sm"
-                            type="button"
-                            onClick={openWorkerApplications}
-                          >
-                            View Request Details
-                          </button>
-                        </div>
-                      )}
                     </article>
                   ))}
                   {workerPendingHireRequests.length === 0 && workerGeneralNotifications.length === 0 && (
@@ -2731,6 +2712,130 @@ export default function AppViews({
                     </article>
                   )}
                 </div>
+                {workerHireRequestPreviewJob && (
+                  <div
+                    className="worker-hire-request-modal-backdrop"
+                    role="presentation"
+                    onClick={() => setWorkerHireRequestPreview(null)}
+                  >
+                    <section
+                      className="worker-hire-request-modal"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="worker-hire-request-modal-title"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className="worker-hire-request-modal-head">
+                        <div>
+                          <p className="small text-muted mb-1">
+                            {workerHireRequestPreviewJob.updatedAt || workerHireRequestPreviewJob.appliedAt || "Recently"}
+                          </p>
+                          <h2 id="worker-hire-request-modal-title">Hire request details</h2>
+                          <p>
+                            {workerHireRequestPreviewJob.householdName || "A household"} wants to hire you for{" "}
+                            <strong>{workerHireRequestPreviewJob.jobTitle || workerHireRequestPreviewJob.serviceType}</strong>.
+                          </p>
+                        </div>
+                        <button
+                          className="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          onClick={() => setWorkerHireRequestPreview(null)}
+                        >
+                          Close
+                        </button>
+                      </div>
+                      <div className="worker-hire-request-details">
+                        <div>
+                          <span>Job title</span>
+                          <strong>{workerHireRequestPreviewJob.jobTitle || "Job request"}</strong>
+                        </div>
+                        <div>
+                          <span>Job type</span>
+                          <strong>{workerHireRequestPreviewJob.serviceType || "Service"}</strong>
+                        </div>
+                        <div>
+                          <span>Schedule</span>
+                          <strong>
+                            {formatDateTime(
+                              workerHireRequestPreviewJob.preferredDate,
+                              workerHireRequestPreviewJob.preferredTime,
+                            ) || workerHireRequestPreviewJob.scheduleType || "Not set"}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>Location</span>
+                          <strong>
+                            {formatLocation(workerHireRequestPreviewJob.barangay, workerHireRequestPreviewJob.streetAddress) ||
+                              "Not set"}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>Distance</span>
+                          <strong>{getWorkerJobDistanceLabel(workerHireRequestPreviewJob) || "Not available"}</strong>
+                        </div>
+                        <div>
+                          <span>Rate</span>
+                          <strong>{formatRate(workerHireRequestPreviewJob.offeredRate, workerHireRequestPreviewJob.rateType)}</strong>
+                        </div>
+                        <div>
+                          <span>Household</span>
+                          <strong>
+                            {workerHireRequestPreviewJob.householdName ||
+                              workerHireRequestPreviewJob.householdUsername ||
+                              "Household"}
+                          </strong>
+                        </div>
+                      </div>
+                      {workerHireRequestPreviewJob.description && (
+                        <div className="worker-hire-request-description">
+                          <span>Description</span>
+                          <p>{workerHireRequestPreviewJob.description}</p>
+                        </div>
+                      )}
+                      <div className="worker-hire-request-description">
+                        <span>Reference images</span>
+                        <div className="worker-hire-request-images">
+                          {renderWorkerJobImages(workerHireRequestPreviewJob)}
+                        </div>
+                      </div>
+                      <div className="worker-hire-request-actions">
+                        <button
+                          className="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          onClick={() => {
+                            const jobId = workerHireRequestPreviewJob.id;
+                            setWorkerHireRequestPreview(null);
+                            openWorkerJobDetail(jobId);
+                          }}
+                        >
+                          View Details
+                        </button>
+                        <button
+                          className="btn btn-success btn-sm"
+                          type="button"
+                          onClick={() => {
+                            const applicationId = workerHireRequestPreviewJob.applicationId;
+                            setWorkerHireRequestPreview(null);
+                            handleWorkerHireDecision(applicationId, "accept");
+                          }}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          className="btn btn-outline-danger btn-sm"
+                          type="button"
+                          onClick={() => {
+                            const applicationId = workerHireRequestPreviewJob.applicationId;
+                            setWorkerHireRequestPreview(null);
+                            handleWorkerHireDecision(applicationId, "reject");
+                          }}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </section>
+                  </div>
+                )}
               </div>
             </div>
           </section>

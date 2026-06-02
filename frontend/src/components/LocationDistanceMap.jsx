@@ -19,22 +19,6 @@ function localFormatDistance(distanceKm) {
   return `${numericDistance.toFixed(1)} km away`;
 }
 
-function haversineDistanceKm(lat1, lon1, lat2, lon2) {
-  const values = [lat1, lon1, lat2, lon2].map(Number);
-  if (!values.every(Number.isFinite)) {
-    return null;
-  }
-  const [firstLatitude, firstLongitude, secondLatitude, secondLongitude] = values;
-  const earthRadiusKm = 6371;
-  const toRadians = (value) => (value * Math.PI) / 180;
-  const deltaLatitude = toRadians(secondLatitude - firstLatitude);
-  const deltaLongitude = toRadians(secondLongitude - firstLongitude);
-  const a =
-    Math.sin(deltaLatitude / 2) ** 2 +
-    Math.cos(toRadians(firstLatitude)) * Math.cos(toRadians(secondLatitude)) * Math.sin(deltaLongitude / 2) ** 2;
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 async function loadLeafletAssets() {
   if (typeof window === "undefined") {
     return null;
@@ -231,15 +215,7 @@ export default function LocationDistanceMap({
     if (distanceKm !== null && distanceKm !== undefined && distanceKm !== "") {
       return Number(distanceKm);
     }
-    if (!resolvedPoints.user || !resolvedPoints.target) {
-      return null;
-    }
-    return haversineDistanceKm(
-      resolvedPoints.user.latitude,
-      resolvedPoints.user.longitude,
-      resolvedPoints.target.latitude,
-      resolvedPoints.target.longitude,
-    );
+    return null;
   }, [distanceKm, resolvedPoints, routeInfo]);
   const distanceLabel = (formatDistanceFn || localFormatDistance)(resolvedDistanceKm);
 
@@ -334,7 +310,7 @@ export default function LocationDistanceMap({
               <strong>{distanceLabel}</strong>
               <small>
                 {mapStatus === "fallback"
-                  ? "Map tiles unavailable, showing approximate route."
+                  ? "Map tiles unavailable. Road distance may be unavailable."
                   : "Preparing map view..."}
               </small>
             </div>
@@ -344,8 +320,7 @@ export default function LocationDistanceMap({
       <div className="location-distance-summary">
         <span>{distanceLabel}</span>
         <small>
-          {routeInfo?.points?.length > 1 ? "Road route" : "Straight-line estimate"}:{" "}
-          {userLocation || "User location"} to {targetLocation || "target location"}
+          Road route: {userLocation || "User location"} to {targetLocation || "target location"}
         </small>
       </div>
     </div>

@@ -157,3 +157,9 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "no-reply@gawago.local")
 PASSWORD_RESET_TOKEN_TTL_MINUTES = int(os.environ.get("PASSWORD_RESET_TOKEN_TTL_MINUTES", "10"))
+OPENROUTESERVICE_API_KEY = os.environ.get("OPENROUTESERVICE_API_KEY", "")
+OPENROUTESERVICE_DIRECTIONS_URL = os.environ.get(
+    "OPENROUTESERVICE_DIRECTIONS_URL",
+    "https://api.openrouteservice.org/v2/directions/driving-car/geojson",
+)
+OPENROUTESERVICE_TIMEOUT_SECONDS = float(os.environ.get("OPENROUTESERVICE_TIMEOUT_SECONDS", "4"))

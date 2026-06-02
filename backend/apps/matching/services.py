@@ -1,4 +1,7 @@
-from math import asin, cos, radians, sin, sqrt
+import json
+from urllib import error, request
+
+from django.conf import settings
 
 from django.db import models
 
@@ -50,16 +53,45 @@ def skill_matches(required_skill, worker_skills):
     return required_key in worker_keys
 
 
-def haversine_km(lat1, lon1, lat2, lon2):
-    if None in (lat1, lon1, lat2, lon2):
+def fetch_road_route_distance_km(lat1, lon1, lat2, lon2):
+    if not settings.OPENROUTESERVICE_API_KEY or None in (lat1, lon1, lat2, lon2):
         return None
-    if (float(lat1) == 0.0 and float(lon1) == 0.0) or (float(lat2) == 0.0 and float(lon2) == 0.0):
+    coordinates = [float(lat1), float(lon1), float(lat2), float(lon2)]
+    if any(value == 0.0 for value in coordinates):
         return None
-    r = 6371.0
-    dlat = radians(float(lat2) - float(lat1))
-    dlon = radians(float(lon2) - float(lon1))
-    a = sin(dlat / 2) ** 2 + cos(radians(float(lat1))) * cos(radians(float(lat2))) * sin(dlon / 2) ** 2
-    return 2 * r * asin(sqrt(a))
+    payload = json.dumps(
+        {
+            "coordinates": [
+                [float(lon1), float(lat1)],
+                [float(lon2), float(lat2)],
+            ]
+        }
+    ).encode("utf-8")
+    route_request = request.Request(
+        settings.OPENROUTESERVICE_DIRECTIONS_URL,
+        data=payload,
+        method="POST",
+        headers={
+            "Authorization": settings.OPENROUTESERVICE_API_KEY,
+            "Content-Type": "application/json",
+            "Accept": "application/json, application/geo+json",
+        },
+    )
+    try:
+        with request.urlopen(route_request, timeout=settings.OPENROUTESERVICE_TIMEOUT_SECONDS) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError, error.URLError, error.HTTPError):
+        return None
+    feature = (data.get("features") or [None])[0] or {}
+    distance_meters = (
+        feature.get("properties", {})
+        .get("summary", {})
+        .get("distance")
+    )
+    try:
+        return float(distance_meters) / 1000
+    except (TypeError, ValueError):
+        return None
 
 
 def time_in_window(target_time, start_time, end_time):
@@ -138,7 +170,7 @@ def build_match_results(job, worker_profiles):
             continue
         skills = profile.skills or []
         matches_skill = skill_matches(job.required_skill, skills)
-        distance_km = haversine_km(job.latitude, job.longitude, profile.latitude, profile.longitude)
+        distance_km = fetch_road_route_distance_km(job.latitude, job.longitude, profile.latitude, profile.longitude)
         is_verified = profile.verification_status == "verified"
         rating_score = float(profile.average_rating or 0)
         rate_score = calculate_rate_score(job, profile)
@@ -160,7 +192,9 @@ def build_match_results(job, worker_profiles):
                 "worker_latitude": float(profile.latitude) if profile.latitude is not None else None,
                 "worker_longitude": float(profile.longitude) if profile.longitude is not None else None,
                 "distance_km": round(distance_km, 2) if distance_km is not None else None,
-                "distance_label": f"{round(distance_km, 2)} km away" if distance_km is not None else "Distance not available",
+                "distance_label": (
+                    f"{round(distance_km, 2)} km away" if distance_km is not None else "Road distance unavailable"
+                ),
                 "match_score": round(match_score, 2),
                 "rating_label": profile.display_rating,
                 "rating_score": round(rating_score, 2),

@@ -2,6 +2,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 from decimal import Decimal
+from unittest.mock import patch
 
 from apps.accounts.models import UserProfile, WorkerAvailability
 from apps.common.authentication import create_jwt_token
@@ -152,6 +153,13 @@ class RecommendedWorkersAvailabilityTests(TestCase):
         alias_result = next(item for item in response.data["results"] if item["worker_username"] == "alias-worker")
         self.assertTrue(alias_result["matches_skill"])
 
+    def test_matching_does_not_fall_back_to_straight_line_distance(self):
+        response = self.client.get(reverse("recommended-workers"), {"job_id": self.job.id})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(all(item["distance_km"] is None for item in response.data["results"]))
+        self.assertTrue(all(item["distance_label"] == "Road distance unavailable" for item in response.data["results"]))
+
 
 class RecommendedWorkersRankingTests(TestCase):
     def setUp(self):
@@ -193,8 +201,16 @@ class RecommendedWorkersRankingTests(TestCase):
             daily_rate=daily_rate,
         )
 
+    def fake_road_route_distance_km(self, lat1, lon1, lat2, lon2):
+        if str(lat2) == "13.9622745" and str(lon2) == "121.5632841":
+            return 0.1
+        if str(lat2) == "13.9800000" and str(lon2) == "121.5800000":
+            return 7.5
+        return 3.0
+
     def get_ranked_usernames(self):
-        response = self.client.get(reverse("recommended-workers"), {"job_id": self.job.id})
+        with patch("apps.matching.services.fetch_road_route_distance_km", self.fake_road_route_distance_km):
+            response = self.client.get(reverse("recommended-workers"), {"job_id": self.job.id})
         self.assertEqual(response.status_code, 200)
         return [item["worker_username"] for item in response.data["results"]]
 

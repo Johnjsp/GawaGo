@@ -96,10 +96,31 @@ class NotificationPermissionTests(TestCase):
             notification_type=Notification.TYPE_ACCOUNT_ACTIVITY,
             title="Detailed account activity",
             message=detail_message,
+            related_job_id=10,
+            related_application_id=20,
+            action_type=Notification.ACTION_HIRE_REQUEST,
         )
 
         self.assertEqual(notification.recipient, self.recipient)
+        self.assertEqual(notification.related_job_id, 10)
+        self.assertEqual(notification.related_application_id, 20)
+        self.assertEqual(notification.action_type, Notification.ACTION_HIRE_REQUEST)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, [self.recipient.email])
         self.assertEqual(mail.outbox[0].subject, "GawaGo: Detailed account activity")
         self.assertIn(detail_message, mail.outbox[0].body)
+
+    def test_notification_list_includes_action_context(self):
+        self.notification.related_job_id = 11
+        self.notification.related_application_id = 22
+        self.notification.action_type = Notification.ACTION_HIRE_REQUEST
+        self.notification.save(update_fields=["related_job_id", "related_application_id", "action_type"])
+        self.client.force_authenticate(user=self.recipient)
+
+        response = self.client.get(reverse("notification-list"))
+
+        self.assertEqual(response.status_code, 200)
+        notification_payload = next(item for item in response.json() if item["id"] == self.notification.id)
+        self.assertEqual(notification_payload["related_job_id"], 11)
+        self.assertEqual(notification_payload["related_application_id"], 22)
+        self.assertEqual(notification_payload["action_type"], Notification.ACTION_HIRE_REQUEST)

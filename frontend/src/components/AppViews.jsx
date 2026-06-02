@@ -207,12 +207,41 @@ export default function AppViews({
   };
   const currentWorkerIsVerified = String(currentWorker?.verification || "").toLowerCase() === "verified";
   const workerPendingHireRequests = workerApplications.filter((job) => job.applicationStatus === "Hire Request");
+  const workerPendingHireRequestNotifications = workerNotificationsWithReadState.filter(
+    (item) => item.actionType === "hire_request" && item.applicationId,
+  );
+  const workerHireRequestCards =
+    workerPendingHireRequestNotifications.length > 0
+      ? workerPendingHireRequestNotifications.map((notification) => {
+          const matchingJob =
+            workerPendingHireRequests.find(
+              (job) =>
+                String(job.applicationId) === String(notification.applicationId) ||
+                String(job.id) === String(notification.jobId),
+            ) || {};
+          return {
+            ...matchingJob,
+            notificationId: notification.id,
+            notificationBackendId: notification.backendId,
+            notificationMessage: notification.message,
+            notificationTitle: notification.title,
+            applicationId: notification.applicationId,
+            applicationStatus: "Hire Request",
+            id: notification.jobId ?? matchingJob.id,
+            updatedAt: notification.date || matchingJob.updatedAt,
+            unread: notification.unread,
+          };
+        })
+      : workerPendingHireRequests;
   const workerHireRequestPreviewJob = workerHireRequestPreview
-    ? workerPendingHireRequests.find(
+    ? workerHireRequestCards.find(
         (job) => String(job.applicationId) === String(workerHireRequestPreview.applicationId),
       ) || workerHireRequestPreview
     : null;
   const hiringNotificationHasRequestCard = (notification) => {
+    if (notification.actionType === "hire_request" && notification.applicationId) {
+      return true;
+    }
     if (notification.notificationType !== "hiring") {
       return false;
     }
@@ -2636,10 +2665,10 @@ export default function AppViews({
                   </div>
                 )}
                 <div className="worker-notifications-list">
-                  {workerPendingHireRequests.map((job) => (
+                  {workerHireRequestCards.map((job) => (
                     <article
                       className="notification-card worker-hire-request-card worker-hire-request-clickable unread"
-                      key={`hire-request-${job.applicationId}`}
+                      key={`hire-request-${job.applicationId || job.notificationId || job.id}`}
                       role="button"
                       tabIndex={0}
                       onClick={() => setWorkerHireRequestPreview(job)}
@@ -2655,8 +2684,12 @@ export default function AppViews({
                           <p className="small text-muted mb-1">{job.updatedAt || job.appliedAt || "Recently"}</p>
                           <h2 className="h6 mb-1">Hire request</h2>
                           <p className="mb-0">
-                            {job.householdName || "A household"} wants to hire you for{" "}
-                            <strong>{job.jobTitle || job.serviceType}</strong>.
+                            {job.notificationMessage || (
+                              <>
+                                {job.householdName || "A household"} wants to hire you for{" "}
+                                <strong>{job.jobTitle || job.serviceType}</strong>.
+                              </>
+                            )}
                           </p>
                         </div>
                         <span className="badge text-bg-warning">Needs your response</span>
@@ -2705,7 +2738,7 @@ export default function AppViews({
                       <p className="mb-0">{item.message}</p>
                     </article>
                   ))}
-                  {workerPendingHireRequests.length === 0 && workerGeneralNotifications.length === 0 && (
+                  {workerHireRequestCards.length === 0 && workerGeneralNotifications.length === 0 && (
                     <article className="notification-card">
                       <h2 className="h6 mb-1">No notifications yet</h2>
                       <p className="mb-0 text-muted">Hire requests and job updates will appear here.</p>
@@ -2804,19 +2837,6 @@ export default function AppViews({
                           type="button"
                           onClick={() => {
                             const jobId = workerHireRequestPreviewJob.id;
-                            try {
-                              window.sessionStorage.setItem(
-                                `gawago-worker-hire-request-${currentWorker?.id || currentWorker?.username || "worker"}-${jobId}`,
-                                JSON.stringify({
-                                  jobId,
-                                  applicationId: workerHireRequestPreviewJob.applicationId,
-                                  applicationStatus: "Hire Request",
-                                  openedFrom: "notification",
-                                }),
-                              );
-                            } catch (error) {
-                              // Session storage is only a UI hint; the backend remains the source of truth.
-                            }
                             setWorkerHireRequestPreview(null);
                             openWorkerJobDetail(jobId);
                           }}

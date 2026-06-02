@@ -536,14 +536,15 @@ class JobPermissionTests(TestCase):
         self.job.refresh_from_db()
         self.assertEqual(self.application.status, JobApplication.STATUS_HIRE_REQUESTED)
         self.assertEqual(self.job.status, JobPosting.STATUS_OPEN)
-        self.assertTrue(
-            Notification.objects.filter(
-                recipient=self.worker,
-                notification_type=Notification.TYPE_HIRING,
-                title="Hire request",
-                message__contains=self.job.title,
-            ).exists()
+        notification = Notification.objects.get(
+            recipient=self.worker,
+            notification_type=Notification.TYPE_HIRING,
+            title="Hire request",
+            message__contains=self.job.title,
         )
+        self.assertEqual(notification.related_job_id, self.job.id)
+        self.assertEqual(notification.related_application_id, self.application.id)
+        self.assertEqual(notification.action_type, Notification.ACTION_HIRE_REQUEST)
         self.assertEqual(mail.outbox[-1].to, [self.worker.email])
         self.assertEqual(mail.outbox[-1].subject, "GawaGo: Hire request")
         self.assertIn(self.job.title, mail.outbox[-1].body)

@@ -336,6 +336,14 @@ export function normalizeBackendNotification(notification) {
     notificationType: notification.notification_type || notification.notificationType || "analytics",
     title: notification.title || "Notification",
     message: notification.message || "",
+    jobId: notification.related_job_id ?? notification.relatedJobId ?? notification.job_id ?? notification.jobId ?? null,
+    applicationId:
+      notification.related_application_id ??
+      notification.relatedApplicationId ??
+      notification.application_id ??
+      notification.applicationId ??
+      null,
+    actionType: notification.action_type || notification.actionType || "",
     date: notification.created_at || notification.createdAt || "Recently",
     unread: !notification.is_read,
   };

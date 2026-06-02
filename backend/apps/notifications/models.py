@@ -3,6 +3,17 @@ from django.db import models
 
 
 class Notification(models.Model):
+    ACTION_NONE = ""
+    ACTION_HIRE_REQUEST = "hire_request"
+    ACTION_JOB_DETAIL = "job_detail"
+    ACTION_REVIEW = "review"
+    ACTION_CHOICES = [
+        (ACTION_NONE, "No action"),
+        (ACTION_HIRE_REQUEST, "Hire request"),
+        (ACTION_JOB_DETAIL, "Job detail"),
+        (ACTION_REVIEW, "Review"),
+    ]
+
     TYPE_APPLICATION = "application"
     TYPE_ACCOUNT_ACTIVITY = "account_activity"
     TYPE_ACCEPTED = "accepted"
@@ -28,6 +39,9 @@ class Notification(models.Model):
     notification_type = models.CharField(max_length=30, choices=TYPE_CHOICES)
     title = models.CharField(max_length=255)
     message = models.TextField()
+    related_job_id = models.PositiveIntegerField(null=True, blank=True)
+    related_application_id = models.PositiveIntegerField(null=True, blank=True)
+    action_type = models.CharField(max_length=40, choices=ACTION_CHOICES, blank=True, default=ACTION_NONE)
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

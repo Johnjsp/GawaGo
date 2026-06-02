@@ -2179,14 +2179,14 @@ export default function AppViews({
                 )}
                 <section className="profile-footer worker-rating-summary" aria-labelledby="worker-profile-feedback-title">
                   <header className="worker-rating-header">
-                    <h2 id="worker-profile-feedback-title">☆ Feedback & Rating</h2>
+                    <h2 id="worker-profile-feedback-title">Feedback & Rating</h2>
                     <span>From households</span>
                   </header>
                   <div className="worker-rating-body">
                     <div className="worker-rating-overview">
                       <div className="worker-rating-score">
                         <strong>{workerAverageRating != null ? workerAverageRating.toFixed(1) : "No ratings yet"}</strong>
-                        {workerAverageRating != null && <span className="worker-rating-stars">★★★★★</span>}
+                        {workerAverageRating != null && <span className="worker-rating-stars">5-star average</span>}
                         <small>
                           {workerTotalReviews} {workerTotalReviews === 1 ? "review" : "reviews"}
                         </small>
@@ -2196,7 +2196,7 @@ export default function AppViews({
                           const percentage = workerTotalReviews > 0 ? (count / workerTotalReviews) * 100 : 0;
                           return (
                             <div className="worker-rating-bar-row" key={rating}>
-                              <span>{rating}★</span>
+                              <span>{rating} star</span>
                               <div className="worker-rating-track">
                                 <div className="worker-rating-fill" style={{ width: `${percentage}%` }} />
                               </div>
@@ -2225,7 +2225,7 @@ export default function AppViews({
                     <div className="worker-recent-reviews-head">
                       <h3>Recent reviews</h3>
                       <button type="button" onClick={() => setWorkerProfilePanel("feedback")}>
-                        View all →
+                        View all -&gt;
                       </button>
                     </div>
 
@@ -2249,7 +2249,7 @@ export default function AppViews({
                                     <small>{formatDateTime(review.createdAt || review.date || "") || "Recently"}</small>
                                   </div>
                                   {review.rating != null && (
-                                    <span className="worker-review-rating">★★★★★ {Number(review.rating).toFixed(1)}</span>
+                                    <span className="worker-review-rating">{Number(review.rating).toFixed(1)} / 5</span>
                                   )}
                                 </div>
                                 <p>{review.feedback || review.comment || "No comment provided."}</p>
@@ -4400,7 +4400,7 @@ export default function AppViews({
                 </div>
                 <section className="smart-match-feedback-section profile-footer worker-rating-summary" aria-labelledby="smart-match-feedback-title">
                   <header className="worker-rating-header">
-                    <h2 id="smart-match-feedback-title">☆ Feedback & Rating</h2>
+                    <h2 id="smart-match-feedback-title">Feedback & Rating</h2>
                     <span>From households</span>
                   </header>
                   <div className="worker-rating-body">
@@ -4409,7 +4409,7 @@ export default function AppViews({
                         <strong>
                           {selectedWorkerAverageRating != null ? selectedWorkerAverageRating.toFixed(1) : "No ratings yet"}
                         </strong>
-                        {selectedWorkerAverageRating != null && <span className="worker-rating-stars">★★★★★</span>}
+                        {selectedWorkerAverageRating != null && <span className="worker-rating-stars">5-star average</span>}
                         <small>
                           {selectedWorkerTotalReviews} {selectedWorkerTotalReviews === 1 ? "review" : "reviews"}
                         </small>
@@ -4419,7 +4419,7 @@ export default function AppViews({
                           const percentage = selectedWorkerTotalReviews > 0 ? (count / selectedWorkerTotalReviews) * 100 : 0;
                           return (
                             <div className="worker-rating-bar-row" key={rating}>
-                              <span>{rating}★</span>
+                              <span>{rating} star</span>
                               <div className="worker-rating-track">
                                 <div className="worker-rating-fill" style={{ width: `${percentage}%` }} />
                               </div>
@@ -4469,7 +4469,7 @@ export default function AppViews({
                                     <small>{formatDateTime(review.createdAt || review.date || "") || "Recently"}</small>
                                   </div>
                                   {review.rating != null && (
-                                    <span className="worker-review-rating">★★★★★ {Number(review.rating).toFixed(1)}</span>
+                                    <span className="worker-review-rating">{Number(review.rating).toFixed(1)} / 5</span>
                                   )}
                                 </div>
                                 <p>{review.feedback || review.comment || "No comment provided."}</p>

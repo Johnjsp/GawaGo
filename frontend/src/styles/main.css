@@ -7815,8 +7815,7 @@ a,
 }
 
 .worker-rating-header h2::before {
-  content: "☆";
-  margin-right: 6px;
+  content: "";
 }
 
 .worker-rating-header span {
@@ -8035,6 +8034,108 @@ a,
   color: #77736d;
   font-size: 12px;
   font-weight: 800;
+}
+
+.worker-profile-page .worker-rating-summary,
+.household-smart-match-profile .worker-rating-summary {
+  border-radius: 8px;
+  background: #fffdfa;
+  box-shadow: 0 10px 24px rgba(31, 42, 34, 0.06);
+}
+
+.worker-rating-header {
+  min-height: 42px;
+  padding: 10px 16px;
+  background: #1f9b73;
+}
+
+.worker-rating-header h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.worker-rating-header h2::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  box-shadow: 12px 0 0 -2px currentColor;
+}
+
+.worker-rating-body {
+  gap: 20px;
+}
+
+.worker-rating-overview {
+  grid-template-columns: minmax(160px, 220px) 1fr;
+  gap: 24px;
+  align-items: stretch;
+  padding-bottom: 16px;
+}
+
+.worker-rating-score {
+  align-content: center;
+  gap: 8px;
+  min-height: 128px;
+  padding: 18px 16px;
+  border: 1px solid #eee5d8;
+  border-radius: 8px;
+  background: #f7f3eb;
+}
+
+.worker-rating-score strong {
+  max-width: 170px;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.worker-rating-score strong:first-child:last-child {
+  font-size: 26px;
+}
+
+.worker-rating-stars,
+.worker-review-rating {
+  color: #9b6714;
+  letter-spacing: 0;
+}
+
+.worker-rating-bars {
+  align-content: center;
+  gap: 8px;
+}
+
+.worker-rating-bar-row {
+  grid-template-columns: 54px 1fr 28px;
+  gap: 10px;
+  font-size: 11px;
+}
+
+.worker-rating-track {
+  height: 7px;
+}
+
+.worker-rating-stats {
+  padding-bottom: 18px;
+}
+
+.worker-rating-stats div {
+  border: 1px solid #eee5d8;
+  border-radius: 8px;
+  background: #f7f3eb;
+}
+
+.worker-recent-review-empty {
+  min-height: 128px;
+  border: 1px dashed #d8ccbc;
+  background: #f8f5ee;
+}
+
+.worker-recent-review-empty::before {
+  content: "";
+  display: none;
 }
 
 .worker-layout,

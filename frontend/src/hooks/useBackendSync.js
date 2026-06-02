@@ -266,6 +266,7 @@ export function useBackendSync({
                 ? Number(result.distance_km).toFixed(1)
                 : "",
             distanceLabel,
+            routePoints: result.route_points || result.routePoints || [],
             matchScore: result.match_score,
             availableAtRequestedTime: result.available_at_requested_time,
           };

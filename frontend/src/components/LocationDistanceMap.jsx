@@ -1,10 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  OPENROUTESERVICE_API_KEY,
-  OPENROUTESERVICE_DIRECTIONS_URL,
-  OPENROUTESERVICE_SEARCH_URL,
-  TAYABAS_CITY_CENTER,
-} from "../constants/appConstants";
 
 let leafletAssetsPromise = null;
 
@@ -55,74 +49,6 @@ async function loadLeafletAssets() {
   return leafletAssetsPromise;
 }
 
-async function geocodeAddress(address) {
-  const query = String(address || "").trim();
-  if (!query || !OPENROUTESERVICE_API_KEY) {
-    return null;
-  }
-  try {
-    const response = await fetch(
-      `${OPENROUTESERVICE_SEARCH_URL}?text=${encodeURIComponent(query)}&boundary.country=PH&focus.point.lon=${encodeURIComponent(TAYABAS_CITY_CENTER.longitude)}&focus.point.lat=${encodeURIComponent(TAYABAS_CITY_CENTER.latitude)}&size=1&layers=address,street,locality,neighbourhood`,
-      {
-        method: "GET",
-        headers: { Authorization: OPENROUTESERVICE_API_KEY, Accept: "application/json, application/geo+json" },
-      },
-    );
-    if (!response.ok) {
-      return null;
-    }
-    const data = await response.json();
-    const feature = Array.isArray(data?.features) ? data.features[0] : null;
-    const coordinates = Array.isArray(feature?.geometry?.coordinates) ? feature.geometry.coordinates : [];
-    const latitude = Number(Number(coordinates[1]).toFixed(7));
-    const longitude = Number(Number(coordinates[0]).toFixed(7));
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      return null;
-    }
-    return { latitude, longitude };
-  } catch (error) {
-    return null;
-  }
-}
-
-async function fetchDrivingRoute(userPoint, targetPoint) {
-  if (!OPENROUTESERVICE_API_KEY || !userPoint || !targetPoint) {
-    return null;
-  }
-  try {
-    const response = await fetch(OPENROUTESERVICE_DIRECTIONS_URL, {
-      method: "POST",
-      headers: {
-        Authorization: OPENROUTESERVICE_API_KEY,
-        "Content-Type": "application/json",
-        Accept: "application/json, application/geo+json",
-      },
-      body: JSON.stringify({
-        coordinates: [
-          [Number(userPoint.longitude), Number(userPoint.latitude)],
-          [Number(targetPoint.longitude), Number(targetPoint.latitude)],
-        ],
-      }),
-    });
-    if (!response.ok) {
-      return null;
-    }
-    const data = await response.json();
-    const feature = Array.isArray(data?.features) ? data.features[0] : null;
-    const coordinates = Array.isArray(feature?.geometry?.coordinates) ? feature.geometry.coordinates : [];
-    const points = coordinates
-      .map((coordinate) => [Number(coordinate[1]), Number(coordinate[0])])
-      .filter(([latitude, longitude]) => Number.isFinite(latitude) && Number.isFinite(longitude));
-    const distanceMeters = Number(feature?.properties?.summary?.distance);
-    return {
-      distanceKm: Number.isFinite(distanceMeters) ? distanceMeters / 1000 : null,
-      points,
-    };
-  } catch (error) {
-    return null;
-  }
-}
-
 function createPinIcon(L, label, color, markerType) {
   return L.divIcon({
     className: `location-distance-pin location-distance-pin-${markerType}`,
@@ -148,6 +74,18 @@ function buildCoordinatePoint(latitude, longitude) {
   return { latitude: resolvedLatitude, longitude: resolvedLongitude };
 }
 
+function normalizeRoutePoints(routePoints) {
+  return (Array.isArray(routePoints) ? routePoints : [])
+    .map((point) => [Number(point?.[0]), Number(point?.[1])])
+    .filter(([latitude, longitude]) => Number.isFinite(latitude) && Number.isFinite(longitude));
+}
+
+function getMarkerConfig(markerType) {
+  return markerType === "worker"
+    ? { label: "W", color: "#E85D04", type: "worker" }
+    : { label: "H", color: "#1565C0", type: "household" };
+}
+
 export default function LocationDistanceMap({
   userLatitude,
   userLongitude,
@@ -155,7 +93,10 @@ export default function LocationDistanceMap({
   targetLongitude,
   userLocation = "User location",
   targetLocation = "Target location",
+  userMarkerType = "household",
+  targetMarkerType = "worker",
   distanceKm,
+  routePoints = [],
   formatDistanceFn,
   onRouteDistanceChange,
 }) {
@@ -167,14 +108,13 @@ export default function LocationDistanceMap({
   });
   const [status, setStatus] = useState("loading");
   const [mapStatus, setMapStatus] = useState("idle");
-  const [routeInfo, setRouteInfo] = useState(null);
+  const normalizedRoutePoints = useMemo(() => normalizeRoutePoints(routePoints), [routePoints]);
 
   useEffect(() => {
     let cancelled = false;
     async function resolvePoints() {
-      const nextUser = buildCoordinatePoint(userLatitude, userLongitude) || (await geocodeAddress(userLocation));
-      const nextTarget =
-        buildCoordinatePoint(targetLatitude, targetLongitude) || (await geocodeAddress(targetLocation));
+      const nextUser = buildCoordinatePoint(userLatitude, userLongitude);
+      const nextTarget = buildCoordinatePoint(targetLatitude, targetLongitude);
       if (cancelled) {
         return;
       }
@@ -188,35 +128,15 @@ export default function LocationDistanceMap({
   }, [userLatitude, userLongitude, targetLatitude, targetLongitude, userLocation, targetLocation]);
 
   useEffect(() => {
-    let cancelled = false;
-    async function resolveRoute() {
-      setRouteInfo(null);
-      if (!resolvedPoints.user || !resolvedPoints.target) {
-        onRouteDistanceChange?.(null);
-        return;
-      }
-      const nextRoute = await fetchDrivingRoute(resolvedPoints.user, resolvedPoints.target);
-      if (cancelled) {
-        return;
-      }
-      setRouteInfo(nextRoute);
-      onRouteDistanceChange?.(nextRoute?.distanceKm ?? null);
-    }
-    resolveRoute();
-    return () => {
-      cancelled = true;
-    };
-  }, [resolvedPoints]);
+    onRouteDistanceChange?.(distanceKm ?? null);
+  }, [distanceKm, onRouteDistanceChange]);
 
   const resolvedDistanceKm = useMemo(() => {
-    if (routeInfo?.distanceKm !== null && routeInfo?.distanceKm !== undefined) {
-      return routeInfo.distanceKm;
-    }
     if (distanceKm !== null && distanceKm !== undefined && distanceKm !== "") {
       return Number(distanceKm);
     }
     return null;
-  }, [distanceKm, resolvedPoints, routeInfo]);
+  }, [distanceKm]);
   const distanceLabel = (formatDistanceFn || localFormatDistance)(resolvedDistanceKm);
 
   useEffect(() => {
@@ -256,22 +176,25 @@ export default function LocationDistanceMap({
         }).addTo(map);
         const userPoint = [resolvedPoints.user.latitude, resolvedPoints.user.longitude];
         const targetPoint = [resolvedPoints.target.latitude, resolvedPoints.target.longitude];
-        const routePoints = routeInfo?.points?.length > 1 ? routeInfo.points : [userPoint, targetPoint];
-        const householdIcon = createPinIcon(L, "H", "#1565C0", "household");
-        const workerIcon = createPinIcon(L, "W", "#E85D04", "worker");
-        L.marker(userPoint, { icon: householdIcon })
+        const boundsPoints = normalizedRoutePoints.length > 1 ? normalizedRoutePoints : [userPoint, targetPoint];
+        const userMarker = getMarkerConfig(userMarkerType);
+        const targetMarker = getMarkerConfig(targetMarkerType);
+        const userIcon = createPinIcon(L, userMarker.label, userMarker.color, userMarker.type);
+        const targetIcon = createPinIcon(L, targetMarker.label, targetMarker.color, targetMarker.type);
+        L.marker(userPoint, { icon: userIcon })
           .addTo(map)
           .bindPopup(userLocation || "User location");
-        L.marker(targetPoint, { icon: workerIcon })
+        L.marker(targetPoint, { icon: targetIcon })
           .addTo(map)
           .bindPopup(targetLocation || "Target location");
-        L.polyline(routePoints, {
-          color: "#0d6efd",
-          weight: 4,
-          opacity: 0.85,
-          dashArray: routeInfo?.points?.length > 1 ? null : "8 8",
-        }).addTo(map);
-        map.fitBounds(L.latLngBounds(routePoints).pad(0.28));
+        if (normalizedRoutePoints.length > 1) {
+          L.polyline(normalizedRoutePoints, {
+            color: "#0d6efd",
+            weight: 4,
+            opacity: 0.85,
+          }).addTo(map);
+        }
+        map.fitBounds(L.latLngBounds(boundsPoints).pad(0.28));
         mapRendered = true;
         window.clearTimeout(fallbackTimer);
         setMapStatus("ready");
@@ -290,7 +213,7 @@ export default function LocationDistanceMap({
         mapInstanceRef.current = null;
       }
     };
-  }, [resolvedPoints, routeInfo, userLocation, targetLocation]);
+  }, [resolvedPoints, normalizedRoutePoints, userLocation, targetLocation, userMarkerType, targetMarkerType]);
 
   return (
     <div className="location-distance-map">
@@ -302,9 +225,13 @@ export default function LocationDistanceMap({
         {status === "ready" && mapStatus !== "ready" && (
           <div className="location-distance-fallback">
             <div className="location-distance-fallback-route">
-              <span className="location-distance-fallback-pin user-pin">YOU</span>
+              <span className="location-distance-fallback-pin user-pin">
+                {getMarkerConfig(userMarkerType).label}
+              </span>
               <span className="location-distance-fallback-line" />
-              <span className="location-distance-fallback-pin target-pin">W</span>
+              <span className="location-distance-fallback-pin target-pin">
+                {getMarkerConfig(targetMarkerType).label}
+              </span>
             </div>
             <div className="location-distance-fallback-label">
               <strong>{distanceLabel}</strong>

@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
 from django.core import mail
 from django.test import override_settings
@@ -9,6 +11,7 @@ from apps.accounts.models import UserProfile
 from apps.common.authentication import create_jwt_token
 from apps.jobs.models import JobApplication, JobPosting
 from apps.jobs.services import complete_job
+from apps.matching.models import RouteDistanceCache
 from apps.notifications.models import Notification
 from apps.reviews.models import Review
 
@@ -84,6 +87,29 @@ class JobPermissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["applications"]), 1)
         self.assertEqual(response.data["applications"][0]["worker_username"], self.worker.username)
+
+    def test_worker_job_payload_uses_cached_road_route_distance(self):
+        self.worker.profile.latitude = "13.9800000"
+        self.worker.profile.longitude = "121.5800000"
+        self.worker.profile.save(update_fields=["latitude", "longitude"])
+
+        def fake_road_route(lat1, lon1, lat2, lon2):
+            return {
+                "distance_km": 6.9,
+                "route_points": [[float(lat1), float(lon1)], [13.9700000, 121.5700000], [float(lat2), float(lon2)]],
+            }
+
+        self.client.force_authenticate(user=self.worker)
+        with patch("apps.matching.services.fetch_road_route", side_effect=fake_road_route) as route_fetch:
+            response = self.client.get(reverse("job-detail", args=[self.job.id]))
+            second_response = self.client.get(reverse("job-detail", args=[self.job.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(response.data["route_distance_km"], 6.9)
+        self.assertEqual(response.data["route_points"][1], [13.97, 121.57])
+        self.assertEqual(route_fetch.call_count, 1)
+        self.assertEqual(RouteDistanceCache.objects.count(), 1)
 
     def test_worker_only_sees_own_application_on_job_detail(self):
         second_worker = User.objects.create_user(username="worker-private-other", password="password")

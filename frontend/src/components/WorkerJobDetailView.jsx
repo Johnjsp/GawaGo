@@ -4,7 +4,6 @@ import JobImageGallery from "./JobImageGallery";
 import LocationDistanceMap from "./LocationDistanceMap";
 import { formatDistance, formatLocation, formatRate, getDisplayName, getHouseholdPhoto } from "../utils/formatters";
 import { getHiringProgressLabel, getJobStatusBadgeClass } from "../utils/jobUtils";
-import { haversineDistanceKm } from "../utils/locationServices";
 
 export default function WorkerJobDetailView({
   currentWorker,
@@ -49,7 +48,7 @@ export default function WorkerJobDetailView({
   const jobLongitude = job?.longitude ?? household?.longitude ?? null;
   const workerLatitude = currentWorker?.latitude ?? null;
   const workerLongitude = currentWorker?.longitude ?? null;
-  const jobDistanceKm = haversineDistanceKm(workerLatitude, workerLongitude, jobLatitude, jobLongitude);
+  const jobDistanceKm = job?.routeDistanceKm ?? null;
   const [routeDistanceKm, setRouteDistanceKm] = useState(null);
   const [completionNote, setCompletionNote] = useState("I have completed the service today.");
   const distanceLabel = formatDistance(routeDistanceKm ?? jobDistanceKm);
@@ -303,7 +302,10 @@ export default function WorkerJobDetailView({
                           household?.barangay || job.barangay,
                           household?.streetAddress || job.streetAddress,
                         )}
+                        userMarkerType="worker"
+                        targetMarkerType="household"
                         distanceKm={jobDistanceKm}
+                        routePoints={job.routePoints || []}
                         formatDistanceFn={formatDistance}
                         onRouteDistanceChange={setRouteDistanceKm}
                       />

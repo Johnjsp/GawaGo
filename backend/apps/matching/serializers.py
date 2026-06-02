@@ -15,6 +15,7 @@ class MatchResultSerializer(serializers.Serializer):
     worker_longitude = serializers.FloatField(allow_null=True)
     distance_km = serializers.FloatField(allow_null=True)
     distance_label = serializers.CharField()
+    route_points = serializers.ListField(child=serializers.ListField(child=serializers.FloatField()), required=False)
     match_score = serializers.FloatField()
     rating_label = serializers.CharField()
     rating_score = serializers.FloatField()

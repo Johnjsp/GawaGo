@@ -309,6 +309,8 @@ export function normalizeBackendJob(job) {
     streetAddress: job.street_address || parsedLocation.streetAddress || "",
     latitude: job.latitude ?? job.job_latitude ?? null,
     longitude: job.longitude ?? job.job_longitude ?? null,
+    routeDistanceKm: job.route_distance_km ?? job.routeDistanceKm ?? null,
+    routePoints: job.route_points || job.routePoints || [],
     offeredRate: String(job.service_rate ?? "0.00"),
     rateType: "Per Day",
     workersNeeded: Number(job.worker_slots || 1),

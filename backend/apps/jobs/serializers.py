@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.jobs.models import JobApplication, JobImage, JobPosting
+from apps.matching.services import get_road_route_for_match
 
 
 class JobApplicationSerializer(serializers.ModelSerializer):
@@ -50,6 +51,8 @@ class JobPostingSerializer(serializers.ModelSerializer):
     household_name = serializers.SerializerMethodField()
     applications = serializers.SerializerMethodField()
     images = JobImageSerializer(many=True, read_only=True)
+    route_distance_km = serializers.SerializerMethodField()
+    route_points = serializers.SerializerMethodField()
 
     class Meta:
         model = JobPosting
@@ -75,6 +78,8 @@ class JobPostingSerializer(serializers.ModelSerializer):
             "completed_at",
             "applications",
             "images",
+            "route_distance_km",
+            "route_points",
         ]
         read_only_fields = [
             "id",
@@ -84,6 +89,8 @@ class JobPostingSerializer(serializers.ModelSerializer):
             "completed_at",
             "applications",
             "images",
+            "route_distance_km",
+            "route_points",
         ]
 
     def get_household_name(self, obj):
@@ -103,6 +110,28 @@ class JobPostingSerializer(serializers.ModelSerializer):
                 return []
             visible_applications = applications.filter(worker=user)
         return JobApplicationSerializer(visible_applications, many=True, context=self.context).data
+
+    def get_worker_route(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        profile = getattr(user, "profile", None)
+        if not user or not user.is_authenticated or not profile or profile.role != "worker":
+            return None
+        cache_key = f"worker_route:{obj.pk}:{profile.pk}"
+        if not hasattr(self, "_worker_route_cache"):
+            self._worker_route_cache = {}
+        if cache_key not in self._worker_route_cache:
+            self._worker_route_cache[cache_key] = get_road_route_for_match(obj, profile)
+        return self._worker_route_cache[cache_key]
+
+    def get_route_distance_km(self, obj):
+        route = self.get_worker_route(obj)
+        distance_km = route.get("distance_km") if route else None
+        return round(distance_km, 2) if distance_km is not None else None
+
+    def get_route_points(self, obj):
+        route = self.get_worker_route(obj)
+        return route.get("route_points") if route else []
 
 
 class JobCreateSerializer(serializers.Serializer):

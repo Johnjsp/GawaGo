@@ -7,6 +7,7 @@ from unittest.mock import patch
 from apps.accounts.models import UserProfile, WorkerAvailability
 from apps.common.authentication import create_jwt_token
 from apps.jobs.models import JobPosting
+from apps.matching.models import RouteDistanceCache
 from apps.matching.services import normalize_skill_label, skill_matches
 
 
@@ -201,18 +202,38 @@ class RecommendedWorkersRankingTests(TestCase):
             daily_rate=daily_rate,
         )
 
-    def fake_road_route_distance_km(self, lat1, lon1, lat2, lon2):
+    def fake_road_route(self, lat1, lon1, lat2, lon2):
         if str(lat2) == "13.9622745" and str(lon2) == "121.5632841":
-            return 0.1
-        if str(lat2) == "13.9800000" and str(lon2) == "121.5800000":
-            return 7.5
-        return 3.0
+            distance_km = 0.1
+        elif str(lat2) == "13.9800000" and str(lon2) == "121.5800000":
+            distance_km = 7.5
+        else:
+            distance_km = 3.0
+        return {
+            "distance_km": distance_km,
+            "route_points": [[float(lat1), float(lon1)], [float(lat2), float(lon2)]],
+        }
 
     def get_ranked_usernames(self):
-        with patch("apps.matching.services.fetch_road_route_distance_km", self.fake_road_route_distance_km):
+        with patch("apps.matching.services.fetch_road_route", self.fake_road_route):
             response = self.client.get(reverse("recommended-workers"), {"job_id": self.job.id})
         self.assertEqual(response.status_code, 200)
         return [item["worker_username"] for item in response.data["results"]]
+
+    def test_matching_caches_backend_route_distance_and_points(self):
+        self.create_worker_profile("cached-worker", ["House Cleaning"], verification_status="verified")
+
+        with patch("apps.matching.services.fetch_road_route", side_effect=self.fake_road_route) as route_fetch:
+            first_response = self.client.get(reverse("recommended-workers"), {"job_id": self.job.id})
+            second_response = self.client.get(reverse("recommended-workers"), {"job_id": self.job.id})
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(route_fetch.call_count, 1)
+        cached_result = first_response.data["results"][0]
+        self.assertEqual(cached_result["distance_km"], 0.1)
+        self.assertEqual(cached_result["route_points"][0], [13.9622745, 121.5632841])
+        self.assertEqual(RouteDistanceCache.objects.count(), 1)
 
     def test_skill_match_ranks_before_other_factors(self):
         self.create_worker_profile("skilled-worker", ["cleaning"], verification_status="pending")

@@ -1,9 +1,11 @@
 import json
+from decimal import Decimal
 from urllib import error, request
 
 from django.conf import settings
-
 from django.db import models
+
+from apps.matching.models import RouteDistanceCache
 
 
 SKILL_ALIASES = {
@@ -53,7 +55,22 @@ def skill_matches(required_skill, worker_skills):
     return required_key in worker_keys
 
 
-def fetch_road_route_distance_km(lat1, lon1, lat2, lon2):
+def normalize_coordinate(value):
+    if value is None:
+        return None
+    return Decimal(str(value)).quantize(Decimal("0.0000001"))
+
+
+def cached_coordinates_match(cache_record, job, profile):
+    return (
+        cache_record.job_latitude == normalize_coordinate(job.latitude)
+        and cache_record.job_longitude == normalize_coordinate(job.longitude)
+        and cache_record.worker_latitude == normalize_coordinate(profile.latitude)
+        and cache_record.worker_longitude == normalize_coordinate(profile.longitude)
+    )
+
+
+def fetch_road_route(lat1, lon1, lat2, lon2):
     if not settings.OPENROUTESERVICE_API_KEY or None in (lat1, lon1, lat2, lon2):
         return None
     coordinates = [float(lat1), float(lon1), float(lat2), float(lon2)]
@@ -83,15 +100,51 @@ def fetch_road_route_distance_km(lat1, lon1, lat2, lon2):
     except (OSError, ValueError, error.URLError, error.HTTPError):
         return None
     feature = (data.get("features") or [None])[0] or {}
-    distance_meters = (
-        feature.get("properties", {})
-        .get("summary", {})
-        .get("distance")
-    )
+    distance_meters = feature.get("properties", {}).get("summary", {}).get("distance")
+    raw_coordinates = feature.get("geometry", {}).get("coordinates") or []
+    route_points = [
+        [float(coordinate[1]), float(coordinate[0])]
+        for coordinate in raw_coordinates
+        if isinstance(coordinate, list)
+        and len(coordinate) >= 2
+        and isinstance(coordinate[0], (int, float))
+        and isinstance(coordinate[1], (int, float))
+    ]
     try:
-        return float(distance_meters) / 1000
+        return {
+            "distance_km": float(distance_meters) / 1000,
+            "route_points": route_points,
+        }
     except (TypeError, ValueError):
         return None
+
+
+def get_road_route_for_match(job, profile):
+    if None in (job.latitude, job.longitude, profile.latitude, profile.longitude):
+        return {"distance_km": None, "route_points": []}
+    cache_record = RouteDistanceCache.objects.filter(job=job, worker_profile=profile).first()
+    if cache_record and cached_coordinates_match(cache_record, job, profile):
+        return {
+            "distance_km": float(cache_record.distance_km),
+            "route_points": cache_record.route_points or [],
+        }
+    route = fetch_road_route(job.latitude, job.longitude, profile.latitude, profile.longitude)
+    if not route or route["distance_km"] is None:
+        return {"distance_km": None, "route_points": []}
+    cache_values = {
+        "job_latitude": normalize_coordinate(job.latitude),
+        "job_longitude": normalize_coordinate(job.longitude),
+        "worker_latitude": normalize_coordinate(profile.latitude),
+        "worker_longitude": normalize_coordinate(profile.longitude),
+        "distance_km": Decimal(str(route["distance_km"])).quantize(Decimal("0.001")),
+        "route_points": route.get("route_points") or [],
+    }
+    RouteDistanceCache.objects.update_or_create(
+        job=job,
+        worker_profile=profile,
+        defaults=cache_values,
+    )
+    return route
 
 
 def time_in_window(target_time, start_time, end_time):
@@ -170,7 +223,8 @@ def build_match_results(job, worker_profiles):
             continue
         skills = profile.skills or []
         matches_skill = skill_matches(job.required_skill, skills)
-        distance_km = fetch_road_route_distance_km(job.latitude, job.longitude, profile.latitude, profile.longitude)
+        route = get_road_route_for_match(job, profile)
+        distance_km = route["distance_km"]
         is_verified = profile.verification_status == "verified"
         rating_score = float(profile.average_rating or 0)
         rate_score = calculate_rate_score(job, profile)
@@ -195,6 +249,7 @@ def build_match_results(job, worker_profiles):
                 "distance_label": (
                     f"{round(distance_km, 2)} km away" if distance_km is not None else "Road distance unavailable"
                 ),
+                "route_points": route.get("route_points") or [],
                 "match_score": round(match_score, 2),
                 "rating_label": profile.display_rating,
                 "rating_score": round(rating_score, 2),

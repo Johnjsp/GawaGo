@@ -5,7 +5,6 @@ import HouseholdJobMapPanel from "./HouseholdJobMapPanel";
 import JobImageUpload from "./JobImageUpload";
 import LocationDistanceMap from "./LocationDistanceMap";
 import WorkerLocationPicker from "./WorkerLocationPicker";
-import { haversineDistanceKm } from "../utils/locationServices";
 import { getBarangayCenter } from "../utils/locationUtils";
 import { getHiringProgressLabel, getPendingApplicationCount, getWorkersNeeded } from "../utils/jobUtils";
 export default function AppViews({
@@ -200,16 +199,10 @@ export default function AppViews({
     if (!currentWorker || !job) {
       return "";
     }
-    const household = registeredHouseholds.find((item) => item.username === job.householdUsername);
-    const workerPoint = getDistancePoint(currentWorker);
-    const jobPoint = getDistancePoint({
-      barangay: household?.barangay || job.barangay,
-      latitude: job.latitude ?? household?.latitude ?? null,
-      longitude: job.longitude ?? household?.longitude ?? null,
-    });
-    return formatDistance(
-      haversineDistanceKm(workerPoint.latitude, workerPoint.longitude, jobPoint.latitude, jobPoint.longitude),
-    );
+    const backendDistanceKm = job.routeDistanceKm ?? job.distanceKm ?? null;
+    return backendDistanceKm !== null && backendDistanceKm !== undefined && backendDistanceKm !== ""
+      ? formatDistance(backendDistanceKm)
+      : "Road distance unavailable";
   };
   const currentWorkerIsVerified = String(currentWorker?.verification || "").toLowerCase() === "verified";
   const workerPendingHireRequests = workerApplications.filter((job) => job.applicationStatus === "Hire Request");
@@ -4339,6 +4332,7 @@ export default function AppViews({
                           )}
                           targetLocation={formatLocation(selectedWorker.barangay, selectedWorker.streetAddress)}
                           distanceKm={selectedWorkerDistanceKm}
+                          routePoints={selectedWorker.routePoints || []}
                           formatDistanceFn={formatDistance}
                           onRouteDistanceChange={setSelectedWorkerRouteDistanceKm}
                         />
